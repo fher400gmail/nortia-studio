@@ -96,8 +96,11 @@ fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset, lang: Lang) 
     // Regla de dither: bits destino < bits origen, origen float, o remuestreo a <= 24 bit.
     // Dither si baja de bits, si el máster es float, o si se remuestrea a <= 24 bit
     // (el audio remuestreado tiene más precisión que un entero).
+    // El MP3 parte de la versión de 16 bit / 44,1 kHz con dither, igual que un PCM de 16 bit,
+    // y comparte con ellos la misma entrada de caché.
+    let dithers = is_audio_pcm || container == Container::Mp3;
     let needs_dither =
-        is_audio_pcm && (bits < master_bits || master.is_float || (needs_resample && bits <= 24));
+        dithers && (bits < master_bits || master.is_float || (needs_resample && bits <= 24));
     let is_upsampling = sample_rate > master.sample_rate || (is_audio_pcm && bits > master_bits);
 
     let tag = naming::preset_tag(p, lang);

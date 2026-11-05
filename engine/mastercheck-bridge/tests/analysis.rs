@@ -125,3 +125,41 @@ fn lang_from_locale() {
     assert_eq!(LangTag::from_locale("en-US"), Lang::En);
     assert_eq!(LangTag::from_locale(""), Lang::En);
 }
+
+#[test]
+fn waveform_handles_mono_few_frames_and_zero_frames() {
+    let tmp = tempfile::tempdir().unwrap();
+    // Mono: un solo canal, pico 0,5.
+    let mono = tmp.path().join("mono.wav");
+    let ch: Vec<i32> = (0..44_100)
+        .map(|i| ((i as f64 * 0.05).sin() * 0.5 * 32767.0) as i32)
+        .collect();
+    common::write_wav(&mono, 44_100, 16, &[ch]);
+    let (m, w) = analyze(&mono, Lang::Es, 50).unwrap();
+    assert_eq!((m.channels, w.bins.len()), (1, 50));
+    let max = w.bins.iter().cloned().fold(0.0f32, f32::max);
+    assert!((max - 0.5).abs() < 0.01, "{max}");
+
+    // Más tramos que frames: se devuelven los tramos pedidos y nada entra en pánico.
+    let tiny = tmp.path().join("tiny.wav");
+    common::write_wav(&tiny, 44_100, 16, &[vec![1000; 10], vec![-2000; 10]]);
+    let (_, w) = analyze(&tiny, Lang::Es, 100).unwrap();
+    assert_eq!(w.bins.len(), 100);
+    assert!(w.bins.iter().all(|b| (0.0..=1.0).contains(b)));
+    assert!(w.bins.iter().any(|&b| b > 0.0));
+    // 0 tramos: lista vacía.
+    assert!(analyze(&tiny, Lang::Es, 0).unwrap().1.bins.is_empty());
+
+    // Cero frames: sin pánico, ya sea Ok con onda a 0 o un error con clave.
+    let empty = tmp.path().join("vacio.wav");
+    common::write_wav(&empty, 44_100, 16, &[vec![], vec![]]);
+    match analyze(&empty, Lang::Es, 20) {
+        Ok((m, w)) => {
+            assert_eq!(m.frames, 0);
+            assert_eq!(w.bins.len(), 20);
+            assert!(w.bins.iter().all(|&b| b == 0.0));
+            assert!(serde_json::to_string(&m).is_ok());
+        }
+        Err(e) => assert!(e.key.starts_with("err."), "{e:?}"),
+    }
+}

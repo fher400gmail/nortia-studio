@@ -5,7 +5,7 @@
 use crate::audio::{AudioBuffer, AudioError};
 use crate::dither::{self, Dither};
 use crate::flac::{self, FlacTags};
-use crate::i18n::{t, tf, Lang};
+use crate::i18n::{t, Lang};
 use crate::loudness;
 use crate::mp3::{self, Id3Tags};
 use crate::naming;
@@ -84,7 +84,10 @@ pub enum Progress {
     },
     JobFailed {
         preset_id: String,
+        /// Clave i18n del error (`err.*`); la interfaz la traduce.
         error: String,
+        /// Detalle técnico sin localizar, si lo hay.
+        detail: Option<String>,
     },
     /// Exportación cancelada; `files_kept` son los archivos de audio completos que se conservan.
     Cancelled {
@@ -98,8 +101,12 @@ pub struct Delivery {
     pub folder: PathBuf,
     /// Todos los archivos escritos (audio y documentos) con su tamaño en bytes.
     pub files: Vec<(PathBuf, u64)>,
-    /// `(preset_id, mensaje de error)` de los destinos que fallaron.
+    /// `(preset_id, clave de error)` de los destinos que fallaron (`"documents"` para los documentos).
     pub failed: Vec<(String, String)>,
+    /// `(preset_id, detalle técnico)` de los que tienen detalle.
+    pub failed_details: Vec<(String, String)>,
+    /// La exportación se canceló; `files` son los archivos completos que se conservan.
+    pub cancelled: bool,
     pub elapsed_ms: u128,
 }
 
@@ -183,7 +190,23 @@ fn create_delivery_folder(root: &Path, base: &str) -> Result<PathBuf, AudioError
     unreachable!()
 }
 
-/// Escribe con `f` a `final_path.part` y lo renombra si todo fue bien; si no, lo borra.
+/// Borra el archivo al soltarse salvo que se desarme: así un error, una cancelación o un
+/// panic nunca dejan temporales.
+struct TempGuard<'a> {
+    path: &'a Path,
+    armed: bool,
+}
+
+impl Drop for TempGuard<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = std::fs::remove_file(self.path);
+        }
+    }
+}
+
+/// Escribe con `f` a `final_path.part` y lo renombra si todo fue bien; si no (error,
+/// cancelación o panic), lo borra.
 fn atomic(
     final_path: &Path,
     f: impl FnOnce(&Path) -> Result<(), AudioError>,
@@ -191,15 +214,40 @@ fn atomic(
     let mut tmp = final_path.as_os_str().to_owned();
     tmp.push(".part");
     let tmp = PathBuf::from(tmp);
-    let r = f(&tmp).and_then(|()| std::fs::rename(&tmp, final_path).map_err(Into::into));
-    if r.is_err() {
-        let _ = std::fs::remove_file(&tmp);
-    }
-    r?;
+    let mut guard = TempGuard {
+        path: &tmp,
+        armed: true,
+    };
+    f(&tmp)?;
+    std::fs::rename(&tmp, final_path)?;
+    guard.armed = false;
     Ok(std::fs::metadata(final_path)?.len())
 }
 
-/// Clave de la caché de muestras: (bits, frecuencia, dither).
+/// Punto de inyección de fallos para pruebas: si el id de destino coincide, escribe el
+/// temporal y entra en pánico (una sola vez).
+#[doc(hidden)]
+pub static TEST_PANIC_PRESET: Mutex<Option<String>> = Mutex::new(None);
+
+fn inject_fault(job: &Job, tmp: &Path) {
+    let hit = {
+        let mut g = TEST_PANIC_PRESET.lock().unwrap_or_else(|e| e.into_inner());
+        if g.as_deref() == Some(job.preset_id.as_str()) {
+            g.take().is_some()
+        } else {
+            false
+        }
+    };
+    if hit {
+        let _ = std::fs::write(tmp, b"parcial");
+        panic!("fallo inyectado en {}", job.preset_id);
+    }
+}
+
+/// Clave de la caché de muestras: (bits, frecuencia, dither). El dither es un bool porque la
+/// semilla TPDF (`DITHER_SEED`) es constante: dos destinos con la misma clave producen
+/// exactamente las mismas muestras. Si algún día la semilla dependiera del destino, habría
+/// que meterla en la clave.
 type SampleKey = (u16, u32, bool);
 type Shared = Arc<Vec<Vec<i32>>>;
 
@@ -232,6 +280,26 @@ fn dither_for(needs: bool) -> Dither {
     } else {
         Dither::None
     }
+}
+
+fn is_sampled(job: &Job) -> bool {
+    matches!(
+        job.container,
+        Container::Wav | Container::Flac | Container::Mp3
+    )
+}
+
+/// Combinaciones distintas (bits, frecuencia, dither) que hay que calcular para estos destinos.
+#[doc(hidden)]
+pub fn plan_sample_keys(jobs: &[&Job]) -> Vec<(u16, u32, bool)> {
+    let mut keys: Vec<SampleKey> = jobs
+        .iter()
+        .filter(|j| is_sampled(j))
+        .map(|j| sample_key(j))
+        .collect();
+    keys.sort_unstable();
+    keys.dedup();
+    keys
 }
 
 /// Combinación de muestras que necesita un destino (el MP3 parte de la versión CD).
@@ -319,10 +387,7 @@ impl Ctx<'_> {
         let dir = self.folder.join(&job.subfolder);
         let path = dir.join(&job.file_name);
         let lame = if job.container == Container::Mp3 {
-            Some(
-                mp3::find_lame()
-                    .ok_or_else(|| unsupported(t(self.lang, "export.err.lame_missing")))?,
-            )
+            Some(mp3::find_lame().ok_or_else(|| unsupported("err.lame_missing"))?)
         } else {
             None
         };
@@ -330,10 +395,9 @@ impl Ctx<'_> {
             job.container,
             Container::Wav | Container::Flac | Container::Mp3
         ) {
-            return Err(unsupported(tf(
-                self.lang,
-                "export.err.container",
-                &[("ext", job.container.extension())],
+            return Err(unsupported(format!(
+                "err.container: {}",
+                job.container.extension()
             )));
         }
         let samples = self.samples(job)?;
@@ -348,15 +412,24 @@ impl Ctx<'_> {
                     bits: job.bits,
                     metadata: job.embed_metadata.then(|| self.wav_metadata()),
                 };
+                inject_fault(job, tmp);
                 wav::write(tmp, &samples, job.sample_rate, &opts)
             })?,
             Container::Flac => atomic(&path, |tmp| {
                 let tags = job.embed_metadata.then(|| self.flac_tags());
-                flac::write(tmp, &samples, job.sample_rate, job.bits, tags.as_ref())
+                inject_fault(job, tmp);
+                flac::write_cancellable(
+                    tmp,
+                    &samples,
+                    job.sample_rate,
+                    job.bits,
+                    tags.as_ref(),
+                    &|| self.cancelled(),
+                )
             })?,
             _ => atomic(&path, |tmp| {
                 let Some(lame) = lame.as_deref() else {
-                    return Err(unsupported(t(self.lang, "export.err.lame_missing")));
+                    return Err(unsupported("err.lame_missing"));
                 };
                 // WAV intermedio fuera de la carpeta de entrega.
                 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -370,7 +443,13 @@ impl Ctx<'_> {
                     bits: 16,
                     metadata: None,
                 };
-                let r = wav::write(&wav_tmp, &samples, 44_100, &opts).and_then(|()| {
+                // El guard borra el WAV intermedio también si hay un panic.
+                let _wav_guard = TempGuard {
+                    path: &wav_tmp,
+                    armed: true,
+                };
+                inject_fault(job, tmp);
+                wav::write(&wav_tmp, &samples, 44_100, &opts).and_then(|()| {
                     step(0.8);
                     mp3::encode_with(
                         self.lang,
@@ -380,9 +459,7 @@ impl Ctx<'_> {
                         &self.id3_tags(),
                         self.meta.cover.as_deref(),
                     )
-                });
-                let _ = std::fs::remove_file(&wav_tmp);
-                r
+                })
             })?,
         };
         Ok(Some((path, bytes)))
@@ -399,19 +476,18 @@ fn write_text(path: &Path, text: &str) -> Result<u64, AudioError> {
 /// en curso + las ya calculadas (en i32), nunca varias copias remuestreadas a la vez.
 fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool) -> Cache {
     let mut cache: Cache = HashMap::new();
-    for job in jobs {
-        if matches!(
-            job.container,
-            Container::Wav | Container::Flac | Container::Mp3
-        ) {
-            cache
-                .entry(sample_key(job))
-                .or_insert_with(|| CacheEntry {
-                    data: Err(String::new()),
-                    remaining: 0,
-                })
-                .remaining += 1;
-        }
+    for key in plan_sample_keys(jobs) {
+        let remaining = jobs
+            .iter()
+            .filter(|j| is_sampled(j) && sample_key(j) == key)
+            .count();
+        cache.insert(
+            key,
+            CacheEntry {
+                data: Err("err.internal".to_string()),
+                remaining,
+            },
+        );
     }
     let native = buf.sample_rate;
     // Primero las remuestreadas (transitorios pequeños), al final las nativas.
@@ -427,20 +503,29 @@ fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool
         let (bits, rate, dither) = key;
         let data = catch_unwind(AssertUnwindSafe(|| -> Result<Shared, String> {
             let d = dither_for(dither);
+            let stop = || "err.cancelled".to_string();
             if rate == native {
                 if i == last {
                     let channels = std::mem::take(&mut buf.channels);
-                    Ok(Arc::new(dither::quantize_owned(channels, bits, d)))
+                    dither::quantize_owned_cancellable(channels, bits, d, cancelled)
+                        .map(Arc::new)
+                        .ok_or_else(stop)
                 } else {
-                    Ok(Arc::new(dither::quantize_with(&buf.channels, bits, d)))
+                    dither::quantize_cancellable(&buf.channels, bits, d, cancelled)
+                        .map(Arc::new)
+                        .ok_or_else(stop)
                 }
             } else {
-                let resampled = resample::resample(&buf, rate).map_err(|e| e.to_string())?;
-                Ok(Arc::new(dither::quantize_owned(
-                    resampled.channels,
-                    bits,
-                    d,
-                )))
+                let resampled =
+                    resample::resample_cancellable(&buf, rate, cancelled).map_err(|e| {
+                        match e.key_and_detail() {
+                            (k, Some(d)) => format!("{k}: {d}"),
+                            (k, None) => k,
+                        }
+                    })?;
+                dither::quantize_owned_cancellable(resampled.channels, bits, d, cancelled)
+                    .map(Arc::new)
+                    .ok_or_else(stop)
             }
         }))
         .unwrap_or_else(|_| Err("err.internal".to_string()));
@@ -454,7 +539,8 @@ fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool
 /// Resultado de un destino dentro de la exportación paralela.
 enum Outcome {
     Done(PathBuf, u64),
-    Failed(String),
+    /// (clave de error, detalle técnico)
+    Failed(String, Option<String>),
     /// Cancelado antes de escribir.
     Skipped,
 }
@@ -462,7 +548,8 @@ enum Outcome {
 /// Ejecuta la exportación completa y devuelve la entrega.
 ///
 /// Ningún panic de un destino ni del callback de progreso aborta la exportación: un destino
-/// que entra en pánico se informa como `JobFailed { error: "err.internal" }`.
+/// que entra en pánico se informa como `JobFailed { error: "err.internal" }`. Los errores de
+/// destino son siempre claves `err.*` (nunca texto de un idioma); el detalle va aparte.
 pub fn run(
     req: &ExportRequest,
     on_progress: &(dyn Fn(Progress) + Sync),
@@ -484,13 +571,7 @@ pub fn run(
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(threads)
         .build()
-        .map_err(|e| {
-            unsupported(tf(
-                req.lang,
-                "export.err.threadpool",
-                &[("detail", &e.to_string())],
-            ))
-        })?;
+        .map_err(|e| unsupported(format!("err.threadpool: {e}")))?;
     let folder = create_delivery_folder(
         &req.out_root,
         &naming::delivery_folder(&meta.artist, &meta.title, meta.version.as_deref()),
@@ -548,22 +629,24 @@ pub fn run(
                         });
                         Outcome::Done(path, bytes)
                     }
-                    Ok(Ok(None)) => Outcome::Skipped,
+                    Ok(Ok(None)) | Ok(Err(AudioError::Cancelled)) => Outcome::Skipped,
                     Ok(Err(e)) => {
-                        let error = e.to_string();
+                        let (error, detail) = e.key_and_detail();
                         emit(Progress::JobFailed {
                             preset_id: id,
                             error: error.clone(),
+                            detail: detail.clone(),
                         });
-                        Outcome::Failed(error)
+                        Outcome::Failed(error, detail)
                     }
                     Err(_) => {
                         let error = "err.internal".to_string();
                         emit(Progress::JobFailed {
                             preset_id: id,
                             error: error.clone(),
+                            detail: None,
                         });
-                        Outcome::Failed(error)
+                        Outcome::Failed(error, None)
                     }
                 }
             })
@@ -573,10 +656,16 @@ pub fn run(
 
     let mut files = Vec::new();
     let mut failed = Vec::new();
+    let mut failed_details = Vec::new();
     for (job, r) in jobs.iter().zip(outcomes) {
         match r {
             Outcome::Done(p, b) => files.push((p, b)),
-            Outcome::Failed(e) => failed.push((job.preset_id.clone(), e)),
+            Outcome::Failed(e, d) => {
+                failed.push((job.preset_id.clone(), e));
+                if let Some(d) = d {
+                    failed_details.push((job.preset_id.clone(), d));
+                }
+            }
             Outcome::Skipped => {}
         }
     }
@@ -599,6 +688,8 @@ pub fn run(
             folder,
             files,
             failed,
+            failed_details,
+            cancelled: true,
             elapsed_ms: t0.elapsed().as_millis(),
         });
     }
@@ -626,16 +717,19 @@ pub fn run(
     // Un fallo en los documentos no aborta: se informa en `failed` y `Finished` siempre se emite.
     for (name, text) in docs {
         let path = folder.join(&name);
-        match write_text(&path, &text) {
+        // Un panic al escribir un documento tampoco impide que `Finished` se emita.
+        let r = catch_unwind(AssertUnwindSafe(|| write_text(&path, &text)))
+            .unwrap_or_else(|_| Err(unsupported("err.internal")));
+        match r {
             Ok(bytes) => files.push((path, bytes)),
-            Err(e) => failed.push((
-                "documents".to_string(),
-                tf(
-                    req.lang,
-                    "export.err.documents",
-                    &[("detail", &format!("{name}: {e}"))],
-                ),
-            )),
+            Err(e) => {
+                failed.push(("documents".to_string(), "err.documents".to_string()));
+                let detail = match e.key_and_detail() {
+                    (_, Some(d)) => d,
+                    (k, None) => k,
+                };
+                failed_details.push(("documents".to_string(), format!("{name}: {detail}")));
+            }
         }
     }
 
@@ -643,6 +737,8 @@ pub fn run(
         folder,
         files,
         failed,
+        failed_details,
+        cancelled: false,
         elapsed_ms: t0.elapsed().as_millis(),
     };
     emit(Progress::Finished(delivery.clone()));

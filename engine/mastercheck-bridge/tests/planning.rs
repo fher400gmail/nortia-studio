@@ -95,12 +95,9 @@ fn plan_dto_verdict_is_localized_and_fail_marked() {
 }
 
 #[test]
-fn plan_dto_untitled_uses_file_name_fallback() {
+fn plan_dto_untitled_uses_suggested_title_without_duplicating_artist() {
     let mut mt = meta();
     mt.title = "  ".into();
     let p = plan(&master(24), &mt, &ids(&["deezer"]), Lang::Es);
-    assert_eq!(
-        p.delivery_folder,
-        "Vera Alcón - Vera Alcón - Luz de Noviembre"
-    );
+    assert_eq!(p.delivery_folder, "Vera Alcón - Luz de Noviembre");
 }

@@ -160,3 +160,66 @@ fn non_wav_master_is_reported_with_key() {
     .unwrap_err();
     assert_eq!(e.key, "err.not_wav");
 }
+
+#[test]
+fn failed_job_carries_localized_message_key_and_no_spanish_display_text() {
+    if masterout_core::mp3::find_lame().is_some() {
+        eprintln!("skip: lame presente");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path());
+    let events = Mutex::new(Vec::new());
+    let d = export(
+        &request(&m, &tmp.path().join("out"), &["deezer", "mp3_promo"]),
+        Lang::En,
+        &|p| events.lock().unwrap().push(p),
+        Arc::new(AtomicBool::new(false)),
+    )
+    .unwrap();
+    let ev = events.into_inner().unwrap();
+    let failed = ev.iter().find(|e| e.kind == "job_failed").unwrap();
+    assert_eq!(failed.error_key.as_deref(), Some("err.lame_missing"));
+    assert!(failed.error.as_deref().unwrap().contains("lame"));
+    assert!(!failed.error.as_deref().unwrap().contains("no soportado"));
+    assert_eq!(d.failed.len(), 1);
+    assert_eq!(
+        d.failed_keys,
+        vec![("mp3_promo".to_string(), "err.lame_missing".to_string())]
+    );
+    assert!(d.failed[0].1.starts_with("lame was not found"));
+    assert!(!d.cancelled);
+}
+
+#[test]
+fn cancelled_delivery_is_flagged_and_empty_folder_reported_blank() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path());
+    let d = export(
+        &request(&m, &tmp.path().join("out"), &["deezer"]),
+        Lang::Es,
+        &|_| {},
+        Arc::new(AtomicBool::new(true)),
+    )
+    .unwrap();
+    assert!(d.cancelled);
+    assert!(d.files.is_empty());
+    assert_eq!(d.folder, "");
+}
+
+#[test]
+fn blank_title_uses_suggested_title_without_duplicating_artist() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp
+        .path()
+        .join("Vera Alcón - Luz de Noviembre (master v3).wav");
+    common::write_wav(&path, 44_100, 16, &common::sine_stereo(44_100, 16, 1, 0.3));
+    let mut req = request(&path, &tmp.path().join("out"), &["deezer"]);
+    req.meta.title = String::new();
+    let d = export(&req, Lang::Es, &|_| {}, Arc::new(AtomicBool::new(false))).unwrap();
+    assert!(
+        d.folder.ends_with("Vera Alcón - Luz de Noviembre"),
+        "{}",
+        d.folder
+    );
+}

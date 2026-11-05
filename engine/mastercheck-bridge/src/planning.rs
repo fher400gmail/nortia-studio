@@ -70,7 +70,16 @@ pub fn plan(
 ) -> PlanDto {
     let info = master_info(master);
     let mut rmeta = to_release_meta(meta);
-    rmeta.title = naming::fallback_title(&rmeta.title, Path::new(&master.path));
+    if rmeta.title.is_empty() {
+        // Igual que `exporting::export`: el título sugerido, sin repetir el artista.
+        rmeta.title = match &master.suggested_title {
+            Some(t) => t.clone(),
+            None => naming::fallback_title("", Path::new(&master.path)),
+        };
+        if rmeta.artist.is_empty() {
+            rmeta.artist = master.suggested_artist.clone().unwrap_or_default();
+        }
+    }
     let ids: Vec<&str> = active_ids.iter().map(String::as_str).collect();
     let all = presets::all();
 

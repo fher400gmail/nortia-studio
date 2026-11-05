@@ -20,7 +20,7 @@ fn finite(v: f64) -> f64 {
 }
 
 /// `"Artista - Título"` -> (Some(artista), Some(título)); sin separador, solo título.
-fn suggest(path: &Path) -> (Option<String>, Option<String>) {
+pub(crate) fn suggest(path: &Path) -> (Option<String>, Option<String>) {
     let base = naming::fallback_title("", path);
     for sep in [" - ", " – ", " — "] {
         if let Some((artist, title)) = base.split_once(sep) {

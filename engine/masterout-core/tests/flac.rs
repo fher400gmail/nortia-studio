@@ -147,7 +147,28 @@ fn write_at_96k_works_and_above_is_a_clean_error() {
     let err = flac::write(&q, &sine(24, 192_000, 4800, 2), 192_000, 24, None).unwrap_err();
     assert_eq!(
         err.to_string(),
-        masterout_core::audio::AudioError::UnsupportedFormat("FLAC > 96 kHz".into()).to_string()
+        masterout_core::audio::AudioError::UnsupportedFormat("err.rate_over_96k".into())
+            .to_string()
     );
     assert!(!q.exists());
+}
+
+#[test]
+fn cancel_is_checked_every_64_blocks() {
+    use std::cell::Cell;
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("c.flac");
+    // ~20 s a 48 kHz: más de 200 bloques de 4096.
+    let s = sine(24, 48_000, 48_000 * 20, 2);
+    let calls = Cell::new(0u32);
+    let r = flac::write_cancellable(&p, &s, 48_000, 24, None, &|| {
+        calls.set(calls.get() + 1);
+        calls.get() >= 3
+    });
+    assert!(matches!(
+        r,
+        Err(masterout_core::audio::AudioError::Cancelled)
+    ));
+    // Se detuvo en la tercera comprobación (bloque 128), no al final.
+    assert_eq!(calls.get(), 3);
 }

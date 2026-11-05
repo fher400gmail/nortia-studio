@@ -1,7 +1,9 @@
 mod common;
 
 use mastercheck_bridge::dto::{ExportRequestDto, ReleaseMetaDto};
-use mastercheck_bridge::exporting::{export, export_with};
+use mastercheck_bridge::exporting::export;
+#[cfg(unix)]
+use mastercheck_bridge::exporting::export_with;
 use masterout_core::i18n::Lang;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};

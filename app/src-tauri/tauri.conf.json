@@ -44,6 +44,16 @@
     ],
     "macOS": {
       "minimumSystemVersion": "14.0"
+    },
+    "externalBin": [
+      "binaries/ffmpeg",
+      "binaries/ffprobe"
+    ],
+    "resources": {
+      "../../docs/legal/terceros.md": "legal/terceros.txt",
+      "licenses/LICENSE.LGPLv2.1": "legal/LICENSE.LGPLv2.1",
+      "licenses/COPYING.LGPL": "legal/COPYING.LGPL",
+      "licenses/LICENSE.lame": "legal/LICENSE.lame"
     }
   }
 }

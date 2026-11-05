@@ -79,7 +79,7 @@ def video_check(ffprobe, path, codec, w, h, audio):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--platform", choices=["mac", "win"], required=True)
+    ap.add_argument("--platform", choices=["mac", "win", "linux"], required=True)
     ap.add_argument("--adm", choices=["required", "any"], default="any")
     args = ap.parse_args()
 
@@ -141,7 +141,8 @@ def main():
         info = probe(ffprobe, p)
         if info:
             a = streams(info, "audio")[0]
-            br = int(info["format"].get("bit_rate", 0))
+            # bit_rate de la pista de audio: el del formato incluye la portada incrustada (mjpeg)
+            br = int(a.get("bit_rate") or 0)
             want(a["codec_name"] == "mp3" and int(a["sample_rate"]) == 44100 and 315000 <= br <= 325000,
                  f"{base(p)}: {a['codec_name']} {a['sample_rate']} Hz {br} bps (se esperaba mp3 44100 Hz 320 kbps)")
             print(f"ok   {base(p)}: mp3 44.1 kHz {br // 1000} kbps")
@@ -152,7 +153,8 @@ def main():
     square = [f for f in files if "[Apple Motion]" in base(f) and "3840x3840" in base(f)]
     if caps["hevc"]:
         if len(square) == 1:
-            video_check(ffprobe, square[0], "hevc", 3840, 3840, audio=False)
+            # en Linux (solo desarrollo) el «HEVC» es libx264: nunca se distribuye
+            video_check(ffprobe, square[0], "h264" if args.platform == "linux" else "hevc", 3840, 3840, audio=False)
         else:
             fail("HEVC disponible y falta [Apple Motion] 3840x3840.mp4")
     else:

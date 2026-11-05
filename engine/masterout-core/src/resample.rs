@@ -53,7 +53,8 @@ pub fn resample(buf: &AudioBuffer, target_rate: u32) -> Result<AudioBuffer, Audi
         pos += n;
     }
     // Resto (bloque parcial relleno con ceros) y vaciado del filtro hasta tener lo necesario.
-    let mut tail: Option<Vec<&[f32]>> = Some(buf.channels.iter().map(|c| &c[pos..]).collect());
+    let mut tail: Option<Vec<&[f32]>> =
+        (pos < frames).then(|| buf.channels.iter().map(|c| &c[pos..]).collect());
     while out[0].len() < want {
         let res = rs.process_partial(tail.as_deref(), None).map_err(map_err)?;
         tail = None;
@@ -64,7 +65,11 @@ pub fn resample(buf: &AudioBuffer, target_rate: u32) -> Result<AudioBuffer, Audi
 
     let channels = out
         .into_iter()
-        .map(|c| c[delay..delay + expected].to_vec())
+        .map(|mut c| {
+            c.drain(..delay);
+            c.truncate(expected);
+            c
+        })
         .collect();
     Ok(AudioBuffer {
         sample_rate: target_rate,

@@ -78,3 +78,25 @@ fn no_gain_change_on_real_master() {
         c.integrated_lufs
     );
 }
+
+#[test]
+fn exact_multiple_of_chunk_size_works() {
+    let b = sine_buf(96000, 1000.0, -6.0, 51200.0 / 96000.0);
+    assert_eq!(b.frames(), 51200);
+    let o = resample(&b, 44100).unwrap();
+    assert!((o.frames() as i64 - 23520).abs() <= 2, "{}", o.frames());
+}
+
+#[test]
+fn empty_buffer_returns_empty() {
+    let b = AudioBuffer {
+        sample_rate: 96000,
+        channels: vec![vec![], vec![]],
+        source_bits: 24,
+        source_float: false,
+    };
+    let o = resample(&b, 44100).unwrap();
+    assert_eq!(o.frames(), 0);
+    assert_eq!(o.sample_rate, 44100);
+    assert_eq!(o.num_channels(), 2);
+}

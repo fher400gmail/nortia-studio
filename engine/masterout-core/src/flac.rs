@@ -1,9 +1,11 @@
-//! Escritor FLAC de 16/24 bit con Vorbis comments (codificador `flacenc`, Rust puro).
+//! Escritor FLAC de 16/24 bit con Vorbis comments (codificador `flac-codec`, Rust puro).
+//!
+//! No se usa `flacenc`: solo implementa Rice de 4 bit (parámetro <= 14) y, con audio de 24 bit
+//! fuerte, sus predictores producen subtramas mayores que el PCM (el FLAC salía 2,6x el WAV).
+//! `flac-codec` usa Rice de 5 bit y comprime como `flac -5`.
 
 use crate::audio::AudioError;
-use flacenc::bitsink::ByteSink;
-use flacenc::component::BitRepr;
-use flacenc::error::Verify;
+use flac_codec::encode::{FlacChannelWriter, Options};
 use std::path::Path;
 
 #[derive(Debug, Clone, Default)]
@@ -16,57 +18,11 @@ pub struct FlacTags {
     pub copyright: Option<String>,
 }
 
+/// Muestras por bloque FLAC (4096 = valor por defecto de `flac`, válido en perfil subset).
+const BLOCK_SIZE: usize = 4096;
+
 fn unsupported(msg: impl Into<String>) -> AudioError {
     AudioError::UnsupportedFormat(msg.into())
-}
-
-/// Bloque VORBIS_COMMENT (tipo 4) completo, con su cabecera de 4 bytes.
-fn vorbis_comment_block(tags: &FlacTags, last: bool) -> Vec<u8> {
-    let vendor = concat!("masterout-core ", env!("CARGO_PKG_VERSION"));
-    let mut comments: Vec<String> = vec![
-        format!("TITLE={}", tags.title),
-        format!("ARTIST={}", tags.artist),
-    ];
-    for (k, v) in [
-        ("ALBUM", &tags.album),
-        ("DATE", &tags.date),
-        ("ISRC", &tags.isrc),
-        ("COPYRIGHT", &tags.copyright),
-    ] {
-        if let Some(v) = v.as_ref().filter(|v| !v.is_empty()) {
-            comments.push(format!("{k}={v}"));
-        }
-    }
-    let mut body = Vec::new();
-    body.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
-    body.extend_from_slice(vendor.as_bytes());
-    body.extend_from_slice(&(comments.len() as u32).to_le_bytes());
-    for c in &comments {
-        body.extend_from_slice(&(c.len() as u32).to_le_bytes());
-        body.extend_from_slice(c.as_bytes());
-    }
-    let len = body.len() as u32;
-    let mut block = Vec::with_capacity(body.len() + 4);
-    block.push(4 | if last { 0x80 } else { 0 });
-    block.extend_from_slice(&len.to_be_bytes()[1..]);
-    block.extend_from_slice(&body);
-    block
-}
-
-/// Inserta el bloque de comentarios justo tras STREAMINFO.
-fn insert_tags(bytes: Vec<u8>, tags: &FlacTags) -> Result<Vec<u8>, AudioError> {
-    const STREAMINFO_END: usize = 4 + 4 + 34;
-    if bytes.len() < STREAMINFO_END || &bytes[..4] != b"fLaC" || bytes[4] & 0x7f != 0 {
-        return Err(unsupported("salida FLAC inesperada"));
-    }
-    let streaminfo_was_last = bytes[4] & 0x80 != 0;
-    let mut out = Vec::with_capacity(bytes.len() + 256);
-    out.extend_from_slice(&bytes[..STREAMINFO_END]);
-    out[4] &= 0x7f;
-    // Si STREAMINFO era el último bloque, el nuestro pasa a serlo.
-    out.extend_from_slice(&vorbis_comment_block(tags, streaminfo_was_last));
-    out.extend_from_slice(&bytes[STREAMINFO_END..]);
-    Ok(out)
 }
 
 /// Escribe un FLAC de 16 o 24 bit. `samples_i32[canal][frame]` en el rango de `bits`.
@@ -77,11 +33,24 @@ pub fn write(
     bits: u16,
     tags: Option<&FlacTags>,
 ) -> Result<(), AudioError> {
+    write_cancellable(path, samples_i32, sample_rate, bits, tags, &|| false)
+}
+
+/// Como `write`, comprobando `should_cancel` cada 64 bloques; si devuelve `true` termina con
+/// `AudioError::Cancelled` (el archivo parcial lo borra quien lo llama, p. ej. `atomic`).
+pub fn write_cancellable(
+    path: &Path,
+    samples_i32: &[Vec<i32>],
+    sample_rate: u32,
+    bits: u16,
+    tags: Option<&FlacTags>,
+    should_cancel: &dyn Fn() -> bool,
+) -> Result<(), AudioError> {
     if bits != 16 && bits != 24 {
-        return Err(unsupported(format!("FLAC de {bits} bit")));
+        return Err(unsupported(format!("err.flac: {bits} bit")));
     }
     if sample_rate > 96_000 {
-        return Err(unsupported("FLAC > 96 kHz"));
+        return Err(unsupported("err.rate_over_96k"));
     }
     let channels = samples_i32.len();
     if channels == 0 || channels > 2 {
@@ -89,7 +58,7 @@ pub fn write(
     }
     let frames = samples_i32[0].len();
     if samples_i32.iter().any(|c| c.len() != frames) {
-        return Err(unsupported("canales de distinta longitud"));
+        return Err(unsupported("err.flac: channel length mismatch"));
     }
     let limit = 1i32 << (bits - 1);
     if samples_i32
@@ -97,33 +66,47 @@ pub fn write(
         .flatten()
         .any(|&s| s < -limit || s >= limit)
     {
-        return Err(unsupported("muestra fuera del rango de bits"));
+        return Err(unsupported("err.flac: sample out of range"));
     }
-    let mut interleaved = Vec::with_capacity(frames * channels);
-    for i in 0..frames {
-        for c in samples_i32 {
-            interleaved.push(c[i]);
+    let enc = |e: flac_codec::Error| unsupported(format!("err.flac: encode {e:?}"));
+    let mut options = Options::default().no_padding().no_seektable().overwrite();
+    if let Some(t) = tags {
+        options = options.tag("TITLE", &t.title).tag("ARTIST", &t.artist);
+        for (k, v) in [
+            ("ALBUM", &t.album),
+            ("DATE", &t.date),
+            ("ISRC", &t.isrc),
+            ("COPYRIGHT", &t.copyright),
+        ] {
+            if let Some(v) = v.as_ref().filter(|v| !v.is_empty()) {
+                options = options.tag(k, v);
+            }
         }
     }
-    let config = flacenc::config::Encoder::default()
-        .into_verified()
-        .map_err(|e| unsupported(format!("configuración FLAC: {e:?}")))?;
-    let source = flacenc::source::MemSource::from_samples(
-        &interleaved,
-        channels,
-        bits as usize,
-        sample_rate as usize,
-    );
-    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
-        .map_err(|e| unsupported(format!("codificación FLAC: {e:?}")))?;
-    let mut sink = ByteSink::new();
-    stream
-        .write(&mut sink)
-        .map_err(|e| unsupported(format!("escritura FLAC: {e:?}")))?;
-    let mut bytes = sink.as_slice().to_vec();
-    if let Some(t) = tags {
-        bytes = insert_tags(bytes, t)?;
+    let block_size = BLOCK_SIZE;
+    // Se codifica y escribe bloque a bloque, directamente desde los canales (sin copia
+    // entrelazada del audio completo ni flujo FLAC completo en memoria).
+    let mut writer = FlacChannelWriter::create(
+        path,
+        options,
+        sample_rate,
+        u32::from(bits),
+        channels as u8,
+        Some(frames as u64),
+    )
+    .map_err(enc)?;
+    let mut head = 0;
+    let mut blocks = 0usize;
+    while head < frames {
+        if blocks.is_multiple_of(64) && should_cancel() {
+            return Err(AudioError::Cancelled);
+        }
+        blocks += 1;
+        let end = (head + block_size).min(frames);
+        let block: Vec<&[i32]> = samples_i32.iter().map(|c| &c[head..end]).collect();
+        writer.write(&block).map_err(enc)?;
+        head = end;
     }
-    std::fs::write(path, bytes)?;
+    writer.finalize().map_err(enc)?;
     Ok(())
 }

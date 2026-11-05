@@ -58,8 +58,12 @@ pub enum Status {
 pub struct Preset {
     pub id: String,
     pub name: String,
-    pub subfolder: String,
+    /// Clave de subcarpeta (`naming::subfolder` la traduce al idioma).
+    pub subfolder_key: String,
+    /// Etiqueta en español (contrato §4).
     pub tag: String,
+    /// Clave i18n de la etiqueta cuando cambia con el idioma.
+    pub tag_key: Option<String>,
     pub container: Container,
     pub bits: BitsPolicy,
     pub rate: RatePolicy,
@@ -97,8 +101,9 @@ fn parse(v: &Value) -> Preset {
     Preset {
         id: s(v, "id"),
         name: s(v, "name"),
-        subfolder: s(v, "subfolder"),
+        subfolder_key: s(v, "subfolder_key"),
         tag: s(v, "tag"),
+        tag_key: v["tag_key"].as_str().map(str::to_string),
         container: Container::parse(&s(v, "container")),
         bits,
         rate,

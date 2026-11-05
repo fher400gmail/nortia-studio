@@ -1,0 +1,62 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Master Out · D4b Tres pasos en fila</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script>document.documentElement.dataset.theme=new URLSearchParams(location.search).get("theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light")</script>
+<style>
+/*__COMMON_CSS__*/
+/*__D4_CSS__*/
+/* ---- D4b Tres pasos en fila ---- */
+.m4b{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;padding:16px 24px 12px;gap:12px}
+.cols{flex:0 1 548px;min-height:0;display:grid;grid-template-columns:1fr 1fr 1.08fr;gap:28px}
+.col{position:relative;background:var(--surf);border:1px solid var(--line);border-radius:20px;padding:14px 18px 14px;display:flex;flex-direction:column;gap:12px;min-height:0;transition:opacity .3s}
+.col>header{display:flex;align-items:center;gap:10px;height:28px;flex:none}
+.col>header .sp{flex:1}
+.n{width:26px;height:26px;border-radius:50%;background:var(--st);color:var(--on-btn);font-size:13px;font-weight:600;display:grid;place-items:center;flex:none}
+.col h2{font-size:17px;font-weight:600;letter-spacing:-.012em}
+.col:not(:last-child)::after{content:'';position:absolute;right:-19px;top:50%;width:9px;height:9px;border-top:2px solid var(--ctl);border-right:2px solid var(--ctl);transform:translateY(-50%) rotate(45deg)}
+.col.dim{opacity:.45;pointer-events:none}
+.c1.dz.over{border-color:var(--st);background:var(--st-bg)}
+.c1 .body{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:10px}
+.c1 .wbox{background:var(--surf2);border-radius:16px;padding:18px 12px}
+.c1 .ctl{display:flex;align-items:center;gap:10px}.c1 .ctl .sp{flex:1}
+.c1 .dzone{flex:1}
+.c2 .body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;justify-content:center}
+.c2 .cov{align-self:center;--cs:200px}
+.c2 .in4{height:42px}
+.c2 .moreb{align-self:flex-start;position:relative}
+.c2 .mfw{position:relative;align-self:flex-start}
+.c3 .body{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px}
+.c3 .flist{flex:1;min-height:0}
+.t3c{grid-template-columns:repeat(3,1fr)}.t4c{grid-template-columns:repeat(4,1fr)}
+.sumrow{margin-top:auto;display:flex;justify-content:flex-end}
+.dbar{height:58px;border-radius:15px;background:var(--st-bg);border:1px solid var(--st-line);display:flex;align-items:center;gap:14px;padding:0 10px 0 16px}
+.dbar h1{font-size:17px;font-weight:600;letter-spacing:-.012em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbar .markdone{width:10px;height:30px}
+.dbar .bb{height:40px}
+.go{height:58px}
+.c3 .chip{height:84px}.c3 .mono{width:42px;height:42px}.c3 .mono svg{width:25px;height:25px}
+.pct{font-size:15px}
+</style></head><body><div class="win" id="win"><div id="tbw"></div><div id="app"></div></div>
+<input type="file" id="fsong" hidden accept=".wav,.aif,.aiff,.flac,.caf,.m4a,audio/*"><input type="file" id="fcov" hidden accept="image/*">
+<script>/*__COMMON_JS__*/</script><script>/*__D4_JS__*/</script>
+<script>
+const totalFiles=()=>{const s=MO.stats();return s.n+s.docs};
+const hd=(n,t,x='')=>`<header><b class="n">${n}</b><h2>${t}</h2><span class="sp"></span>${x}</header>`;
+const c1=()=>{const m=S.mode;let body;
+ if(!S.loaded)body=`<div class="dzone" data-act="song" style="flex:1"><span class="mk">${sym(46)}</span><b>Suelta tu canción</b>${S.err?`<small class="er">${S.err}</small>`:''}</div>`;
+ else if(m==='idle')body=`<div class="body"><div class="wbox">${waveBox(300,200,46)}</div><div class="ctl"><button class="play" data-act="play" aria-label="Escuchar">${IC.play}</button><span class="tm" data-time>${timeTxt()}</span><span class="sp"></span><button class="ib" data-act="song" title="Cambiar canción" aria-label="Cambiar canción">${ICO.reset}</button></div><div>${lpill()}</div></div>`;
+ else body=`<div class="body"><div class="wbox">${waveBox(300,200,46,m==='done'?1:0)}</div><div class="ctl"><span class="ttl"><b>${esc(S.title)}</b></span><span class="sp"></span>${m==='creating'?'<span class="pct" data-pc>0 %</span>':'<span class="pct" style="display:inline-flex">'+IC.check+'</span>'}</div></div>`;
+ return `<section class="col c1 dz">${hd(1,'Canción')}${body}</section>`};
+const c2=()=>`<section class="col c2 ${S.mode==='idle'?'':'dim'}">${hd(2,'Datos')}<div class="body">${coverHTML(200)}<input class="in4" data-f="artist" placeholder="Artista" aria-label="Artista" autocomplete="off"><input class="in4" data-f="title" placeholder="Título" aria-label="Título" autocomplete="off"><div class="mfw"><button class="moreb" data-act="more">Más datos</button>${fieldsMore()}</div></div></section>`;
+const c3=()=>{const m=S.mode;let body;
+ if(m==='idle')body=`<div class="body dests"><div><div class="gh">Plataformas</div><div class="tiles t3c">${G4[0].ids.map(dest).join('')}</div></div>
+  <div style="display:grid;grid-template-columns:1fr 3fr;gap:8px"><div><div class="gh">Distribuidora</div><div class="tiles" style="grid-template-columns:1fr">${dest('dist')}</div></div><div><div class="gh">Extras</div><div class="tiles t3c">${G4[2].ids.map(dest).join('')}</div></div></div>
+  <div class="sumrow">${sumHTML()}</div></div>`;
+ else body=`<div class="body"><div class="flist" data-flist></div>${m==='done'?`<div class="sumrow">${sumHTML()}</div>`:''}</div>`;
+ return `<section class="col c3 ${m==='creating'?'':''}">${hd(3,'Entrega',m==='idle'?presetHTML():'')}${body}</section>`};
+const VW={html(){const m=S.mode;
+ const bar=m==='idle'?goBtn():m==='creating'?busyBtn():`<div class="dbar">${MO.doneMark(24)}<h1>Listo: ${totalFiles()} archivos en <span data-fname></span></h1><button class="bb pri" data-act="open">${IC.folder}<span>Abrir carpeta</span></button><button class="bb" data-act="again">${IC.plus}<span>Nueva canción</span></button></div>`;
+ const fl=m==='idle'?folderLine():`<div class="fline" style="visibility:hidden">.</div>`;
+ return `<div class="m4b"><div class="cols">${c1()}${c2()}${c3()}</div>${bar}${fl}</div>`}};
+D4.boot(VW);
+</script></body></html>

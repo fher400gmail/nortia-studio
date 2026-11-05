@@ -205,6 +205,20 @@ pub fn open_path(
         .map_err(|e| BridgeError::from_key("err.io", current_lang(&lang), Some(e.to_string())))
 }
 
+/// Abre el documento de licencias y fuentes (`legal/terceros.txt`, empaquetado como recurso)
+/// con el programa del sistema. Ruta fija: la interfaz no puede pedir otra.
+#[tauri::command]
+pub fn open_legal(app: AppHandle, lang: State<'_, LangState>) -> Result<(), BridgeError> {
+    let lang = current_lang(&lang);
+    let path = app
+        .path()
+        .resolve("legal/terceros.txt", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| BridgeError::from_key("err.io", lang, Some(e.to_string())))?;
+    app.opener()
+        .open_path(path.to_string_lossy(), None::<&str>)
+        .map_err(|e| BridgeError::from_key("err.io", lang, Some(e.to_string())))
+}
+
 #[tauri::command]
 pub fn system_lang(lang: State<'_, LangState>) -> String {
     match current_lang(&lang) {
@@ -271,6 +285,7 @@ pub fn run_app() {
             allow_asset,
             media_thumbnail,
             open_path,
+            open_legal,
             system_lang,
             set_lang,
             app_info,

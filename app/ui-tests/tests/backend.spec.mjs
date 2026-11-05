@@ -103,8 +103,8 @@ test('tauri_backend_calls_commands_with_exact_names', async () => {
   await be.plan({ x: 1 }, { artist: 'a' }, ['spotify']);
   const seen = [];
   await be.export({ master_path: '/a.wav' }, e => seen.push(e.kind));
-  await be.cancelExport(); await be.pickFolder(); await be.openPath('/x'); await be.systemLang(); await be.appInfo();
-  assert.deepEqual(calls.map(c => c[0]), ['analyze', 'plan', 'export', 'cancel_export', 'pick_folder', 'open_path', 'system_lang', 'app_info']);
+  await be.cancelExport(); await be.pickFolder(); await be.openPath('/x'); await be.systemLang(); await be.appInfo(); await be.openLegal();
+  assert.deepEqual(calls.map(c => c[0]), ['analyze', 'plan', 'export', 'cancel_export', 'pick_folder', 'open_path', 'system_lang', 'app_info', 'open_legal']);
   assert.deepEqual(calls[0][1], { path: '/a.wav', bins: 600 });
   assert.deepEqual(calls[1][1], { master: { x: 1 }, meta: { artist: 'a' }, activeIds: ['spotify'], mediaInputs: {} });
   assert.deepEqual(calls[2][1], { req: { master_path: '/a.wav' } });
@@ -259,4 +259,25 @@ test('mock_app_info_default_on_follows_presets_and_can_be_overridden', async () 
   assert.ok(!d.includes('apple_motion') && d.includes('spotify') && d.includes('cover'));
   const d2 = (await createMock({ defaultOff: ['tidal', 'apple_motion'] }).appInfo()).default_on;
   assert.ok(!d2.includes('tidal') && d2.includes('amazon'));
+});
+
+test('about_info_and_legal_link_in_both_backends', async () => {
+  const be = createMock();
+  const info = await be.appInfo();
+  assert.match(info.sidecar_release, /^ffmpeg-sidecar-v\d+\.\d+\.\d+-[0-9a-f]+$/);
+  assert.equal(be.legalOpened, 0);
+  await be.openLegal();
+  assert.equal(be.legalOpened, 1);
+  // sin sidecar: el release no se anuncia
+  assert.equal((await createMock({ sidecar: false }).appInfo()).sidecar_release, '');
+});
+
+test('about_texts_exist_in_both_languages_and_name_the_licenses', () => {
+  for (const lang of ['es', 'en']) {
+    const d = JSON.parse(readFileSync(new URL(`../../ui/i18n/${lang}.json`, import.meta.url)));
+    for (const k of ['about.title', 'about.version', 'about.component', 'about.component.none', 'about.licenses', 'about.others', 'about.legal', 'about.maker']) assert.ok(d[k], `${lang}: ${k}`);
+    assert.match(d['about.licenses'], /FFmpeg/);
+    assert.match(d['about.licenses'], /LGPL/);
+    assert.match(d['about.licenses'], /LAME/);
+  }
 });

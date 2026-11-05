@@ -333,6 +333,17 @@ const App = (() => {
     const adv = $('#pop-adv');
     if (adv) adv.innerHTML = `<h4>${t('adv.title')}</h4>${Data.ids.map(id => { const j = Store.job(id), why = Store.disabledReason(id); return `<div class="kv"><span>${esc(t('chip.long.' + id))}</span><b>${j ? esc(why ? t('adv.off') : fmtSpec(j, lg())) : ''}</b></div>`; }).join('')}`;
   }
+  /* Acerca de: versión, componente (release del sidecar) y licencias; se pinta una vez, al arrancar */
+  function paintAbout() {
+    const el = $('#pop-about'); if (!el) return;
+    const i = S.info || {};
+    el.innerHTML = `<h4>${esc(t('about.heading'))}</h4>
+      <div class="kv"><span>${esc(t('about.version'))}</span><b>${esc(i.version || '')}</b></div>
+      <div class="kv"><span>${esc(t('about.component'))}</span>${i.sidecar_release ? `<b class="mono">${esc(i.sidecar_release)}</b>` : `<b>${esc(t('about.component.none'))}</b>`}</div>
+      <p>${esc(t('about.licenses'))}</p><p>${esc(t('about.others'))}</p>
+      <button class="lnk link-b" data-act="legal">${esc(t('about.legal'))}</button>
+      <p class="abt-mk">${esc(t('about.maker'))}</p>`;
+  }
   /* actualiza una ficha sin recrearla (conserva la animación) */
   function setDest(id, bump) {
     $$(`[data-id="${id}"]`).forEach(b => {
@@ -364,7 +375,7 @@ const App = (() => {
     $$('[data-time]').forEach(e => e.textContent = Views.timeTxt());
     $$('[data-act=play]').forEach(b => { b.innerHTML = S.pt ? Icons.pause : Icons.play; b.dataset.playing = !!S.pt; b.setAttribute('aria-label', t(S.pt ? 'pause' : 'play')); });
   }
-  return { live, setDest, syncChips, render, closePops, togglePop, paintPlay, popDone: 0 };
+  return { live, setDest, syncChips, render, closePops, togglePop, paintAbout, paintPlay, popDone: 0 };
 })();
 
 /* ───────────── Player: audio real en la app (asset protocol), simulado en el mock ───────────── */
@@ -575,6 +586,7 @@ const Events = (() => {
       if (act === 'pop') return App.togglePop(a.dataset.p);
       if (act === 'toggle') { if (S.mode !== 'idle' || Store.disabledReason(a.dataset.id)) return; S.on.has(a.dataset.id) ? S.on.delete(a.dataset.id) : S.on.add(a.dataset.id); App.setDest(a.dataset.id, 1); App.live(); }
       else if (act === 'preset') { Data.ids.forEach(id => { if (Data.defaultOn(id)) S.on.add(id); else S.on.delete(id); App.setDest(id, Data.defaultOn(id) && !Store.disabledReason(id)); }); App.live(); }
+      else if (act === 'legal') backend.openLegal().catch(err => console.warn(err));
       else if (act === 'song') pickSong();
       else if (act === 'cover') pickCover();
       else if (act === 'media-pick') pickMedia(a.dataset.mid);
@@ -636,7 +648,7 @@ async function boot() {
   const tb = $('#themeBtn'), paintTheme = () => tb.innerHTML = d.dataset.theme === 'dark' ? Icons.sun.replace('class="ic"', 'class="ic turn"') : Icons.moon.replace('class="ic"', 'class="ic turn"');
   paintTheme();
   tb.addEventListener('click', () => { d.dataset.theme = d.dataset.theme === 'dark' ? 'light' : 'dark'; paintTheme(); const u = new URL(location); u.searchParams.set('theme', d.dataset.theme); history.replaceState(0, '', u); });
-  $('#pop-adv').classList.add('glass-pop');
+  $('#pop-adv').classList.add('glass-pop'); $('#pop-about').classList.add('glass-pop'); App.paintAbout();
   Fx.init(); Events.init();
   /* estado inicial: la app real arranca vacía; el mock del prototipo, con la canción de ejemplo */
   const state = Q.get('state') || (backend.kind === 'mock' ? 'normal' : 'empty');

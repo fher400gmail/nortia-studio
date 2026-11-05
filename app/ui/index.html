@@ -18,6 +18,7 @@
       <span class="appn" data-tauri-drag-region>master check</span>
       <div class="tb-sp" data-tauri-drag-region></div>
       <button class="tbtn" id="advBtn" data-act="pop" data-p="adv" aria-expanded="false" aria-controls="pop-adv" data-i18n="adv.title">Ajustes avanzados</button>
+      <button class="tbtn" id="aboutBtn" data-act="pop" data-p="about" aria-expanded="false" aria-controls="pop-about" data-i18n="about.title">Acerca de</button>
       <button class="tbtn ico" id="themeBtn" data-i18n-aria="theme.toggle" data-i18n-title="theme.title" aria-label="Cambiar entre claro y oscuro" title="Claro / oscuro"></button>
       <div class="winctl" data-i18n-aria="win.controls" aria-label="Controles de ventana">
         <button data-win="min" data-i18n-aria="win.min" aria-label="Minimizar"><svg viewBox="0 0 10 10"><path d="M0 5.5h10"/></svg></button>
@@ -27,6 +28,7 @@
     </header>
     <main class="body" id="view" aria-live="polite"></main>
   </div>
+  <div class="pop" id="pop-about" role="dialog" data-i18n-aria="about.title" aria-label="Acerca de"></div>
   <div class="pop" id="pop-adv" role="dialog" data-i18n-aria="adv.title" aria-label="Ajustes avanzados"></div>
 </div>
 <input type="file" id="fsong" hidden accept=".wav,.wave,audio/*">

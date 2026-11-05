@@ -120,7 +120,7 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
     kind: 'mock',
     async setLang(l) { curLang = l === 'es' ? 'es' : 'en'; },
     async systemLang() { return curLang; },
-    async appInfo() { return { version, os, sidecar_available: sidecar, default_on: PRESETS.map(p => p.id).filter(id => !defaultOff.includes(id)), default_out_root: MOCK_FOLDERS[curLang][0] }; },
+    async appInfo() { return { version, os, sidecar_available: sidecar, sidecar_release: sidecar ? 'ffmpeg-sidecar-v7.1.5-3a21763' : '', default_on: PRESETS.map(p => p.id).filter(id => !defaultOff.includes(id)), default_out_root: MOCK_FOLDERS[curLang][0] }; },
 
     async analyze(path, bins = 600) {
       const file = baseName(path);
@@ -221,6 +221,9 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
     async pickFolder() { folderIx = (folderIx + 1) % MOCK_FOLDERS[curLang].length; return MOCK_FOLDERS[curLang][folderIx]; },
     async pickFile() { return null; },
     async openPath() {},
+    /** Abre el documento de licencias y fuentes (terceros) incluido en la app. */
+    legalOpened: 0,
+    async openLegal() { be.legalOpened++; },
     async allowAsset() {},
     /** Miniatura de una imagen o un vídeo: el mock devuelve siempre el mismo PNG pequeño. */
     async mediaThumbnail() { return MOCK_THUMB; },
@@ -251,6 +254,7 @@ export function createTauri(g = globalThis) {
     pickFolder: () => invoke('pick_folder'),
     pickFile: kind => invoke('pick_file', { kind }),
     openPath: path => invoke('open_path', { path }),
+    openLegal: () => invoke('open_legal'),
     /** Autoriza una imagen arrastrada para verla (asset protocol, ámbito vacío por defecto). */
     allowAsset: path => invoke('allow_asset', { path }),
     /** Miniatura (data URL de 160 px) de una imagen o del primer fotograma de un vídeo. */

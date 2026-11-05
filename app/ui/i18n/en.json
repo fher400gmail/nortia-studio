@@ -100,5 +100,14 @@
   "media.bad_type": "Only images (JPG, PNG) and videos (MP4, MOV) are supported.",
   "done.notes": "Notes:",
   "sidecar.missing": "MP3 and video unavailable: ffmpeg is missing from this install.",
-  "cover.bad_type": "The cover art must be a JPG or PNG image."
+  "cover.bad_type": "The cover art must be a JPG or PNG image.",
+  "about.title": "About",
+  "about.heading": "master check",
+  "about.version": "Version",
+  "about.component": "Video and MP3",
+  "about.component.none": "Not available in this install",
+  "about.licenses": "master check uses FFmpeg (LGPL 2.1 or later) and LAME (LGPL 2), as a separate program with no GPL components. The exact source code, build configuration and licenses are in the third-party document.",
+  "about.others": "Also: Tauri (Apache-2.0/MIT), flac-codec, ebur128, rubato and image (MIT/Apache-2.0), and the Hanken Grotesk typeface (SIL OFL 1.1).",
+  "about.legal": "Licenses and source code",
+  "about.maker": "nortia. studio"
 }

@@ -4,5 +4,6 @@
 pub mod audio;
 pub mod dither;
 pub mod loudness;
+pub mod naming;
 pub mod resample;
 pub mod wav;

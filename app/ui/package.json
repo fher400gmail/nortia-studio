@@ -1,0 +1,10 @@
+{
+  "name": "master-check-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/backend.spec.mjs",
+    "check": "node scripts/ui-check.mjs",
+    "capturas": "node scripts/capturas.mjs"
+  }
+}

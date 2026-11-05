@@ -1,4 +1,4 @@
-/* nortia. studio · Master Out · D5
+/* nortia. studio · Master Check · D5
    Sin dependencias. Un solo script clásico (funciona con file:// y con el protocolo de Tauri),
    organizado en módulos: Data · Icons · Wave · Fx · Store · Views · Create · Events · Boot.
    Querystring: ?theme=light|dark &state=empty|normal|creating|done &os=mac|win &still=1 &pop=adv|more|tree|detail &drag=1 */

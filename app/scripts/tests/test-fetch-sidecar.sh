@@ -27,9 +27,11 @@ mkrelease() { # $1 dir
   ( cd "$1" && for f in *; do echo "$(sum "$f")  $f"; done > SHA256SUMS )
 }
 export GH_BIN="$T/gh" FAKE_LOG="$T/log"
+# hashes «del repositorio» de cada release falso (fetch-sidecar.sh los lee de SIDECAR_SHA_FILE)
+repo_hashes() { grep -v '^ffmpeg-7\|^buildconf' "$1/SHA256SUMS" > "$T/repo-sha"; export SIDECAR_SHA_FILE="$T/repo-sha"; }
 
 # 1) macOS: tres nombres por herramienta (aarch64, x86_64, universal), licencias, tag y repo correctos
-mkrelease "$T/rel1"; export FAKE_RELEASE="$T/rel1"; : > "$T/log"
+mkrelease "$T/rel1"; export FAKE_RELEASE="$T/rel1"; : > "$T/log"; repo_hashes "$T/rel1"
 "$FETCH" macos "$T/d1" >"$T/out1" 2>&1 && ok "macos descarga" || { bad "macos descarga"; cat "$T/out1"; }
 for tr in aarch64-apple-darwin x86_64-apple-darwin universal-apple-darwin; do
   for b in ffmpeg ffprobe; do [ -x "$T/d1/binaries/$b-$tr" ] && ok "$b-$tr" || bad "$b-$tr"; done
@@ -42,17 +44,27 @@ rm -rf "$T/d2"; "$FETCH" windows "$T/d2" >"$T/out2" 2>&1 && ok "windows descarga
 [ -f "$T/d2/binaries/ffmpeg-x86_64-pc-windows-msvc.exe" ] && [ -f "$T/d2/binaries/ffprobe-x86_64-pc-windows-msvc.exe" ] && ok "windows nombres" || bad "windows nombres"
 
 # 3) un binario alterado: falla y no deja nada en binaries/
-mkrelease "$T/rel3"; echo manipulado > "$T/rel3/ffmpeg-universal-apple-darwin"; export FAKE_RELEASE="$T/rel3"
+mkrelease "$T/rel3"; repo_hashes "$T/rel3"; echo manipulado > "$T/rel3/ffmpeg-universal-apple-darwin"; export FAKE_RELEASE="$T/rel3"
 "$FETCH" macos "$T/d3" >"$T/out3" 2>&1 && bad "hash alterado debe fallar" || ok "hash alterado falla"
 grep -qi 'sha256' "$T/out3" && ok "mensaje menciona SHA256" || bad "mensaje SHA256"
 [ -z "$(ls "$T/d3/binaries" 2>/dev/null)" ] && ok "nada copiado" || bad "nada copiado"
 
 # 4) fichero sin línea en SHA256SUMS: falla
-mkrelease "$T/rel4"; grep -v ffprobe-universal "$T/rel4/SHA256SUMS" > "$T/s" && mv "$T/s" "$T/rel4/SHA256SUMS"; export FAKE_RELEASE="$T/rel4"
+mkrelease "$T/rel4"; repo_hashes "$T/rel4"; grep -v ffprobe-universal "$T/rel4/SHA256SUMS" > "$T/s" && mv "$T/s" "$T/rel4/SHA256SUMS"; export FAKE_RELEASE="$T/rel4"
 "$FETCH" macos "$T/d4" >/dev/null 2>&1 && bad "sin línea de hash debe fallar" || ok "sin línea de hash falla"
 
+# 4b) release manipulado de forma consistente (binario y SHA256SUMS cambian a la vez): el hash del
+# repositorio lo delata
+mkrelease "$T/rel4b"; repo_hashes "$T/rel4b"; echo manipulado > "$T/rel4b/ffmpeg-universal-apple-darwin"
+( cd "$T/rel4b" && for f in *; do [ "$f" = SHA256SUMS ] || echo "$(sum "$f")  $f"; done > SHA256SUMS ); export FAKE_RELEASE="$T/rel4b"
+"$FETCH" macos "$T/d4b" >"$T/out4b" 2>&1 && bad "release manipulado consistente debe fallar" || ok "release manipulado consistente falla"
+grep -qi 'repositorio' "$T/out4b" && ok "mensaje cita el hash del repositorio" || bad "mensaje cita el repositorio"
+# 4c) el repositorio no lista el fichero: falla
+mkrelease "$T/rel4c"; grep -v 'ffprobe-universal' "$T/rel4c/SHA256SUMS" > "$T/repo-sha"; export SIDECAR_SHA_FILE="$T/repo-sha" FAKE_RELEASE="$T/rel4c"
+"$FETCH" macos "$T/d4c" >/dev/null 2>&1 && bad "sin hash en el repositorio debe fallar" || ok "sin hash en el repositorio falla"
+
 # 5) sin SHA256SUMS: falla
-mkrelease "$T/rel5"; rm "$T/rel5/SHA256SUMS"; export FAKE_RELEASE="$T/rel5"
+mkrelease "$T/rel5"; repo_hashes "$T/rel5"; rm "$T/rel5/SHA256SUMS"; export FAKE_RELEASE="$T/rel5"
 "$FETCH" macos "$T/d5" >/dev/null 2>&1 && bad "sin SHA256SUMS debe fallar" || ok "sin SHA256SUMS falla"
 
 # 6) marcador de posición (job de Linux): ficheros vacíos con el triple del host

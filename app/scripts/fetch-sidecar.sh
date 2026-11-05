@@ -13,6 +13,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="fher400gmail/nortia-studio"
 TAG="$(tr -d '[:space:]' < "$HERE/sidecar-tag.txt")"
 GH="${GH_BIN:-gh}"
+# Hashes fijados en el repositorio: un release manipulado (binario y SHA256SUMS a la vez) no pasa.
+SHA_FILE="${SIDECAR_SHA_FILE:-$HERE/sidecar-sha256.txt}"
 LICENSES=(LICENSE.LGPLv2.1 COPYING.LGPL LICENSE.lame)
 
 die() { echo "::error::fetch-sidecar: $*" >&2; exit 1; }
@@ -41,14 +43,18 @@ echo "descargando $TAG ($REPO)"
 "$GH" release download "$TAG" --repo "$REPO" "${pats[@]}" -D "$work" --clobber \
   || die "no se pudo descargar el release $TAG"
 
+[ -s "$SHA_FILE" ] || die "falta $SHA_FILE"
 [ -s "$work/SHA256SUMS" ] || die "el release $TAG no trae SHA256SUMS"
 for f in "${sources[@]}" "${LICENSES[@]}"; do
   [ -f "$work/$f" ] || die "falta $f en el release $TAG"
   want="$(awk -v n="$f" '$2 == n { print $1 }' "$work/SHA256SUMS")"
   [ -n "$want" ] || die "$f no figura en SHA256SUMS"
+  pinned="$(awk -v n="$f" '$1 !~ /^#/ && $2 == n { print $1 }' "$SHA_FILE")"
+  [ -n "$pinned" ] || die "$f no figura en el SHA256 del repositorio ($SHA_FILE)"
+  [ "$pinned" = "$want" ] || die "SHA256SUMS del release difiere del hash del repositorio para $f (repositorio $pinned, release $want)"
   got="$(sha256 "$work/$f")"
   [ "$got" = "$want" ] || die "SHA256 de $f no coincide (esperado $want, obtenido $got)"
-  echo "sha256 ok  $f"
+  echo "sha256 ok  $f (release y repositorio)"
 done
 
 mkdir -p "$dest/binaries" "$dest/licenses"

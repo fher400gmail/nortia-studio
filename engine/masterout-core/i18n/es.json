@@ -1,8 +1,8 @@
 {
-  "readme.master_untouched": "Tu máster no se ha modificado. Master Out mide y avisa.",
+  "readme.master_untouched": "Tu máster no se ha modificado. master check mide y avisa.",
   "readme.upsampling": "sube la resolución (no mejora el sonido)",
   "readme.disabled": "No disponible",
-  "readme.generated": "Creado con Master Out {version} el {date}",
+  "readme.generated": "Creado con master check {version} el {date}",
   "readme.folders": "Carpetas de esta entrega:",
   "report.title": "Informe de loudness",
   "report.integrated": "Loudness integrado",

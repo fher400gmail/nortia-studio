@@ -337,7 +337,7 @@ fn list_info_body(m: &WavMetadata) -> Vec<u8> {
     if let Some(y) = m.year {
         info_sub(&mut b, b"ICRD", &y.to_string());
     }
-    info_sub(&mut b, b"ISFT", "Master Out");
+    info_sub(&mut b, b"ISFT", "master check");
     b
 }
 

@@ -3,7 +3,7 @@
 use crate::i18n::{t, tf, Lang};
 use crate::loudness::Verdict;
 use crate::plan::{Job, MasterInfo, ReleaseMeta, Resolved};
-use crate::presets;
+use crate::presets::{self, Container};
 
 pub struct DeliverySummary<'a> {
     pub meta: &'a ReleaseMeta,
@@ -73,14 +73,17 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
     for r in s.jobs {
         match r {
             Resolved::Job(j) => {
-                out.push_str(&format!(
-                    "{}/  →  {}  ({} bit · {} kHz · {})",
-                    j.subfolder,
-                    j.file_name,
-                    j.bits,
-                    khz(lang, j.sample_rate),
-                    container_label(j)
-                ));
+                let spec = if j.container == Container::Mp3 {
+                    "MP3 320 kbps".to_string()
+                } else {
+                    format!(
+                        "{} bit · {} kHz · {}",
+                        j.bits,
+                        khz(lang, j.sample_rate),
+                        container_label(j)
+                    )
+                };
+                out.push_str(&format!("{}/  →  {}  ({})", j.subfolder, j.file_name, spec));
                 if j.is_upsampling {
                     out.push_str(&format!("  ⚠ {}", t(lang, "readme.upsampling")));
                 }

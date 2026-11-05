@@ -80,6 +80,10 @@ fn readme_lists_each_active_job_once_in_order() {
         assert!(pos[0] < pos[1] && pos[1] < pos[2]);
         assert!(r.contains("01 Spotify/  →  Vera Alcón - Luz de Noviembre [Spotify] 24bit-96kHz.flac  (24 bit · 96 kHz · FLAC)"));
         assert!(r.contains(&t(lang, "readme.master_untouched")));
+        assert!(t(lang, "readme.master_untouched").contains("master check"));
+        assert!(
+            r.contains("08 Promo/  →  Vera Alcón - Luz de Noviembre [MP3 320].mp3  (MP3 320 kbps)")
+        );
     }
 }
 

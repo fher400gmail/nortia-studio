@@ -13,7 +13,8 @@
     "status": "confirmed",
     "source_url": "https://providersupport.spotify.com/article/audio-and-artwork-specifications",
     "group": "streaming",
-    "default_on": true
+    "default_on": true,
+    "source_kind": "url"
   },
   {
     "id": "apple_adm",
@@ -31,7 +32,8 @@
     "group": "streaming",
     "default_on": true,
     "min_bits": 24,
-    "min_bits_reason_key": "apple_needs_24bit"
+    "min_bits_reason_key": "apple_needs_24bit",
+    "source_kind": "url"
   },
   {
     "id": "amazon",
@@ -47,7 +49,8 @@
     "status": "recommendation",
     "source_url": "https://digprjsurvey.amazon.com/csad/help/node/TgG1d8mPjGwf885hRP",
     "group": "streaming",
-    "default_on": false
+    "default_on": false,
+    "source_kind": "url"
   },
   {
     "id": "tidal",
@@ -63,7 +66,8 @@
     "status": "recommendation",
     "source_url": "docs/investigacion/specs-plataformas-ronda2.md (sin fuente oficial: por verificar)",
     "group": "streaming",
-    "default_on": false
+    "default_on": false,
+    "source_kind": "note"
   },
   {
     "id": "deezer",
@@ -79,12 +83,13 @@
     "status": "recommendation",
     "source_url": "docs/investigacion/specs-plataformas-ronda2.md (sin fuente oficial: por verificar)",
     "group": "streaming",
-    "default_on": false
+    "default_on": false,
+    "source_kind": "note"
   },
   {
     "id": "youtube_music",
     "name": "YouTube Music",
-    "subfolder": "06 YouTube Music",
+    "subfolder": "06 YouTube",
     "tag": "YouTube Music",
     "container": "wav",
     "bits": "native",
@@ -97,7 +102,25 @@
     "group": "streaming",
     "default_on": false,
     "min_bits": 16,
-    "min_bits_reason_key": "youtube_music_needs_16bit"
+    "min_bits_reason_key": "youtube_music_needs_16bit",
+    "source_kind": "note"
+  },
+  {
+    "id": "youtube_video",
+    "name": "Vídeo YouTube",
+    "subfolder": "06 YouTube",
+    "tag": "YouTube",
+    "container": "mp4",
+    "bits": null,
+    "rate": 48000,
+    "target_lufs": null,
+    "max_tp_dbtp": -1,
+    "embed_metadata": false,
+    "status": "confirmed",
+    "source_url": "https://support.google.com/youtube/answer/1722171",
+    "group": "extras",
+    "default_on": false,
+    "source_kind": "url"
   },
   {
     "id": "distributor_std",
@@ -113,7 +136,42 @@
     "status": "confirmed",
     "source_url": "https://support.cdbaby.com/hc/en-us/articles/204498645",
     "group": "distributor",
-    "default_on": true
+    "default_on": true,
+    "source_kind": "url"
+  },
+  {
+    "id": "distributor_hires",
+    "name": "Distribuidora alta resolución",
+    "subfolder": "07 Distribuidora",
+    "tag": "Distribuidora Hi-Res",
+    "container": "wav",
+    "bits": "native",
+    "rate": "native",
+    "target_lufs": null,
+    "max_tp_dbtp": -1,
+    "embed_metadata": true,
+    "status": "confirmed",
+    "source_url": "https://support.distrokid.com/hc/en-us/articles/360013647753-",
+    "group": "distributor",
+    "default_on": false,
+    "source_kind": "url"
+  },
+  {
+    "id": "tunecore",
+    "name": "TuneCore (24 bit / 192 kHz)",
+    "subfolder": "07 Distribuidora",
+    "tag": "TuneCore",
+    "container": "wav",
+    "bits": 24,
+    "rate": 192000,
+    "target_lufs": null,
+    "max_tp_dbtp": -1,
+    "embed_metadata": false,
+    "status": "confirmed",
+    "source_url": "https://support.tunecore.com/hc/en-us/articles/115006499327",
+    "group": "distributor",
+    "default_on": false,
+    "source_kind": "url"
   },
   {
     "id": "mp3_promo",
@@ -129,44 +187,13 @@
     "status": "confirmed",
     "source_url": "https://id3.org/id3v2.3.0",
     "group": "extras",
-    "default_on": false
-  },
-  {
-    "id": "distributor_hires",
-    "name": "Distribuidora alta resolución",
-    "subfolder": "09 Distribuidora Hi-Res",
-    "tag": "Hi-Res",
-    "container": "wav",
-    "bits": "native",
-    "rate": "native",
-    "target_lufs": null,
-    "max_tp_dbtp": -1,
-    "embed_metadata": true,
-    "status": "confirmed",
-    "source_url": "https://support.distrokid.com/hc/en-us/articles/360013647753-",
-    "group": "distributor",
-    "default_on": false
-  },
-  {
-    "id": "tunecore",
-    "name": "TuneCore (24 bit / 192 kHz)",
-    "subfolder": "10 TuneCore",
-    "tag": "TuneCore",
-    "container": "wav",
-    "bits": 24,
-    "rate": 192000,
-    "target_lufs": null,
-    "max_tp_dbtp": -1,
-    "embed_metadata": false,
-    "status": "confirmed",
-    "source_url": "https://support.tunecore.com/hc/en-us/articles/115006499327",
-    "group": "distributor",
-    "default_on": false
+    "default_on": false,
+    "source_kind": "url"
   },
   {
     "id": "cover",
     "name": "Portada",
-    "subfolder": "11 Portada",
+    "subfolder": "09 Imagen",
     "tag": "Portada",
     "container": "jpg",
     "bits": null,
@@ -177,12 +204,13 @@
     "status": "recommendation",
     "source_url": "https://providersupport.spotify.com/article/audio-and-artwork-specifications",
     "group": "extras",
-    "default_on": false
+    "default_on": false,
+    "source_kind": "url"
   },
   {
     "id": "canvas",
     "name": "Canvas",
-    "subfolder": "12 Canvas",
+    "subfolder": "09 Imagen",
     "tag": "Canvas",
     "container": "mp4",
     "bits": null,
@@ -193,22 +221,7 @@
     "status": "confirmed",
     "source_url": "https://support.spotify.com/us/artists/article/canvas-guidelines/",
     "group": "extras",
-    "default_on": false
-  },
-  {
-    "id": "youtube_video",
-    "name": "Vídeo YouTube",
-    "subfolder": "13 YouTube",
-    "tag": "YouTube",
-    "container": "mp4",
-    "bits": null,
-    "rate": 48000,
-    "target_lufs": null,
-    "max_tp_dbtp": -1,
-    "embed_metadata": false,
-    "status": "confirmed",
-    "source_url": "https://support.google.com/youtube/answer/1722171",
-    "group": "extras",
-    "default_on": false
+    "default_on": false,
+    "source_kind": "url"
   }
 ]

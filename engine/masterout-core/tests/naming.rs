@@ -96,3 +96,14 @@ fn media_examples() {
         "Vera Alcón - Luz [MP3 320].mp3"
     );
 }
+
+#[test]
+fn long_version_tag_and_suffix_never_panic_or_exceed_200() {
+    let long = "x".repeat(300);
+    assert!(delivery_folder("Artista", "Título", Some(&long)).len() <= 200);
+    assert!(delivery_folder(&long, &long, Some(&long)).len() <= 200);
+    let f = audio_file_name(&long, &long, &long, 24, 96000, "flac");
+    assert!(f.len() <= 200 && f.ends_with(" 24bit-96kHz.flac"));
+    let m = media_file_name(&long, &long, &long, &long, "jpg");
+    assert!(m.len() <= 200 && m.ends_with(".jpg"));
+}

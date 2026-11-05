@@ -1,8 +1,8 @@
 {
-  "readme.master_untouched": "Your master has not been modified. Master Out measures and warns.",
+  "readme.master_untouched": "Your master has not been modified. master check measures and warns.",
   "readme.upsampling": "upsampled (does not improve the sound)",
   "readme.disabled": "Not available",
-  "readme.generated": "Created with Master Out {version} on {date}",
+  "readme.generated": "Created with master check {version} on {date}",
   "readme.folders": "Folders in this delivery:",
   "report.title": "Loudness report",
   "report.integrated": "Integrated loudness",

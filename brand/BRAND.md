@@ -1,57 +1,73 @@
 # nortia. · BRAND
 
-Dirección «software de confianza» (referencias de sobriedad: Stripe, Linear, Mercury, Qonto; sin copiar ninguna). Marca sin personas visibles, sin fotos de stock y sin logos de terceros. El símbolo es una propuesta de diseño: unicidad de marca registrada no verificada.
+Sistema cerrado. Dirección A «Tipográfica pura» con el gesto del icono de C para studio. Todo lo de esta carpeta sale de `python3 gen.py`.
 
-## 1. Propósito y personalidad (5 líneas)
-1. Propósito: dar orientación. Software que dice dónde estás y qué toca hacer ahora (la aguja marca el norte).
-2. Promesa: herramientas fiables, claras y duraderas, con precio y alcance a la vista.
-3. Personalidad: serena, precisa, discreta; piensa antes de hablar.
-4. Lo que no es: llamativa, juguetona, hype tecnológico, promesa de resultados.
-5. Cómo se nota: mucho aire, un solo toque de ámbar, números exactos y textos cortos.
+## 1. Propósito y personalidad
+
+1. **Propósito:** hacer herramientas pequeñas, exactas y tranquilas para quien hace música, para que termine la canción y no pelee con el software.
+2. **Confianza:** tu archivo sale como lo dejaste, sin sorpresas.
+3. **Precisión:** números exactos (LUFS, kHz, bits, formatos); ningún adorno que no informe.
+4. **Calma:** el producto se aparta; la marca es tinta y papel y solo se enciende donde hay significado.
+5. **Carácter:** de estudio y de aparato (un piloto LED, una barra de nivel), no de corporación.
 
 ## 2. Tono de voz (3 reglas)
-1. **Concreto antes que grande.** Di qué hace, para quién y en qué sistemas; sin superlativos ni promesas de ingresos.
-   - Bien: «Grabadora de ideas para productores. macOS y Windows. Pago único de 49 €.»
-   - Mal: «La revolucionaria herramienta que transformará tu música para siempre.»
-2. **Voz de producto, tuteo sobrio.** Verbos de acción, una idea por frase, sin exclamaciones ni emojis. Marca sin persona: «nosotros» solo en soporte.
-   - Bien: «Descarga la versión 1.0. Si algo falla, escríbenos y lo revisamos.»
-   - Mal: «¡Te encantará! 🎉 Nuestro increíble equipo ha creado algo especial para ti.»
-3. **Transparente con lo que no hace.** Indica versión, fecha y límites; los estados llevan texto (Vigente, Anunciado).
-   - Bien: «Versión 1.0 · actualizada el 5 de noviembre de 2026. No incluye exportación en vídeo.»
-   - Mal: «Lo hace todo. Sin límites.»
 
-## 3. Arquitectura de marca
-**Modelo: madre + submarcas («casa de marca»).** La madre es **nortia.**; cada línea de producto es **nortia. <sub>**.
+1. **Dato antes que adjetivo.** Di qué pasa y con qué cifra; no cómo de bueno es.
+2. **Frase corta, verbo directo, tú.** Una idea por frase; sin exclamaciones, sin jerga de marketing, sin «solución», «potente» ni «revolucionario».
+3. **Calma en los errores.** Di qué ha pasado, qué está a salvo y qué hacer; nunca culpes ni alarmes.
 
-| | Madre | Submarca |
-|---|---|---|
-| Nombre | `nortia.` | `nortia. studio` (luego `nortia. tools`, `nortia. lab`…) |
-| Wordmark | «nortia» SemiBold + punto ámbar | idéntico + espacio de 0,2 em + «<sub>» en **Regular** y color de la submarca |
-| Símbolo | aguja: punta ámbar, cuerpo azul noche | misma geometría; punta ámbar, cuerpo en el color de la submarca |
-| Color propio | azul noche #0F1F3D | color de submarca (ver DESIGN.md §2) |
+| Bien | Mal |
+|---|---|
+| «Tu máster está a −9,1 LUFS y pasa de 0 dB. Bájalo 1 dB y listo.» | «¡Atención! Tu máster tiene un nivel demasiado alto y podría sonar fatal.» |
+| «No hemos podido guardar la carpeta. Tus archivos siguen intactos. Elige otra ubicación.» | «¡Error crítico! Algo ha fallado.» |
+| «Prepara tu lanzamiento en un paso.» | «La solución todo en uno más potente para llevar tu música al siguiente nivel.» |
 
-**Cómo se nombra una submarca:** una sola palabra en minúscula que describe el territorio (studio, tools, lab); sin «pro», «ai», «plus» ni sufijos; máx. 8 letras; nunca un nombre de persona.
+Nombres de producto y app: **siempre en minúsculas** (`master check`), sin punto propio. El punto es de la marca.
 
-**Qué hereda** (no se toca): geometría del símbolo y hueco de 2 u; punta y punto en ámbar #BF7F12; «nortia.» en SemiBold con tracking −0,015 em; Inter; avatar y portadas sobre azul noche; radios, espaciado, componentes, iconografía; tono de voz.
+## 3. Arquitectura: madre + divisiones
 
-**Qué cambia:** color del cuerpo del símbolo y de la palabra de la submarca; color del botón primario en sus productos (hover oscuro propio); tinte de superficie; tagline.
+- **nortia.** es la madre. Wordmark en tinta, punto en tinta. Sin segunda palabra y sin acento. Icono: un punto.
+- **nortia. &lt;división&gt;** = el mismo wordmark + una segunda palabra en gris (Hanken Grotesk 400, `#6A6863` en claro / `#9A9893` en oscuro) + **acento propio solo en el punto**, en los estados y en el botón primario.
+- Cada división tiene un color y una **transformación del punto** en su icono:
 
-**Alta de una submarca nueva:** (1) color con contraste ≥ 4,5:1 sobre #F7F8FA y variante clara ≥ 4,5:1 sobre #0A1429; (2) tono distinto del azul noche y del ámbar, ni rojo ni verde puro (reservados a error/éxito); (3) generarla en `gen.py` añadiéndola a `SUBS` de `core.py`; (4) pasar `contrast.py`.
+| División | Palabra | Acento (claro / oscuro) | Icono (gesto) | Estado |
+|---|---|---|---|---|
+| nortia. | — | tinta / papel | un punto | madre |
+| nortia. studio | studio | `#FF5A00` / `#FF5A00` | punto estirado a barra vertical 2:1 («el punto se estira cuando suena») | fijado |
+| nortia. lab | lab | `#2B3BFF` / `#7483FF` | dos puntos (ejemplo) | reservado, ejemplo |
+| reserva 1 | p. ej. field | `#00968B` / `#1FD1C2` | punto estirado en horizontal | propuesta |
+| reserva 2 | p. ej. live | `#D6137A` / `#FF52A2` | punto con anillo | propuesta |
 
-## 4. Reglas del punto de «nortia.»
-- El punto forma parte del nombre: **siempre presente** en el logo, en minúscula; nunca «Nortia», «NORTIA» ni «nortia» sin punto en un logo.
-- Color: **ámbar #BF7F12** en versiones de color y en negativo; en negro/blanco, de la misma tinta que el texto.
-- Es el glifo de Inter SemiBold (mismo peso que «nortia»), pegado a la «a» con el kerning de la fuente; sin espacio antes.
-- En submarcas el punto queda tras «nortia» y la palabra de la submarca va después, sin segundo punto: `nortia. studio`.
-- Es la **segunda firma de ámbar** del logo junto con la punta: en una pantalla o página, el ámbar solo aparece en el logo (y como mucho en un dato clave por página).
-- En texto corrido se escribe `nortia.`, en minúscula incluso al inicio de frase; si cae al final de frase no se añade otro punto. En URL, usuario de redes, nombre de archivo y firma de razón social **no lleva punto** (`nortia`, `@nortia`); en voz: «nortia».
-- No se usa el punto solo como viñeta, separador, sello ni decoración.
+**Cómo se nombra una división nueva**
+
+1. Una sola palabra, minúscula, 3 a 8 letras, que diga el **oficio** (studio, lab, field), no la tecnología.
+2. Se escribe `nortia. palabra`: punto, espacio, palabra. Nunca guion, nunca mayúscula, nunca dos palabras.
+3. Coge el siguiente acento libre de la reserva (o propón uno nuevo y pásalo por `python3 gen.py`: el script exige AA en texto-acento, texto sobre botón y 3:1 del relleno sobre oscuro).
+4. Define su gesto: una sola transformación del punto (estirar, dividir, anillar). Se dibuja con el mismo diámetro base y vive en `brand.glyph()`.
+5. Añade la palabra a `WORD` y el color a `ACCENTS` en `brand.py`; el kit, los tokens y los iconos se regeneran solos.
+6. Comprueba que a 16 px el icono se lee (el script lo mide) y que el acento no se confunde con los estados (error `#B42318`, aviso `#E0A100`, correcto `#1E7F4F`).
+
+## 4. Reglas del punto
+
+1. El punto del wordmark es **circular, dibujado a medida**, nunca el glifo de la fuente: diámetro = grosor de asta × 1,22, separado 0,075 em de la «a» y apoyado en la línea de base con 0,6 % de sobreimpresión.
+2. En la madre el punto es del color del texto. En una división, es **el único sitio del logo donde vive el acento**.
+3. El punto se estira solo en el **icono** de la división (studio = barra). En el wordmark no se estira nunca.
+4. El punto final de un titular (`plataforma.`) es el mismo círculo y va en el acento de la división; un titular lleva un solo punto de acento.
+5. El punto no se anima en bucle ni se usa como viñeta decorativa: marca estado (lectura, selección) o cierre de frase.
+6. Zona de respeto: 1 diámetro de punto alrededor del wordmark. Tamaño mínimo: wordmark 64 px de ancho (pantalla) / 18 mm (impresión); símbolo 16 px.
 
 ## 5. Usos prohibidos
-- Escribir «Nortia», «NORTIA», «Nortia Labs» o añadir sufijos; cambiar de fuente el wordmark; poner «studio» en negrita o en mayúsculas.
-- Ámbar en botones, enlaces, fondos o texto (solo punta, punto y, como texto, #8A5A00 si hiciera falta); otro color de acento; degradados, sombras, contornos, brillos.
-- Estirar, rotar, inclinar, igualar los brazos de la aguja, cerrar el hueco de 2 u, añadir círculos, estrellas o destellos; usar el símbolo como viñeta.
-- Recolorear el cuerpo con un color fuera de la paleta; usar el color de submarca en la madre.
-- Versión de color sobre fondos que no sean #F7F8FA/blanco (usar «reverse» sobre azul noche, negro/blanco sobre foto o color).
-- Anchos menores de 120 px (horizontal) o 16 px (símbolo); sin zona de respeto de 0,5 × altura del símbolo.
-- Personas, fotos de stock, logos de terceros, emojis; promesas de ingresos o rentabilidad.
+
+- Cambiar la fuente, el peso (590), el interletraje o el punto del wordmark; recomponerlo con texto vivo.
+- Colorear letras o la segunda palabra con el acento; dos acentos en un mismo logo.
+- Degradados, brillos, biseles, sombras en el wordmark o en el símbolo; contornos y efectos 3D.
+- Poner el wordmark naranja sobre papel como **texto** (2,8:1): para texto usa tinta, y para enlaces el naranja-texto `#B84100`.
+- Estirar o deformar el símbolo; rotar la barra; usar la barra en la madre o el punto simple en studio.
+- Poner el logo sobre fotos sin contraste o sobre colores de otra división.
+- Logos o marcas de terceros dentro de los iconos y portadas; nombres de personas en plantillas.
+- Mayúsculas en `nortia.` o en nombres de app (`Master Check`, `NORTIA`).
+- Usar el naranja de studio como color de error o el rojo como acento.
+
+## 6. Archivos
+
+`logos/` (SVG + PNG 512/2048 transparentes) · `avatares/` · `favicon/` · `banners/` · `iconos/macos` y `iconos/windows` · `plantillas/` · `kit.png` y `familia.png` · `tokens.json` / `tokens.css` · `DESIGN.md`.

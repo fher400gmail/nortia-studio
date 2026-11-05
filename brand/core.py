@@ -1,169 +1,248 @@
-"""nortia. · núcleo: colores, tipografía (Inter a trazados con kerning GPOS), símbolo y logos."""
-import os, base64
+"""Núcleo de gen.py: fuentes, contornos de texto (wordmarks a medida), formas y render.
+Todo el texto de marca se dibuja como PATH (kerning y punto propios); el texto de interfaz usa @font-face."""
+import os, math, asyncio
 from fontTools.ttLib import TTFont
+from fontTools.varLib import instancer
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
+from fontTools.pens.boundsPen import BoundsPen
 
-ROOT=os.path.dirname(os.path.abspath(__file__))
-FD='/usr/share/fonts/opentype/inter/'
-# ---- paleta -----------------------------------------------------------------
-NAVY='#0F1F3D'; NAVY_HOVER='#1B2F57'; NIGHT='#0A1429'; AMBER='#BF7F12'; AMBER_TEXT='#8A5A00'
-PAPER='#F7F8FA'; WHITE='#FFFFFF'; BLACK='#000000'
-INK2='#4A5568'; INK3='#5F6B7E'; BORDER='#D5DBE5'; CONTROL='#808CA3'
-D_TEXT='#E8ECF3'; D_TEXT2='#A3AEC2'; D_BORDER='#26385A'
-OK='#146C43'; OK_BG='#E6F4EC'; ANN='#1F4E8C'; ANN_BG='#E6EEF9'; WARN=AMBER_TEXT; WARN_BG='#FBF1DC'; ERR='#B42318'; ERR_BG='#FDECEA'
-# submarcas: color sobre claro, variante para fondo oscuro, tinte de superficie
-SUBS={
- 'verde':  dict(name='studio',label='Verde azulado',main='#0E5E63',light='#5BB8BC',tint='#E3F1F1',hover='#0B4A4E'),
- 'grafito':dict(name='studio',label='Grafito cálido',main='#45413C',light='#CFC8BE',tint='#ECEAE6',hover='#33302C'),
+HERE = os.path.dirname(os.path.abspath(__file__))
+FONTS = os.path.join(HERE, "fonts")
+BASE = "https://raw.githubusercontent.com/google/fonts/main/ofl"
+FONT_URLS = {
+    "HankenGrotesk.ttf": "hankengrotesk/HankenGrotesk%5Bwght%5D.ttf",
 }
-DEFAULT_SUB='verde'
 
-def fmt(v): return ('%.2f'%v).rstrip('0').rstrip('.')
-def poly(pts): return 'M'+' L'.join(f'{fmt(x)} {fmt(y)}' for x,y in pts)+' Z'
 
-# ---- tipografía ---------------------------------------------------------------
-WF={'r':'Inter-Regular.otf','m':'Inter-Medium.otf','s':'Inter-SemiBold.otf','b':'Inter-Bold.otf'}
-_F={}
-def _font(w):
-    fn=WF[w]
-    if fn not in _F:
-        f=TTFont(FD+fn); g=f['GPOS'].table; idx=set()
-        for fr in g.FeatureList.FeatureRecord:
-            if fr.FeatureTag=='kern': idx.update(fr.Feature.LookupListIndex)
-        subs=[]
-        for i in sorted(idx):
-            lk=g.LookupList.Lookup[i]
-            for st in lk.SubTable:
-                if lk.LookupType==9: st=st.ExtSubTable
-                if st.__class__.__name__=='PairPos': subs.append(st)
-        _F[fn]=(f.getGlyphSet(),f.getBestCmap(),f['head'].unitsPerEm,subs)
-    return _F[fn]
-def kern(w,a,b):
-    gs,cm,upm,subs=_font(w); ga,gb=cm[ord(a)],cm[ord(b)]
-    for st in subs:
-        cov=st.Coverage.glyphs
-        if ga not in cov: continue
-        if st.Format==1:
-            for pv in st.PairSet[cov.index(ga)].PairValueRecord:
-                if pv.SecondGlyph==gb: return getattr(pv.Value1,'XAdvance',0) or 0
-        else:
-            c1=st.ClassDef1.classDefs.get(ga,0); c2=st.ClassDef2.classDefs.get(gb,0)
-            v=st.Class1Record[c1].Class2Record[c2].Value1
-            val=getattr(v,'XAdvance',0) if v else 0
-            if val: return val
-    return 0
-def _glyph(w,ch,size,x,y):
-    gs,cm,upm,_=_font(w); sc=size/upm; gn=cm[ord(ch)]
-    pen=SVGPathPen(gs,fmt); gs[gn].draw(TransformPen(pen,(sc,0,0,-sc,x,y)))
-    return pen.getCommands(),gs[gn].width*sc
-def layout(runs,size,x,y,track=0.0):
-    """runs=[(texto,peso,color[,hueco_em_antes])] -> (svg, ancho). Kerning continuo entre runs sin hueco."""
-    out=[]; cx=x; n=len(runs)
-    for ri,run in enumerate(runs):
-        t,w,col=run[:3]; gap=run[3] if len(run)>3 else 0
-        cx+=gap*size; d=[]
-        for i,ch in enumerate(t):
-            if ch==' ':
-                cx+=_font(w)[2] and (0.27*size)+track*size; continue
-            c,adv=_glyph(w,ch,size,cx,y); d.append(c); cx+=adv+track*size
-            nxt=t[i+1] if i+1<len(t) else (runs[ri+1][0][0] if ri+1<n and not (len(runs[ri+1])>3 and runs[ri+1][3]) else None)
-            if nxt and nxt!=' ': cx+=kern(w,ch,nxt)*size/_font(w)[2]
-        if d: out.append(f'<path d="{" ".join(d)}" fill="{col}"/>')
-    return ''.join(out),cx-x
-def tw(s,w,size,track=0.0): return layout([(s,w,'#000')],size,0,0,track)[1]
-def txt(s,w,size,x,y,fill,track=0.0,anchor='start',op=None):
-    width=tw(s,w,size,track)
-    if anchor=='middle': x-=width/2
-    elif anchor=='end': x-=width
-    svg,_=layout([(s,w,fill)],size,x,y,track)
-    if op: svg=svg.replace('/>',f' fill-opacity="{op}"/>')
-    return svg
-def para(s,w,size,x,y,maxw,lh,fill,track=0.0):
-    words=s.split(); lines=[]; cur=''
-    for wd in words:
-        t=(cur+' '+wd).strip()
-        if tw(t,w,size,track)<=maxw or not cur: cur=t
-        else: lines.append(cur); cur=wd
-    if cur: lines.append(cur)
-    return ''.join(txt(l,w,size,x,y+i*lh,fill,track) for i,l in enumerate(lines)),len(lines)*lh
+def ensure_fonts():
+    os.makedirs(FONTS, exist_ok=True)
+    import subprocess
+    for name, rel in FONT_URLS.items():
+        p = os.path.join(FONTS, name)
+        if not os.path.exists(p):
+            subprocess.run(["curl", "-sf", "-m", "90", "-o", p, f"{BASE}/{rel}"], check=True)
 
-# ---- símbolo N2 «norte marcado» (viewBox 64) -------------------------------------
-def sym_parts(hw=10):
-    wd=lambda y: hw*(y-2)/30 if y<=32 else hw*(62-y)/30
-    tip=[(32,2),(32+wd(31),31),(32-wd(31),31)]
-    body=[(32-wd(33),33),(32+wd(33),33),(32,62)]
-    return body,tip
-def symbol(body_col,tip_col,hw=10):
-    b,t=sym_parts(hw)
-    return f'<path d="{poly(b)}" fill="{body_col}"/><path d="{poly(t)}" fill="{tip_col}"/>'
 
-def cols(tone,brand):
-    """colores por tono: name (nortia), dot, sub (studio), body, tip"""
-    S=SUBS.get(brand) if brand else None
-    if tone=='color':  return dict(name=NAVY,dot=AMBER,sub=S['main'] if S else None,body=S['main'] if S else NAVY,tip=AMBER)
-    if tone=='reverse':return dict(name=WHITE,dot=AMBER,sub=S['light'] if S else None,body=S['light'] if S else PAPER,tip=AMBER)
-    c=BLACK if tone=='negro' else WHITE
-    return dict(name=c,dot=c,sub=c,body=c,tip=c)
+_cache = {}
 
-# ---- logos --------------------------------------------------------------------
-TRACK=-0.015; SUBGAP=0.2
-def wm_runs(brand,tone):
-    c=cols(tone,brand); runs=[('nortia','s',c['name']),('.','s',c['dot'])]
-    if brand: runs.append((SUBS[brand]['name'],'r',c['sub'],SUBGAP))
-    return runs
-XH=0.546  # altura de x de Inter (em)
-def svgdoc(w,h,body,title='nortia.',bg=None):
-    b=f'<rect width="{fmt(w)}" height="{fmt(h)}" fill="{bg}"/>' if bg else ''
-    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {fmt(w)} {fmt(h)}" width="{fmt(w)}" height="{fmt(h)}" role="img" aria-label="{title}"><title>{title}</title>{b}{body}</svg>\n'
-def title_of(brand): return 'nortia. '+SUBS[brand]['name'] if brand else 'nortia.'
-SIZE_H=46; GAP_H=14; RAISE=0.5; ASC=0.74   # ASC: altura del punto de la i en Inter (em)
-def logo(form,brand,tone):
-    """devuelve (fragmento svg, ancho, alto) en unidades donde el símbolo mide 64 de alto (agujas de 20 de ancho, recortadas)"""
-    c=cols(tone,brand); sym=symbol(c['body'],c['tip'])
-    if form=='simbolo': return sym,64,64
-    runs=wm_runs(brand,tone)
-    if form=='wordmark':
-        size=SIZE_H; base=ASC*size+3
-        wm,w=layout(runs,size,0,base,TRACK); return wm,w,base+3
-    if form=='horizontal':
-        base=32+XH*SIZE_H/2+RAISE
-        wm,w=layout(runs,SIZE_H,20+GAP_H,base,TRACK)
-        return f'<g transform="translate(-22 0)">{sym}</g>'+wm,20+GAP_H+w,64
-    if form=='vertical':
-        size=30; wmw=layout(runs,size,0,0,TRACK)[1]; vw=max(wmw,20); base=64+20+ASC*size
-        wm,_=layout(runs,size,(vw-wmw)/2,base,TRACK)
-        return f'<g transform="translate({fmt(vw/2-32)} 0)">{sym}</g>'+wm,vw,base+3
-def logo_svg(form,brand,tone):
-    f,w,h=logo(form,brand,tone); return svgdoc(w,h,f,title_of(brand))
-def place(form,brand,tone,x,y,height=None,width=None):
-    f,w,h=logo(form,brand,tone); s=(height/h) if height else (width/w)
-    return f'<g transform="translate({fmt(x)} {fmt(y)}) scale({s:.5f})">{f}</g>',w*s,h*s
 
-def avatar_frag(brand,size,radius=0.22,round_=True,frac=0.80,hw=12):
-    """cuadrado navy con aguja al frac del lado; fragmento en coordenadas 0..size"""
-    S=SUBS.get(brand) if brand else None
-    body=S['light'] if S else PAPER
-    sc=frac*size/64; off=(size-64*sc)/2   # la aguja ocupa 60/64*sc; se centra la caja de 64
-    r=f' rx="{fmt(size*radius)}"' if round_ else ''
-    return f'<rect width="{fmt(size)}" height="{fmt(size)}"{r} fill="{NAVY}"/><g transform="translate({fmt(off)} {fmt(off)}) scale({sc:.5f})">{symbol(body,AMBER,hw)}</g>'
-def avatar_svg(brand,round_=True,frac=0.80):
-    return svgdoc(64,64,avatar_frag(brand,64,0.22,round_,frac),title_of(brand)+' avatar')
+def font(fname, **axes):
+    key = (fname, tuple(sorted(axes.items())))
+    if key in _cache:
+        return _cache[key]
+    f = TTFont(os.path.join(FONTS, fname))
+    if "fvar" in f:
+        have = {a.axisTag: a for a in f["fvar"].axes}
+        loc = {k: v for k, v in axes.items() if k in have}
+        # los ejes no indicados se quedan en su valor por defecto
+        f = instancer.instantiateVariableFont(f, loc, inplace=False)
+    _cache[key] = f
+    return f
 
-# ---- raster / ico -------------------------------------------------------------
-import subprocess, struct, io
-def png(svg_text,out,w=None,h=None):
-    tmp=out+'.tmp.svg'; open(tmp,'w').write(svg_text)
-    a=['rsvg-convert','-o',out]+(['-w',str(w)] if w else [])+(['-h',str(h)] if h else [])+[tmp]
-    subprocess.run(a,check=True); os.remove(tmp)
-def pdf(svg_text,out):
-    tmp=out+'.tmp.svg'; open(tmp,'w').write(svg_text)
-    subprocess.run(['rsvg-convert','-f','pdf','-o',out,tmp],check=True); os.remove(tmp)
-def data_uri(path):
-    return 'data:image/png;base64,'+base64.b64encode(open(path,'rb').read()).decode()
-def write_ico(out,entries):
-    """entries=[(size,png_bytes)] PNG dentro de ICO"""
-    n=len(entries); head=struct.pack('<HHH',0,1,n); off=6+16*n; dirs=b''; data=b''
-    for s,b in entries:
-        dirs+=struct.pack('<BBBBHHII',s%256,s%256,0,0,1,32,len(b),off+len(data)); data+=b
-    open(out,'wb').write(head+dirs+data)
+
+def _cmap(f):
+    return f.getBestCmap()
+
+
+def gname(f, ch):
+    return _cmap(f)[ord(ch)]
+
+
+def adv(f, g):
+    return f["hmtx"][g][0]
+
+
+def bounds(f, g):
+    gs = f.getGlyphSet()
+    bp = BoundsPen(gs)
+    gs[g].draw(bp)
+    return bp.bounds  # xmin,ymin,xmax,ymax o None
+
+
+def gpath(f, g, x, y, s):
+    """path SVG del glifo, origen (x,y) en baseline, escala s (unidades->px)."""
+    gs = f.getGlyphSet()
+    pen = SVGPathPen(gs, ntos=lambda v: f"{v:.2f}")
+    gs[g].draw(TransformPen(pen, (s, 0, 0, -s, x, y)))
+    return pen.getCommands()
+
+
+def kern_gpos(f, a, b):
+    return 0  # kerning se resuelve a mano (par a par) en cada dirección
+
+
+class Mark:
+    """Resultado de dibujar un texto: svg (paths), ancho, métricas."""
+    def __init__(self, svg, w, xh, cap, r, cx, cy):
+        self.svg, self.w, self.xh, self.cap, self.r, self.cx, self.cy = svg, w, xh, cap, r, cx, cy
+
+
+def text_outline(spec, text, size, x, y, fill, track=None, kern=None, weight=None, opacity=1.0):
+    """Contornos de `text` con la fuente/ejes de spec. track en em; kern dict {'or': em}."""
+    axes = dict(spec["axes"])
+    if weight is not None:
+        axes["wght"] = weight
+    f = font(spec["font"], **axes)
+    upm = f["head"].unitsPerEm
+    s = size / upm
+    track = spec.get("track", 0) if track is None else track
+    kern = spec.get("kern", {}) if kern is None else kern
+    cx = x
+    out = []
+    for i, ch in enumerate(text):
+        if ch == " ":
+            cx += adv(f, gname(f, " ")) * s + track * size
+            continue
+        g = gname(f, ch)
+        out.append(gpath(f, g, cx, y, s))
+        cx += adv(f, g) * s + track * size
+        if i + 1 < len(text):
+            cx += kern.get(ch + text[i + 1], 0) * size
+    d = " ".join(out)
+    return f'<path d="{d}" fill="{fill}" fill-opacity="{opacity}"/>', cx - x
+
+
+def wordmark(spec, size, x, y, ink, accent, suffix=None, suffix_ink=None, dot_shape="circle", pill=1.0, suffix_op=1.0):
+    """'nortia.' con punto a medida. y = baseline. Devuelve Mark.
+    spec: font, axes, track, kern, dot_k (diámetro/asta), dot_gap (em), dotless_i (bool)."""
+    f = font(spec["font"], **spec["axes"])
+    upm = f["head"].unitsPerEm
+    s = size / upm
+    track, kern = spec.get("track", 0), spec.get("kern", {})
+    letters = "nortia"
+    cx = x
+    parts = []
+    xh = f["OS/2"].sxHeight * s
+    cap = f["OS/2"].sCapHeight * s
+    lb = bounds(f, gname(f, "l"))
+    stem = (lb[2] - lb[0]) * s
+    D = stem * spec.get("dot_k", 1.2)
+    r = D / 2
+    last_right = x
+    for i, ch in enumerate(letters):
+        gch = ch
+        g = gname(f, ch)
+        if ch == "i" and spec.get("dotless_i"):
+            g = [n for n in f.getGlyphOrder() if n in ("dotlessi", "idotless", "uni0131")][0]
+        parts.append(gpath(f, g, cx, y, s))
+        b = bounds(f, g)
+        last_right = cx + b[2] * s
+        if ch == "i" and spec.get("dotless_i"):
+            ib = bounds(f, g)
+            icx = cx + (ib[0] + ib[2]) / 2 * s
+            top = bounds(f, gname(f, "i"))[3] * s  # techo del tittle original
+            tr = D * spec.get("tittle_k", 1.0) / 2
+            parts_dot_i = (icx, y - top + tr, tr)
+        cx += adv(f, g) * s + track * size
+        if i + 1 < len(letters):
+            cx += kern.get(ch + letters[i + 1], 0) * size
+    svg = f'<path d="{" ".join(parts)}" fill="{ink}"/>'
+    if spec.get("dotless_i"):
+        ix, iy, ir = parts_dot_i
+        svg += f'<circle cx="{ix:.2f}" cy="{iy:.2f}" r="{ir:.2f}" fill="{ink}"/>'
+    over = 0.006 * size
+    dcx = last_right + spec.get("dot_gap", 0.07) * size + r
+    dcy = y - r + over
+    if dot_shape == "pill":      # punto estirado en vertical (barra de nivel)
+        h = D * pill
+        svg += f'<rect x="{dcx - r:.2f}" y="{y + over - h:.2f}" width="{D:.2f}" height="{h:.2f}" rx="{r:.2f}" fill="{accent}"/>'
+        dcy = y + over - h / 2
+    elif dot_shape == "hpill":   # punto estirado en horizontal
+        wd = D * pill
+        svg += f'<rect x="{dcx - r:.2f}" y="{y + over - D:.2f}" width="{wd:.2f}" height="{D:.2f}" rx="{r:.2f}" fill="{accent}"/>'
+        dcx = dcx - r + wd - r
+    else:
+        svg += f'<circle cx="{dcx:.2f}" cy="{dcy:.2f}" r="{r:.2f}" fill="{accent}"/>'
+    w = dcx + r - x
+    if suffix:
+        sx = dcx + r + spec.get("suffix_gap", 0.28) * size
+        sspec = dict(spec)
+        sspec["axes"] = dict(spec["axes"], **spec.get("suffix_axes", {}))
+        sp, sw = text_outline(sspec, suffix, size * spec.get("suffix_scale", 1.0), sx, y, suffix_ink or ink,
+                              track=spec.get("suffix_track", spec.get("track", 0)), kern={}, opacity=suffix_op)
+        svg += sp
+        w = sx + sw - x
+    return Mark(svg, w, xh, cap, r, dcx, dcy)
+
+
+def squircle_path(cx, cy, size, n=5.0, steps=240):
+    """superelipse |x|^n+|y|^n=1: aproxima el squircle continuo de macOS."""
+    a = size / 2
+    pts = []
+    for i in range(steps):
+        t = 2 * math.pi * i / steps
+        c, s_ = math.cos(t), math.sin(t)
+        x = a * math.copysign(abs(c) ** (2 / n), c)
+        y = a * math.copysign(abs(s_) ** (2 / n), s_)
+        pts.append((cx + x, cy + y))
+    return "M" + " L".join(f"{px:.2f},{py:.2f}" for px, py in pts) + "Z"
+
+
+FONT_FACE_CSS = """
+@font-face{font-family:'Hanken Grotesk';src:url('fonts/HankenGrotesk.ttf');font-weight:100 900;}
+"""
+
+
+def render_svgs(jobs, scale=1):
+    """jobs: [(svg, w, h, out_png[, transparent])] -> PNG con Chromium (Playwright); fuentes de fonts/."""
+    from playwright.async_api import async_playwright
+
+    async def run():
+        async with async_playwright() as p:
+            b = await p.chromium.launch()
+            pg = await b.new_page(viewport={"width": 100, "height": 100}, device_scale_factor=scale)
+            hp = os.path.join(HERE, "_render.html")
+            for job in jobs:
+                svg, w, h, out = job[:4]
+                tr = job[4] if len(job) > 4 else False
+                bg = "transparent" if tr else "#fff"
+                html = f"<!doctype html><meta charset=utf-8><style>{FONT_FACE_CSS}html,body{{margin:0;background:{bg}}}svg{{display:block}}</style>{svg}"
+                open(hp, "w", encoding="utf-8").write(html)
+                await pg.set_viewport_size({"width": int(w), "height": int(h)})
+                await pg.goto("file://" + hp)
+                await pg.evaluate("document.fonts.ready")
+                await pg.wait_for_timeout(60)
+                os.makedirs(os.path.dirname(out), exist_ok=True)
+                await pg.screenshot(path=out, clip={"x": 0, "y": 0, "width": int(w), "height": int(h)}, omit_background=tr)
+            await b.close()
+    asyncio.run(run())
+    try:
+        os.remove(os.path.join(HERE, "_render.html"))
+    except OSError:
+        pass
+
+
+def render_html(jobs):
+    """jobs: [(html_path, w, h, png_out, pdf_out|None)] -> PNG (y PDF A4 si se indica)."""
+    from playwright.async_api import async_playwright
+
+    async def run():
+        async with async_playwright() as p:
+            b = await p.chromium.launch()
+            for hp, w, h, png, pdf in jobs:
+                pg = await b.new_page(viewport={"width": w, "height": h}, device_scale_factor=2)
+                await pg.goto("file://" + hp)
+                await pg.evaluate("document.fonts.ready")
+                await pg.wait_for_timeout(150)
+                if png:
+                    await pg.screenshot(path=png, full_page=False)
+                if pdf:
+                    await pg.pdf(path=pdf, format="A4", print_background=True, margin=dict(top="0", bottom="0", left="0", right="0"))
+                await pg.close()
+            await b.close()
+    asyncio.run(run())
+
+
+def write_ico(path, pngs):
+    """.ico con entradas PNG. pngs: [(lado_px, bytes_png)]"""
+    import struct
+    n = len(pngs)
+    head = struct.pack("<HHH", 0, 1, n)
+    off = 6 + 16 * n
+    ent, data = b"", b""
+    for s_, b_ in pngs:
+        w = 0 if s_ >= 256 else s_
+        ent += struct.pack("<BBBBHHII", w, w, 0, 0, 1, 32, len(b_), off + len(data))
+        data += b_
+    open(path, "wb").write(head + ent + data)

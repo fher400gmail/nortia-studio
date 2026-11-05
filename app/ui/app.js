@@ -6,6 +6,7 @@
                 &os=mac|win &still=1 &fast=1 &pop=adv|more|tree|detail &drag=1 &lame=0 */
 import { backend } from './backend.js';
 import { loadLang, t, tn, getLang } from './i18n.js';
+import { isCancelled } from './flow.js';
 import { fmtLufs, fmtDbtp, fmtDuration, fmtMB, fmtRate, fmtSpec, shortPath } from './format.js';
 
 /* ───────────── Data: tabla de fichas de la interfaz ↔ destinos del motor ───────────── */
@@ -24,6 +25,7 @@ const Icons = (() => {
   const s = (b, x = '') => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${x}>${b}</svg>`;
   const g = (b, x = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ${x}>${b}</svg>`;
   /* glifos propios y neutros (formas genéricas, sin logos de terceros) */
+  // TODO(brand): antes de la publicación, sustituir por los activos oficiales de cada plataforma, según sus guías de marca.
   const gly = {
     spotify: g('<path d="M5 9c4.8-1.5 9.6-1.1 14 1.4"/><path d="M6.2 12.8c4-1.1 7.6-.8 10.8 1"/><path d="M7.4 16.2c3-.8 5.6-.5 8 .9"/>', 'stroke-width="2.1"'),
     apple: g('<path d="M10 17.2V6.6l8-1.9v10.6"/><circle cx="7.9" cy="17.4" r="2.2" fill="currentColor"/><circle cx="15.9" cy="15.5" r="2.2" fill="currentColor"/>'),
@@ -397,7 +399,7 @@ const Create = (() => {
     const req = { master_path: S.master.path, out_root: S.outRoot, meta: Store.meta(), active_ids: jobs.map(j => j.preset_id) };
     try {
       const d = await backend.export(req, onEvent);
-      if (S.cancelled) { S.mode = 'idle'; S.rows = []; App.render(); return; }
+      if (isCancelled(S.cancelled, d)) { S.mode = 'idle'; S.rows = []; App.render(); return; }
       S.rows.filter(r => r.kind === 'job' && r.state !== 'fail').forEach(r => r.state = 'done');
       S.rows.push(...docRows());
       S.delivery = d; refresh();
@@ -438,9 +440,16 @@ const Events = (() => {
     S.busy = false; App.render();
   }
   /* mock/navegador: File (sin ruta real) · Tauri: ruta */
-  function loadCover(src) {
+  /* aviso breve en la zona de soltar (o bajo los botones si ya hay canción) */
+  function hint(msg) {
+    if (S.loaded) S.banner = msg; else S.err = msg;
+    App.render();
+    setTimeout(() => { if (S.err === msg || S.banner === msg) { S.err = ''; S.banner = ''; if (S.mode === 'idle') App.render(); } }, 3200);
+  }
+  async function loadCover(src) {
     if (!src) return;
-    if (typeof src === 'string') { S.coverPath = src; S.cover = backend.convertFileSrc(src); }
+    if (!S.loaded) return hint(t('drop.need_song'));
+    if (typeof src === 'string') { await backend.allowAsset(src); S.coverPath = src; S.cover = backend.convertFileSrc(src); }
     else { if (!src.type.startsWith('image/')) return; S.coverPath = src.name; S.cover = URL.createObjectURL(src); }
     App.render(); Plan.schedule();
   }
@@ -457,7 +466,7 @@ const Events = (() => {
     else $('#fsong').click();
   }
   async function pickCover() {
-    if (backend.kind === 'tauri') { const p = await backend.pickFile('image'); if (p) loadCover(p); }
+    if (backend.kind === 'tauri') { const p = await backend.pickFile('image'); if (p) await loadCover(p); }
     else $('#fcov').click();
   }
   async function create() {
@@ -485,9 +494,8 @@ const Events = (() => {
     if (p.type === 'drop') {
       clear();
       const f = p.paths && p.paths[0]; if (!f) return;
-      if (/\.(png|jpe?g)$/i.test(f)) loadCover(f);
-      else if (at && at.closest('.cov')) return;
-      else loadSong(f);
+      const run = /\.(png|jpe?g)$/i.test(f) ? loadCover(f) : (at && at.closest('.cov')) ? null : loadSong(f);
+      Promise.resolve(run).catch(e => console.warn('drop', e));
     }
   }
   function init() {
@@ -513,10 +521,10 @@ const Events = (() => {
       const i = e.target.closest('input[data-f]'); if (i) { S[i.dataset.f] = i.value; App.live(); Plan.schedule(); }
       const m = e.target.closest('input[data-m]'); if (m) { S.m[m.dataset.m] = m.value; if (m.dataset.m === 'ver') Plan.schedule(); }
     });
-    document.addEventListener('change', e => { if (e.target.id === 'fsong') { const f = e.target.files[0]; if (f) loadSong(f.name); e.target.value = ''; } if (e.target.id === 'fcov') { loadCover(e.target.files[0]); e.target.value = ''; } });
+    document.addEventListener('change', e => { if (e.target.id === 'fsong') { const f = e.target.files[0]; if (f) loadSong(f.name); e.target.value = ''; } if (e.target.id === 'fcov') { loadCover(e.target.files[0]).catch(err => console.warn(err)); e.target.value = ''; } });
     ['dragenter', 'dragover'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); const z = e.target.closest('.dz,.cov'); if (z) z.classList.add('over'); }));
     ['dragleave', 'drop'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); $$('.over').forEach(z => z.classList.remove('over')); }));
-    document.addEventListener('drop', e => { if (S.mode !== 'idle') return; const f = e.dataTransfer.files[0]; if (!f) return; if (e.target.closest('.cov')) loadCover(f); else if (e.target.closest('.dz')) f.type.startsWith('image/') ? loadCover(f) : loadSong(f.name); });
+    document.addEventListener('drop', e => { if (S.mode !== 'idle') return; const f = e.dataTransfer.files[0]; if (!f) return; const run = e.target.closest('.cov') ? loadCover(f) : e.target.closest('.dz') ? (f.type.startsWith('image/') ? loadCover(f) : loadSong(f.name)) : null; Promise.resolve(run).catch(err => console.warn('drop', err)); });
     if (backend.kind === 'tauri') backend.onFileDrop(tauriDrop);
   }
   return { init, loadSong };

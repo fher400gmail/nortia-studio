@@ -1,7 +1,7 @@
 use mastercheck_bridge::app_support::lame::{path_with_dir_first, resolve_lame_in};
 use mastercheck_bridge::app_support::smoke::{parse_spec, run_and_report, run_smoke};
-use mastercheck_bridge::app_support::{app_info, map_locale, os_name};
-use mastercheck_bridge::dto::{MasterDto, PlanDto};
+use mastercheck_bridge::app_support::{app_info, busy_error, is_image_path, map_locale, os_name};
+use mastercheck_bridge::dto::{DeliveryDto, MasterDto, PlanDto};
 use masterout_core::i18n::Lang;
 use std::ffi::OsString;
 use std::path::Path;
@@ -149,7 +149,10 @@ fn smoke_runs_analyze_plan_export_and_reports() {
     assert!(d.failed.is_empty());
     assert!(d.files.len() >= 5, "audio + 4 documentos: {:?}", d.files);
     assert_eq!(run_and_report(&spec, Lang::En, tmp.path()), 0);
-    assert!(out.join("smoke-result.json").is_file());
+    let written = std::fs::read_to_string(out.join("smoke-result.json")).unwrap();
+    let parsed: DeliveryDto =
+        serde_json::from_str(&written).expect("smoke-result.json es un DeliveryDto");
+    assert!(!parsed.files.is_empty() && parsed.failed.is_empty());
 }
 
 #[test]
@@ -162,4 +165,29 @@ fn smoke_fails_with_exit_code_1_on_missing_file() {
     );
     assert!(run_smoke(&spec, Lang::En, tmp.path()).is_err());
     assert_eq!(run_and_report(&spec, Lang::En, tmp.path()), 1);
+}
+
+#[test]
+fn busy_error_is_localized_with_stable_key() {
+    let es = busy_error(Lang::Es);
+    let en = busy_error(Lang::En);
+    assert_eq!((es.key.as_str(), en.key.as_str()), ("err.busy", "err.busy"));
+    assert!(es.message.contains("exportación"));
+    assert!(en.message.contains("export"));
+}
+
+#[test]
+fn allow_asset_accepts_only_images() {
+    for ok in ["/a/Portada ñ.PNG", "C:\\x\\c.jpg", "c.jpeg"] {
+        assert!(is_image_path(ok), "{ok}");
+    }
+    for bad in [
+        "/a/b.wav",
+        "/etc/passwd",
+        "/a/b.png.exe",
+        "noext",
+        "/a/.png",
+    ] {
+        assert!(!is_image_path(bad), "{bad}");
+    }
 }

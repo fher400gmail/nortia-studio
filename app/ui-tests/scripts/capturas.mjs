@@ -1,5 +1,5 @@
 // Capturas con el mock (880×860, ×2): 02 normal claro, 03 normal oscuro, 06 creando, 07 listo.
-// Uso: node scripts/capturas.mjs [es|en]
+// Uso: node ui-tests/scripts/capturas.mjs [es|en]
 import { fileURLToPath } from 'node:url';
 import { serve, loadPlaywright } from './serve.mjs';
 

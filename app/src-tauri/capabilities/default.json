@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permisos mínimos de la ventana principal. Sin fs: el disco lo toca Rust con las rutas que elige la persona.",
+  "description": "Permisos mínimos de la ventana principal. Sin fs ni permisos de plugins: dialog, opener y os se usan solo desde Rust.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -9,9 +9,6 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
-    "core:window:allow-set-title",
-    "dialog:allow-open",
-    "opener:allow-reveal-item-in-dir",
-    "os:allow-locale"
+    "core:window:allow-set-title"
   ]
 }

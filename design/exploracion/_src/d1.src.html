@@ -1,0 +1,150 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=1440">
+<title>Master Out · D1 Mesa de trabajo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script>document.documentElement.dataset.theme=new URLSearchParams(location.search).get('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+<style>
+/*__COMMON_CSS__*/
+/* ---- D1 Mesa de trabajo ---- */
+.cols{flex:1;display:grid;grid-template-columns:290px 1fr 480px;min-height:0}
+.col{padding:14px 20px 16px;min-height:0;display:flex;flex-direction:column;gap:12px}
+.colC{gap:10px}
+.colL{background:var(--surf);border-right:1px solid var(--line)}
+.colR{background:var(--surf);border-left:1px solid var(--line)}
+.colC{overflow:hidden}
+.sh{display:flex;align-items:center;justify-content:space-between;min-height:27px}
+h2{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.sh .t3{font-size:12px}
+/* izquierda */
+.mfile{display:flex;gap:10px;align-items:center}
+.mfi{width:34px;height:34px;border-radius:8px;background:var(--st-bg);color:var(--st);display:flex;align-items:center;justify-content:center}
+.mfn{font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.wcard{border:1px solid var(--line);border-radius:12px;padding:14px 14px 10px;background:var(--bg)}
+.wfoot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--tx2)}
+.clipnote{color:var(--er);font-weight:600;display:flex;gap:5px;align-items:center}
+.clipnote i{width:7px;height:7px;border-radius:2px;background:var(--er);display:block}
+.gen{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-radius:10px;background:var(--er-bg);color:var(--er)}
+.gen svg{width:18px;height:18px;flex:none;margin-top:1px}
+.gen b{display:block;font-size:13px;font-weight:600}.gen span{display:block;font-size:12px;color:var(--tx2);margin-top:2px;line-height:1.35}
+dl.fx{display:grid;grid-template-columns:auto 1fr;font-size:12.5px}
+dl.fx dt,dl.fx dd{padding:6px 0;border-bottom:1px solid var(--line)}
+dl.fx dt{color:var(--tx3)}dl.fx dd{text-align:right;font-weight:500}
+dl.fx dt:last-of-type,dl.fx dd:last-of-type{border-bottom:0}
+.meters{display:flex;flex-direction:column;gap:15px;margin-top:2px}
+.trust{margin-top:auto;font-size:12px;color:var(--tx2);display:flex;gap:9px;align-items:flex-start;line-height:1.4}
+.trust svg{margin-top:1px}
+/* centro */
+.datos{display:grid;grid-template-columns:1fr 88px;gap:16px;align-items:start}
+.fg{display:grid;grid-template-columns:repeat(12,1fr);gap:9px 10px}
+.fg .s6{grid-column:span 6}.fg .s4{grid-column:span 4}.fg .s3{grid-column:span 3}.fg .s2{grid-column:span 2}
+.cvr{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--tx3)}
+.cvr span{display:flex;gap:4px;align-items:center}.cvr .ic{width:12px;height:12px;color:var(--ok)}
+.grp{display:flex;align-items:center;gap:8px;margin:7px 0 4px;font-size:11.5px;font-weight:600;color:var(--tx2)}
+.grp::after{content:'';flex:1;height:1px;background:var(--line)}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:start}
+.dcard{position:relative;border:1px solid var(--line);border-radius:10px;padding:6px 11px 6px 12px;background:transparent;transition:border-color .2s,background .2s;cursor:pointer;display:flex;flex-direction:column;gap:0;min-width:0}
+.dcard:hover{border-color:var(--ctl)}
+.dcard.on{background:var(--surf);border-color:var(--st-line)}
+.dcard::before{content:'';position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:transparent;transition:background .2s}
+.dcard.on.er::before{background:var(--er)}.dcard.on.wn::before{background:var(--wn)}.dcard.on.ok::before{background:var(--ok)}
+.d1l{display:flex;align-items:center;gap:8px}
+.dname{font-weight:600;font-size:12.5px;line-height:16px;white-space:nowrap}
+.dcard .mono{width:22px;height:22px;border-radius:6px;font-size:10px}
+.dcard .sw{width:32px;height:19px}.dcard .sw::after{width:11px;height:11px}.dcard .sw[aria-checked=true]::after{transform:translateX(13px)}
+.sevi{display:inline-flex;transition:opacity .2s;opacity:.85}.sevi svg{width:13px;height:13px}
+.sevi.ok{color:var(--ok)}.sevi.wn{color:var(--wn)}.sevi.er{color:var(--er)}
+.dcard.on .sevi{display:none}
+.grow{flex:1}
+.dspec{font-size:11.5px;line-height:14px;color:var(--tx3);padding-left:30px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dwrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.3,.8,.3,1)}
+.dwrap>div{overflow:hidden}
+.dcard.on .dwrap{grid-template-rows:1fr}
+.dwhy{display:flex;gap:6px;align-items:flex-start;font-size:11.5px;font-weight:500;padding:1px 0 0 30px;line-height:14px;position:relative}
+.dwhy svg{width:13px;height:13px;position:absolute;left:12px;top:2px;flex:none}
+.dwhy.ok{color:var(--ok)}.dwhy.wn{color:var(--wn-tx)}.dwhy.er{color:var(--er)}
+.dprog{position:absolute;left:12px;right:11px;bottom:0;height:2px;border-radius:2px;background:transparent;overflow:hidden;opacity:0}
+.run .dcard.on .dprog{opacity:1;background:var(--surf2)}
+.dprog i{display:block;height:100%;width:0;background:var(--st);transition:width .3s linear}
+.dcard.done .dprog i{background:var(--ok)}
+.run .dcard{pointer-events:none}.run .dcard.off{opacity:.45}
+/* derecha */
+.dest{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:var(--bg)}
+.dest .ic{color:var(--st)}.dest span{flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.treewrap{flex:1;min-height:0;overflow:hidden;border:1px solid var(--line);border-radius:12px;padding:10px 10px 8px;background:var(--bg);position:relative}
+.sum{display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);padding:0 2px}
+.sum b{color:var(--tx);font-weight:600}
+.note{display:flex;gap:9px;font-size:12px;color:var(--tx2);line-height:1.4;align-items:flex-start}
+.note svg{width:15px;height:15px;flex:none;color:var(--wn);margin-top:1px}
+.expbtn{height:52px;border-radius:11px;font-size:15px;justify-content:center;width:100%;letter-spacing:-.005em}
+.expbtn small{font-weight:400;opacity:.78;font-size:12.5px}
+.xp{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden}
+.xp .row{display:flex;justify-content:space-between;align-items:baseline}
+.xp .big{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.xp .bar{height:8px}
+.done-h{display:flex;gap:14px;align-items:center}
+.done-h h3{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.done-h p{font-size:12.5px;color:var(--tx2);margin-top:2px}
+.btns{display:flex;gap:8px}
+.btns .btn{height:40px;flex:1;justify-content:center}
+</style></head><body><div class="win" id="app"></div>
+<script>
+/*__COMMON_JS__*/
+const app=document.getElementById('app');
+const fld=(l,v,c,ok)=>`<div class="fld ${c}"><label>${l}</label><div class="rel"><input value="${v}" ${l==='ISRC'?'style="padding-right:30px"':''}>${ok?`<span class="okmark">${IC.check.replace('class="ic"','class="ic" style="width:14px;height:14px"')}</span>`:''}</div></div>`;
+const groupsHTML=GROUPS.map(g=>`<div class="grp">${g}</div><div class="dgrid">`+D.filter(d=>d.g===g).map(d=>`
+<div class="dcard ${d.sev}" data-id="${d.id}" role="group" aria-label="${d.n}">
+ <div class="d1l"><span class="mono">${d.m}</span><span class="dname">${d.n}</span><span class="sevi ${d.sev}" title="${SEVL[d.sev]}">${IC[d.sev]}</span><span class="grow"></span>${sw(false,d.n)}</div>
+ <div class="dspec">${d.spec}</div>
+ <div class="dwrap"><div><div class="dwhy ${d.sev}">${IC[d.sev]}<span>${d.why}</span></div></div></div>
+ <div class="dprog"><i data-dp="${d.id}"></i></div></div>`).join('')+`</div>`).join('');
+app.innerHTML=titlebar()+`<div class="cols">
+<section class="col colL" aria-label="Máster">
+ <div class="sh"><h2>Máster</h2><button class="btn sm">Cambiar máster</button></div>
+ <div class="mfile"><div class="mfi">${IC.file}</div><div><div class="mfn">${M.file}</div><div class="t3" style="color:var(--tx3);font-size:12px">${M.fmt} · ${M.bits} bit · ${M.khz} kHz</div></div></div>
+ <div class="wcard"><div class="wvw"><div class="wdraw">${waveSVG(250,84,62,{prog:.31,clips:true})}</div><div class="playhead" style="left:31%"></div></div>
+  <div class="wfoot"><button class="btn sm">${IC.play}Escuchar</button><span>1:12 / ${M.dur}</span></div></div>
+ <div class="gen">${IC.er}<div><b>3 picos sobre 0 dBTP</b><span>Revisa los destinos con aviso antes de exportar.</span></div></div>
+ <dl class="fx"><dt>Resolución</dt><dd>${M.bits} bit · ${M.khz} kHz</dd><dt>Canales</dt><dd>${M.ch}</dd><dt>Duración</dt><dd>${M.dur}</dd><dt>Tamaño</dt><dd>${M.size}</dd><dt>Rango (LRA)</dt><dd>${nf(M.lra)} LU</dd></dl>
+ <div class="meters">${lufsMeter()}${tpMeter()}</div>
+ <p class="trust"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg><span>Tu máster no se modifica. Master Out mide y avisa.</span></p>
+</section>
+<section class="col colC" id="colC" aria-label="Datos y destinos">
+ <div class="sh"><h2>Datos del tema</h2><button class="btn sm quiet">Más campos${IC.down}</button></div>
+ <div class="datos"><div class="fg">${fld('Título',TIT,'s6')}${fld('Artista principal',ART,'s6')}${fld('Featuring','','s3')}${fld('Versión','','s3')}${fld('Año','2026','s2')}${fld('ISRC','ES-ABC-26-00417','s4',true)}</div>
+  <div class="cvr">${cover(88)}<span>${IC.check}3000×3000 · sRGB</span></div></div>
+ <div class="sh" style="margin-top:2px"><h2>Destinos</h2><div style="display:flex;gap:10px;align-items:center"><span class="t3" id="cnt"></span><button class="btn sm">Preset: Mi entrega estándar${IC.down}</button></div></div>
+ <div id="groups" style="margin-top:-12px">${groupsHTML}</div>
+</section>
+<section class="col colR" aria-label="Salida">
+ <div class="sh"><h2>Carpeta de salida</h2></div>
+ <div class="dest">${IC.folder}<span>~/Música/Entregas</span><button class="btn sm">Cambiar</button></div>
+ <div class="treewrap"><div class="tree" id="tree"></div></div>
+ <div class="sum" id="sum"></div>
+ <div id="xarea"></div>
+</section></div>`;
+themeInit();
+const cards=[...document.querySelectorAll('.dcard')];
+function sync(){
+  const run=MO.exp.mode!=='idle';document.getElementById('groups').classList.toggle('run',run);
+  cards.forEach(c=>{const id=c.dataset.id,on=MO.on.has(id);c.classList.toggle('on',on);c.classList.toggle('off',!on);
+    c.querySelector('.sw').setAttribute('aria-checked',on);
+    const d=MO.byId[id];const fs=MO.files().filter(x=>x.d&&x.d.id===id);
+    if(fs.length){const p=fs.reduce((s,x)=>s+(MO.exp.pct[x.k]||0)*x.mb,0)/fs.reduce((s,x)=>s+x.mb,0);c.querySelector('[data-dp]').style.width=p+'%';c.classList.toggle('done',p>=100)}});
+  const s=MO.stats();document.getElementById('cnt').textContent=s.dest+' de '+D.length+' activos';
+  document.getElementById('sum').innerHTML=`<span><b>${s.n+s.docs}</b> archivos</span><span><b>${sizeStr(s.mb)}</b></span>`;
+  xarea()}
+cards.forEach(c=>c.onclick=()=>{if(MO.exp.mode==='idle')MO.toggle(c.dataset.id)});
+function xarea(){const el=document.getElementById('xarea'),e=MO.exp,s=MO.stats();let h;
+ if(e.mode==='idle'){
+  const bad=s.er?`${s.er} ${s.er===1?'destino no cumple':'destinos no cumplen'}${s.wn?` y ${s.wn} tienen aviso`:''}. Se exportan igualmente: el máster no se modifica.`:(s.wn?`${s.wn} destinos tienen aviso.`:'Todo cumple.');
+  h=`<div class="note">${IC.wn}<span>${bad}</span></div><button class="btn pri expbtn" id="go">Exportar ${s.dest} destinos</button>`}
+ else if(e.mode==='run'){const o=MO.overall();
+  h=`<div class="xp"><div class="row"><span class="big"><span data-totalpc>${Math.round(o)} %</span></span><span style="color:var(--tx2)" data-eta>${MO.eta()}</span></div><div class="bar"><i data-total style="width:${o}%"></i></div>
+  <div class="row" style="color:var(--tx2);font-size:12px"><span>Procesando ${s.n} archivos en paralelo</span><button class="btn sm" style="border-color:var(--line)">Cancelar</button></div></div>`}
+ else{h=`<div class="xp" id="doneBox"><div class="done-h">${MO.doneMark(46)}<div><h3>Entrega lista</h3><p>${s.n+s.docs} archivos · ${sizeStr(s.mb)} · ${nf(MO.exp.secs||7.4)} s</p></div></div><div class="btns"><button class="btn pri">${IC.reveal}Mostrar en Finder</button><button class="btn">Nueva entrega</button></div></div>`}
+ el.innerHTML=h;const g=document.getElementById('go');if(g)g.onclick=()=>MO.start();
+ if(e.mode==='done'&&!e.celebrated){e.celebrated=1;MO.confetti(document.getElementById('doneBox'))}}
+MO.mountTree(document.getElementById('tree'));MO.subs.push(sync);
+if(Q.get('state')==='exporting')MO.snapshot();
+if(Q.get('state')==='done'){MO.start();MO.exp.mode='done';MO.files().forEach(x=>MO.exp.pct[x.k]=100);MO.exp.celebrated=1;MO.exp.secs=7.4}
+MO.refresh();
+</script></body></html>

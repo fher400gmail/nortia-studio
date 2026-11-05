@@ -1,0 +1,444 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=1440">
+<title>Master Out · D2 Un solo flujo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script>document.documentElement.dataset.theme=new URLSearchParams(location.search).get('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F7F8FA;--surf:#FFFFFF;--surf2:#EEF1F6;--chrome:#ECEFF4;--line:#DCE1EA;--ctl:#7C879C;
+  --tx:#0F1F3D;--tx2:#4A5568;--tx3:#5C677B;
+  --st:#0E5E63;--st-bg:#E3F0F0;--st-line:#9CC6C8;
+  --ok:#1E7F4F;--ok-bg:#E4F3EA;--wn:#BF7F12;--wn-tx:#855600;--wn-bg:#FBF1DB;--er:#B42318;--er-bg:#FCE9E7;
+  --pri:#0F1F3D;--on-pri:#FFFFFF;--sym-s:#0F1F3D;--wv:#C3CCDB;--wv-on:#0E5E63;
+  --shadow:0 12px 36px rgba(15,31,61,.14),0 2px 6px rgba(15,31,61,.08);
+}
+:root[data-theme=dark]{
+  --bg:#0A1429;--surf:#101F3C;--surf2:#18305A;--chrome:#0C1830;--line:#243A62;--ctl:#7B8CAD;
+  --tx:#E9EDF5;--tx2:#AAB5C9;--tx3:#8E9BB5;
+  --st:#52BDB6;--st-bg:rgba(82,189,182,.13);--st-line:#2B6F72;
+  --ok:#5FCF96;--ok-bg:rgba(95,207,150,.13);--wn:#E0A93F;--wn-tx:#EDBC62;--wn-bg:rgba(224,169,63,.14);--er:#FF7E70;--er-bg:rgba(255,126,112,.14);
+  --pri:#E9EDF5;--on-pri:#0F1F3D;--sym-s:#C9D5EE;--wv:#34497A;--wv-on:#52BDB6;
+  --shadow:0 14px 40px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.4);
+}
+html,body{width:1440px;height:900px;overflow:hidden}
+body{font:13px/1.4 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--tx);background:var(--bg);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+:focus-visible{outline:2px solid var(--st);outline-offset:2px}
+.win{width:1440px;height:900px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+/* barra de título */
+.tb{height:48px;flex:none;display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--chrome);border-bottom:1px solid var(--line)}
+.lights{display:flex;gap:8px;margin-right:8px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#FF5F57}.lights i:nth-child(2){background:#FEBC2E}.lights i:nth-child(3){background:#28C840}
+.wm{font-size:15px;letter-spacing:-.015em;color:var(--tx);display:inline-flex;align-items:center;gap:8px}
+.wm b{font-weight:600}.wm span{font-weight:400}
+.appn{padding-left:14px;margin-left:2px;border-left:1px solid var(--line);color:var(--tx2);font-weight:500;font-size:13px}
+.sp{flex:1}
+.ibtn{width:30px;height:30px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;color:var(--tx2)}
+.ibtn:hover{background:var(--surf2)}
+.ic{width:16px;height:16px;flex:none;display:inline-block}
+/* botones */
+.btn{height:32px;padding:0 13px;border-radius:7px;border:1px solid var(--ctl);background:var(--surf);color:var(--tx);font-weight:500;font-size:12.5px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn:hover{border-color:var(--tx2)}
+.btn.sm{height:27px;padding:0 10px;font-size:12px;border-radius:6px}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:var(--on-pri);font-weight:600}
+.btn.pri:hover{filter:brightness(1.12)}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--tx2)}
+.btn.quiet:hover{background:var(--surf2);color:var(--tx)}
+/* interruptor */
+.sw{width:34px;height:20px;border-radius:99px;background:var(--surf2);border:1px solid var(--ctl);position:relative;flex:none;transition:background .2s,border-color .2s}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:12px;height:12px;border-radius:50%;background:var(--ctl);transition:transform .22s cubic-bezier(.3,1.4,.5,1),background .2s}
+.sw[aria-checked=true]{background:var(--st);border-color:var(--st)}
+.sw[aria-checked=true]::after{transform:translateX(14px);background:var(--bg)}
+:root[data-theme=dark] .sw[aria-checked=true]::after{background:#0A1429}
+/* semáforo: forma + texto, nunca solo color */
+.sev{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px 0 6px;border-radius:99px;font-size:11.5px;font-weight:600;white-space:nowrap;transition:background .25s,color .25s}
+.sev svg{width:13px;height:13px}
+.sev.ok{color:var(--ok);background:var(--ok-bg)}.sev.wn{color:var(--wn-tx);background:var(--wn-bg)}.sev.er{color:var(--er);background:var(--er-bg)}
+.mono{width:26px;height:26px;border-radius:7px;background:var(--surf2);color:var(--tx2);font-weight:600;font-size:10.5px;letter-spacing:-.02em;display:inline-flex;align-items:center;justify-content:center;flex:none;transition:background .2s,color .2s}
+.on .mono,.mono.on{background:var(--st-bg);color:var(--st)}
+/* campos */
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:11.5px;color:var(--tx3);font-weight:500}
+.fld input{height:30px;border-radius:7px;border:1px solid var(--line);background:var(--surf);padding:0 10px;font-size:13px;min-width:0;width:100%;outline:none}
+.fld input:hover{border-color:var(--ctl)}.fld input:focus{border-color:var(--st);box-shadow:0 0 0 3px var(--st-bg)}
+.fld .okmark{position:absolute;right:9px;top:8px;color:var(--ok)}
+.rel{position:relative}
+/* medidores */
+.meter .mh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+.meter .mh span{color:var(--tx2);font-size:12px}.meter .mh b{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.meter .mh b.er{color:var(--er)}
+.mtrack{position:relative;height:8px;border-radius:99px;background:var(--surf2)}
+.mtrack .zone{position:absolute;top:0;bottom:0;right:0;border-radius:0 99px 99px 0;background:var(--er-bg);border-left:1px solid var(--er)}
+.mtrack .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--st);opacity:.9}
+.mtrack .fill.er{background:var(--er);opacity:1}
+.mtrack .ref{position:absolute;top:-4px;bottom:-4px;width:1.5px;background:var(--tx3);opacity:.7}
+.mscale{position:relative;height:14px;margin-top:6px;font-size:10.5px;color:var(--tx3)}
+.mscale span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.mscale span:first-child{transform:none}.mscale span:last-child{transform:translateX(-100%)}
+/* forma de onda */
+.wv{display:block}.wv rect{fill:var(--wv)}.wv rect.p{fill:var(--wv-on)}.wv rect.c{fill:var(--er)}
+.wvw{position:relative}
+.wvw .wdraw{animation:wdraw 1.5s cubic-bezier(.25,.7,.2,1) both}
+@keyframes wdraw{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.playhead{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--tx);border-radius:2px}
+.playhead::before{content:'';position:absolute;top:-1px;left:-3px;width:8px;height:8px;background:var(--tx);clip-path:polygon(0 0,100% 0,50% 100%)}
+/* árbol */
+.tree{font-size:11.5px;line-height:1}
+.tr{display:flex;align-items:center;gap:7px;height:25px;position:relative;padding-right:2px;border-radius:5px}
+.tr .nm{display:flex;min-width:0;flex:1;white-space:nowrap}
+.tr .nm .pre{white-space:pre;min-width:1.1em;overflow:hidden;text-overflow:ellipsis;color:var(--tx3);flex:0 1 auto}
+.tr .nm .tag{font-weight:600;flex:none}
+.tr .nm .rest{flex:none;color:var(--tx2);white-space:pre}
+.tr .sz{color:var(--tx3);font-size:11.5px;flex:none;text-align:right}
+.tr.dir{font-weight:600;color:var(--tx)}.tr.dir .ic{color:var(--st)}
+.tr.doc .nm{color:var(--tx2)}.tr .ic{width:15px;height:15px}
+.tr .ic.f{color:var(--tx3)}
+.tr:hover{background:var(--surf2)}
+.tr.sel{background:var(--st-bg)}
+.tr.in{animation:rowin .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rowin{0%{opacity:0;transform:translateX(-8px);background:var(--st-bg)}35%{opacity:1;transform:none}100%{background:transparent}}
+.tr.out{animation:rowout .25s ease both}
+.pb{width:36px;height:4px;border-radius:9px;background:var(--surf2);overflow:hidden;flex:none}
+.pb i{display:block;height:100%;background:var(--st);border-radius:9px;transition:width .12s linear}
+.pc{font-size:11.5px;color:var(--st);font-weight:600;min-width:32px;text-align:right}
+.q{font-size:11.5px;color:var(--tx3)}
+.dn{color:var(--ok);display:inline-flex}
+/* barras */
+.bar{height:6px;border-radius:99px;background:var(--surf2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--st);border-radius:99px;transition:width .15s linear}
+/* celebración sobria */
+.conf{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.conf i{position:absolute;top:-14px;width:8px;height:14px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);animation:fall 2.6s cubic-bezier(.3,.6,.5,1) forwards}
+@keyframes fall{to{transform:translateY(560px) rotate(40deg);opacity:0}}
+.markdone{width:64px;height:64px}
+.markdone .t{animation:tN .7s cubic-bezier(.2,.9,.3,1) both}.markdone .b{animation:tS .7s cubic-bezier(.2,.9,.3,1) both}
+@keyframes tN{from{transform:translateY(-26px);opacity:0}}@keyframes tS{from{transform:translateY(26px);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+body.still *{animation:none!important}
+
+.tr.rp{background:linear-gradient(90deg,var(--st-bg) var(--p),transparent var(--p))}
+.tr.rp .ic.f{color:var(--st)}
+
+/* ---- D2 Un solo flujo ---- */
+body{background:var(--bg)}
+.stepper{position:relative;display:grid;grid-template-columns:repeat(4,1fr);width:980px;margin:14px auto 0;height:70px;flex:none}
+.stepper .line{position:absolute;left:12.5%;right:12.5%;top:17px;height:3px;border-radius:3px;background:var(--line)}
+.stepper .line i{display:block;height:100%;background:var(--st);border-radius:3px;transition:width .6s cubic-bezier(.3,.8,.3,1)}
+.st{position:relative;display:flex;flex-direction:column;align-items:center;gap:9px;z-index:1}
+.st .nd{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;background:var(--bg);border:2px solid var(--line);color:var(--tx3);transition:all .3s}
+.st.done .nd{background:var(--st);border-color:var(--st);color:var(--bg)}
+:root[data-theme=dark] .st.done .nd{color:#0A1429}
+.st.cur .nd{visibility:hidden}
+.st .sl{font-size:13px;color:var(--tx3);font-weight:500;transition:color .3s}
+.st.done .sl{color:var(--tx2)}.st.cur .sl{color:var(--tx);font-weight:600}
+.st:hover .sl{color:var(--tx)}
+.mk{position:absolute;top:-2px;transform:translateX(-50%);background:var(--bg);padding:0 9px;border-radius:99px;height:40px;display:flex;align-items:center;transition:left .6s cubic-bezier(.3,.8,.3,1);z-index:2}
+.main{flex:1;min-height:0;padding:14px 100px 20px;position:relative}
+.hd h1{font-size:28px;font-weight:600;letter-spacing:-.025em;line-height:1.15}
+.hd p{font-size:15px;color:var(--tx2);margin-top:6px;max-width:640px;line-height:1.45}
+.pane{display:none;height:100%;flex-direction:column;gap:18px}
+.pane.cur{display:flex;animation:pin .45s cubic-bezier(.2,.8,.2,1) both}
+@keyframes pin{from{opacity:0;transform:translateX(18px)}}
+.two{flex:1;min-height:0;display:grid;grid-template-columns:1fr 440px;gap:48px}
+.two.wide{grid-template-columns:1fr 340px}
+.foot{height:76px;flex:none;border-top:1px solid var(--line);background:var(--surf);display:flex;align-items:center;gap:16px;padding:0 100px}
+.foot .sm{color:var(--tx2);font-size:13px;display:flex;gap:16px}.foot .sm b{color:var(--tx);font-weight:600}
+.foot .btn{height:42px;padding:0 20px;font-size:14px;border-radius:9px}
+.foot .btn.pri{min-width:190px;justify-content:center}
+.card{background:var(--surf);border:1px solid var(--line);border-radius:14px}
+.big .fld label{font-size:12.5px}.big .fld input{height:40px;font-size:14px;padding:0 12px;border-radius:9px}
+.big .okmark{top:12px}
+/* paso 1 */
+.wbox{padding:22px 24px 16px}
+.wbox .wvw{margin:6px 0 0}
+.ruler{display:flex;justify-content:space-between;color:var(--tx3);font-size:11.5px;margin-top:8px}
+.mrow{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:20px}
+.fx{display:grid;grid-template-columns:auto 1fr;font-size:13.5px}
+.fx dt,.fx dd{padding:10px 0;border-bottom:1px solid var(--line)}.fx dt{color:var(--tx3)}.fx dd{text-align:right;font-weight:500}
+.fx dt:nth-last-of-type(1),.fx dd:last-of-type{border:0}
+.alert{display:flex;gap:11px;padding:13px 14px;border-radius:11px;background:var(--er-bg);color:var(--er);align-items:flex-start}
+.alert svg{width:18px;height:18px;flex:none;margin-top:1px}.alert b{display:block;font-size:13.5px}.alert span{display:block;color:var(--tx2);font-size:12.5px;margin-top:2px;line-height:1.4}
+.alert.wn{background:var(--wn-bg);color:var(--wn-tx)}
+.chipf{display:inline-flex;gap:9px;align-items:center;font-size:13px;color:var(--tx2);margin-top:2px}
+.chipf b{color:var(--tx);font-weight:600}
+/* paso 2 */
+.formg{display:grid;grid-template-columns:1fr 1fr;gap:18px 18px;max-width:640px}
+.formg .full{grid-column:1/-1}.hint{font-size:11.5px;color:var(--tx3)}
+.covbox{padding:20px;display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.chk{display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--tx2)}.chk span{display:flex;gap:8px;align-items:center}.chk svg{width:14px;height:14px;color:var(--ok)}
+/* paso 3 */
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab{height:34px;padding:0 13px;border-radius:99px;border:1px solid var(--line);font-weight:500;font-size:13px;color:var(--tx2);display:flex;gap:8px;align-items:center}
+.tab em{font-style:normal;font-size:11.5px;color:var(--tx3);background:var(--surf2);border-radius:99px;padding:1px 7px}
+.tab.cur{background:var(--pri);color:var(--on-pri);border-color:var(--pri)}.tab.cur em{background:rgba(255,255,255,.18);color:inherit}
+:root[data-theme=dark] .tab.cur em{background:rgba(15,31,61,.15)}
+.list{overflow:hidden}
+.row{display:grid;grid-template-columns:40px 34px 1fr auto;align-items:center;gap:14px;padding:13px 18px;min-height:70px;border-bottom:1px solid var(--line);cursor:pointer;transition:background .2s}
+.row:last-child{border:0}.row:hover{background:var(--surf2)}
+.row .nm{display:flex;flex-direction:column;gap:2px;min-width:0}
+.row .nm b{font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px}
+.row .nm .sp2{font-size:12.5px;color:var(--tx3)}
+.row .why{font-size:12.5px;display:flex;gap:6px;align-items:flex-start;line-height:1.35;margin-top:1px;font-weight:500}
+
+.row .why.ok{color:var(--ok)}.row .why.wn{color:var(--wn-tx)}.row .why.er{color:var(--er)}
+.row.off .nm b,.row.off .sp2{opacity:.55}.row.off .why{display:none}
+.row .mono{width:34px;height:34px;font-size:11px}
+.row .rt{justify-self:end}
+.row.off .sevoff{display:inline-flex}.row.on .sevoff{display:none}
+.sevoff{align-items:center;gap:5px;font-size:11.5px;font-weight:600;opacity:.8}
+.sevoff.ok{color:var(--ok)}.sevoff.wn{color:var(--wn-tx)}.sevoff.er{color:var(--er)}.sevoff svg{width:13px;height:13px}
+.tp{display:flex;flex-direction:column;min-height:0;padding:16px 16px 12px}
+.tp .th{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.tp .th b{font-size:14px;font-weight:600}.tp .th span{font-size:12px;color:var(--tx3)}
+.tp .tree{flex:1;overflow:auto}.tp .tr{height:22px}.tp .tree::-webkit-scrollbar{display:none}
+.tp .tf{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px;margin-top:8px;font-size:12px;color:var(--tx2)}.tp .tf b{color:var(--tx)}
+/* paso 4 */
+.rev{padding:6px 20px}
+.rv{display:grid;grid-template-columns:100px 1fr auto;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.rv:last-child{border:0}.rv .k{color:var(--tx3)}.rv .v{font-weight:500}
+.rv a{color:var(--st);font-weight:600;font-size:12.5px;cursor:pointer}
+.dchips{display:flex;flex-wrap:wrap;gap:6px}
+.dchip{display:inline-flex;gap:6px;align-items:center;height:26px;padding:0 10px 0 8px;border-radius:99px;border:1px solid var(--line);font-size:12.5px;font-weight:500}
+.dchip svg{width:13px;height:13px}.dchip .ok{color:var(--ok)}.dchip .wn{color:var(--wn)}.dchip .er{color:var(--er)}
+.xph{padding:22px 24px;display:flex;flex-direction:column;gap:14px;position:relative;overflow:hidden}
+.xph .pct{font-size:44px;font-weight:600;letter-spacing:-.03em;line-height:1}
+.xph .bar{height:8px}
+.dp{display:grid;grid-template-columns:22px 170px 1fr 44px;gap:10px;align-items:center;font-size:13px;padding:6px 0}
+.dp .mono{width:22px;height:22px;font-size:10px}.dp .bar{height:5px}.dp .pp{text-align:right;color:var(--tx2);font-size:12px}
+.dp.fin .pp{color:var(--ok)}.dp.fin .bar i{background:var(--ok)}
+.fin-h{display:flex;gap:18px;align-items:center}.fin-h h2{font-size:22px;font-weight:600;letter-spacing:-.02em}.fin-h p{color:var(--tx2);margin-top:3px;font-size:14px}
+</style></head><body><div class="win" id="app"></div>
+<script>
+/* ===== núcleo compartido: datos, formato, árbol en vivo, exportación simulada ===== */
+const MO={subs:[],listeners:[]};
+const Q=new URLSearchParams(location.search);
+const STILL=Q.has('still');
+if(STILL)document.body.classList.add('still');
+const nf=(n,d=1)=>(n<0?'−':'')+Math.abs(n).toFixed(d).replace('.',',');
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const ART='Vera Alcón',TIT='Luz de Noviembre',PRE=ART+' - '+TIT+' ';
+const M={file:'Luz de Noviembre - master v7.wav',fmt:'WAV',bits:24,khz:96,ch:'Estéreo',dur:'3:52',size:'133,6 MB',lufs:-9.1,lra:5.8,tp:1.2,clips:3};
+const IC={
+ folder:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+ file:'<svg class="ic f" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg>',
+ check:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+ play:'<svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>',
+ chev:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+ down:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+ left:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+ moon:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>',
+ sun:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>',
+ pdir:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7" transform="rotate(-90 12 12)"/></svg>',
+ ok:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.6 8.3l2.3 2.3 4.5-4.7" fill="none" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+ wn:'<svg viewBox="0 0 16 16"><path d="M8 1.6L15 14H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6v4M8 11.6v.4" stroke="var(--bg)" stroke-width="1.7" stroke-linecap="round"/></svg>',
+ er:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.4 5.4l5.2 5.2M10.6 5.4l-5.2 5.2" stroke="var(--bg)" stroke-width="1.8" stroke-linecap="round"/></svg>',
+ plus:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+ reveal:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
+};
+const SEVL={ok:'Cumple',wn:'Aviso',er:'No cumple'};
+const sev=s=>`<span class="sev ${s}">${IC[s]}${SEVL[s]}</span>`;
+/* norte marcado: rombo vertical 20×60 en viewBox 64, hueco de 2 u en la cintura */
+const sym=(h=22)=>`<svg width="${h*20/64}" height="${h}" viewBox="22 2 20 60" aria-hidden="true" style="flex:none"><path d="M32 2L42 31H22Z" fill="#BF7F12"/><path d="M22 33H42L32 62Z" fill="var(--sym-s)"/></svg>`;
+const wordmark=(sz=15)=>`<span class="wm" style="font-size:${sz}px">${sym(sz*1.5)}<span style="display:inline-flex;gap:.28em"><b>nortia.</b><span>studio</span></span></span>`;
+function titlebar(extra=''){return `<div class="tb"><div class="lights"><i></i><i></i><i></i></div>${wordmark(15)}<span class="appn">Master Out</span><div class="sp"></div>${extra}<button class="ibtn" id="themeBtn" aria-label="Cambiar tema" title="Claro / oscuro"></button></div>`}
+function themeInit(){const b=document.getElementById('themeBtn');const set=()=>{b.innerHTML=document.documentElement.dataset.theme==='dark'?IC.sun:IC.moon};set();
+ b.onclick=()=>{const d=document.documentElement;d.dataset.theme=d.dataset.theme==='dark'?'light':'dark';set();const u=new URL(location);u.searchParams.set('theme',d.dataset.theme);history.replaceState(0,'',u)}}
+/* ---------- destinos (datos de ejemplo) ---------- */
+const Fs=(tag,mb)=>({tag,mb});
+const D=[
+ {id:'spotify',n:'Spotify',m:'Sp',g:'Streaming',spec:'FLAC · 24 bit · 96 kHz',sev:'er',why:'TP +1,2 dBTP; Spotify recomienda ≤ −1',adv:'El máster llega a +1,2 dBTP. Spotify recomienda ≤ −1 dBTP para que la recodificación no distorsione. Master Out no cambia el audio: si quieres corregirlo, hazlo en tu DAW.',fo:'01 Spotify',f:[Fs('[Spotify] 24bit-96kHz.flac',74.1)]},
+ {id:'apple',n:'Apple Music',m:'Ap',g:'Streaming',spec:'WAV · 24 bit · 96 kHz · Digital Masters',sev:'er',why:'afclip: 1.284 muestras con clipping',adv:'La validación oficial (afconvert + afclip) encuentra 1.284 muestras con clipping en la versión AAC. Apple Digital Masters las rechazaría.',fo:'02 Apple Music',f:[Fs('[Apple Digital Masters] 24bit-96kHz.wav',133.6)]},
+ {id:'amazon',n:'Amazon Music',m:'Am',g:'Streaming',spec:'FLAC · 24 bit · 96 kHz',sev:'wn',why:'TP +1,2 dBTP; recomendación ≤ −2',adv:'Amazon recomienda dejar margen de true peak. Es una recomendación, no un rechazo.',fo:'03 Amazon Music',f:[Fs('[Amazon Music] 24bit-96kHz.flac',74.1)]},
+ {id:'tidal',n:'Tidal',m:'Ti',g:'Streaming',spec:'FLAC · 24 bit · 96 kHz',sev:'ok',why:'Cumple · resolución nativa',adv:'Se entrega en la resolución nativa del máster, sin conversión. Tidal solo ajusta el volumen de reproducción.',fo:'04 Tidal',f:[Fs('[Tidal] 24bit-96kHz.flac',74.1)]},
+ {id:'deezer',n:'Deezer',m:'De',g:'Streaming',spec:'WAV · 16 bit · 44,1 kHz',sev:'wn',why:'TP +1,2 dBTP: puede recortar a 16 bit',adv:'Al pasar de 24 a 16 bit se aplica dither TPDF. Con picos sobre 0 dBTP el remuestreo puede recortar.',fo:'05 Deezer',f:[Fs('[Deezer] 16bit-44kHz.wav',40.9)]},
+ {id:'ytm',n:'YouTube Music',m:'YM',g:'Streaming',spec:'WAV · 24 bit · 48 kHz',sev:'ok',why:'Cumple · YouTube solo baja el volumen',adv:'YouTube nunca sube el volumen; con −9,1 LUFS lo bajará al normalizar.',fo:'06 YouTube',f:[Fs('[YouTube Music] 24bit-48kHz.wav',66.8)]},
+ {id:'dist',n:'Distribuidora estándar',m:'Di',g:'Distribuidoras',spec:'WAV · 16 bit · 44,1 kHz',sev:'wn',why:'TP > 0 dBTP: la distribuidora recodifica',adv:'La mayoría de distribuidoras recodifican a MP3/AAC para algunas tiendas; un pico sobre 0 dBTP puede recortar.',fo:'07 Distribuidora',f:[Fs('[Distribuidora] 16bit-44kHz.wav',40.9)]},
+ {id:'disthr',n:'Distribuidora Hi-Res',m:'DH',g:'Distribuidoras',spec:'WAV · 24 bit · 96 kHz',sev:'ok',why:'Cumple · resolución nativa',adv:'Entrega 24 bit en la resolución nativa del máster.',fo:'07 Distribuidora',f:[Fs('[Distribuidora Hi-Res] 24bit-96kHz.wav',133.6)]},
+ {id:'tunecore',n:'TuneCore',m:'Tc',g:'Distribuidoras',spec:'WAV · 24 bit · 192 kHz · sin metadatos',sev:'wn',why:'Upsampling 96 → 192 kHz, sin ganancia',adv:'TuneCore pide 24/192. Subir de 96 a 192 kHz se permite, pero no mejora la calidad: el README lo marca.',fo:'07 Distribuidora',f:[Fs('[TuneCore] 24bit-192kHz.wav',267.2)]},
+ {id:'mp3',n:'MP3 320',m:'MP',g:'Promo',spec:'MP3 · 320 kbps CBR',sev:'wn',why:'TP +1,2 dBTP: el MP3 puede recortar',adv:'El codificador MP3 añade picos entre muestras; con +1,2 dBTP de partida es probable que recorte.',fo:'08 Promo',f:[Fs('[MP3 320].mp3',9.3)]},
+ {id:'ytv',n:'YouTube vídeo',m:'YV',g:'Vídeo e imagen',spec:'MP4 · 1080p · imagen fija',sev:'ok',why:'Cumple · portada sobre fondo desenfocado',adv:'Vídeo H.264 con la portada centrada y audio AAC a 48 kHz.',fo:'06 YouTube',f:[Fs('[YouTube] 1080p.mp4',6.8)]},
+ {id:'canvas',n:'Spotify Canvas',m:'Ca',g:'Vídeo e imagen',spec:'MP4 · 1080×1920 · 6 s · sin audio',sev:'ok',why:'Cumple · recorte 9:16 de la portada',adv:'Recorte 9:16 de la portada con zoom lento de 6 s.',fo:'09 Imagen',f:[Fs('[Canvas] 1080x1920.mp4',3.2)]},
+ {id:'portada',n:'Portada',m:'Po',g:'Vídeo e imagen',spec:'JPG + PNG · 3000×3000',sev:'ok',why:'Cumple · 3000×3000 · sRGB',adv:'La portada cumple tamaño, formato cuadrado y perfil sRGB.',fo:'09 Imagen',f:[Fs('[Portada] 3000x3000.jpg',1.9),Fs('[Portada] 3000x3000.png',6.4)]}
+];
+const GROUPS=['Streaming','Distribuidoras','Promo','Vídeo e imagen'];
+const DOCS=[['README.txt',.003],['informe-loudness.txt',.004],['ficha-lanzamiento.csv',.001],['ficha-lanzamiento.txt',.002]];
+MO.on=new Set(['spotify','apple','tidal','deezer','dist','mp3','portada']);
+MO.byId=Object.fromEntries(D.map(d=>[d.id,d]));
+MO.exp={mode:'idle',pct:{}};            // idle | run | done
+MO.t0=0;MO.dur=8200;
+const sizeStr=mb=>mb<0.1?'<1 KB':mb<1?nf(mb*1000,0)+' KB':nf(mb,1)+' MB';
+MO.files=function(){ // lista plana ordenada por carpeta
+  const out=[];D.filter(d=>MO.on.has(d.id)).forEach(d=>d.f.forEach((f,i)=>out.push({k:d.id+':'+i,fo:d.fo,tag:f.tag,mb:f.mb,d})));
+  out.sort((a,b)=>a.fo.localeCompare(b.fo)||D.indexOf(a.d)-D.indexOf(b.d));
+  DOCS.forEach((x,i)=>out.push({k:'doc:'+i,fo:'',doc:x[0],mb:x[1]}));
+  return out};
+MO.stats=function(){const f=MO.files();const au=f.filter(x=>!x.doc);const act=D.filter(d=>MO.on.has(d.id));
+  return{n:au.length,docs:DOCS.length,mb:f.reduce((s,x)=>s+x.mb,0),dest:act.length,er:act.filter(d=>d.sev==='er').length,wn:act.filter(d=>d.sev==='wn').length}};
+const fileRow=(x,ind)=>{
+  const e=MO.exp,p=e.pct[x.k]??0;let rs;
+  if(e.mode==='idle')rs=`<span class="sz">${sizeStr(x.mb)}</span>`;
+  else if(p>=100)rs=`<span class="dn">${IC.check}</span><span class="sz">${sizeStr(x.mb)}</span>`;
+  else if(p>0)rs=`<span class="pc" data-pc="${x.k}">${Math.round(p)} %</span>`;
+  else rs=`<span class="q">En cola</span>`;
+  const nm=x.doc?`<span class="rest" style="color:var(--tx2)">${x.doc}</span>`:`<span class="pre">${esc(PRE)}</span><span class="tag">${esc(x.tag.slice(0,x.tag.indexOf(']')+1))}</span><span class="rest">${esc(x.tag.slice(x.tag.indexOf(']')+1))}</span>`;
+  return `<div class="tr ${x.doc?'doc':''} ${p>0&&p<100&&e.mode!=='idle'?'rp':''}" data-k="${x.k}" style="padding-left:${ind}px;--p:${p}%">${IC.file}<div class="nm">${nm}</div>${rs}</div>`};
+MO.treeHTML=function(){
+  const f=MO.files();let h=`<div class="tr dir" data-k="root">${IC.folder}<div class="nm">${esc(ART+' - '+TIT)}/</div></div>`;
+  let last=null;
+  f.filter(x=>!x.doc).forEach(x=>{if(x.fo!==last){last=x.fo;h+=`<div class="tr dir" data-k="fo:${x.fo}" style="padding-left:16px">${IC.folder}<div class="nm">${x.fo}/</div></div>`}h+=fileRow(x,30)});
+  f.filter(x=>x.doc).forEach(x=>h+=fileRow(x,18));
+  return h};
+MO.mountTree=function(el){
+  let prev=new Set();
+  const draw=()=>{const html=MO.treeHTML();el.innerHTML=html;
+    const keys=new Set([...el.querySelectorAll('[data-k]')].map(n=>n.dataset.k));
+    if(prev.size&&!STILL)el.querySelectorAll('[data-k]').forEach(n=>{if(!prev.has(n.dataset.k))n.classList.add('in')});
+    prev=keys;
+    el.querySelectorAll('.tr:not(.dir)').forEach(r=>r.onclick=()=>{el.querySelectorAll('.sel').forEach(s=>s.classList.remove('sel'));r.classList.add('sel')})};
+  draw();MO.subs.push(draw)};
+MO.refresh=()=>MO.subs.forEach(f=>f());
+MO.toggle=id=>{MO.on.has(id)?MO.on.delete(id):MO.on.add(id);MO.refresh()};
+/* ---------- exportación simulada ---------- */
+MO.snapshot=function(){ // estado congelado "exportando"
+  const pr={'spotify:0':100,'apple:0':64,'tidal:0':88,'deezer:0':100,'dist:0':31,'mp3:0':0,'portada:0':100,'portada:1':52};
+  MO.files().forEach(x=>MO.exp.pct[x.k]=pr[x.k]??0);MO.exp.mode='run';MO.exp.snap=true};
+MO.overall=function(){const f=MO.files();const t=f.reduce((s,x)=>s+x.mb,0);return f.reduce((s,x)=>s+x.mb*(MO.exp.pct[x.k]??0)/100,0)/t*100};
+MO.start=function(){
+  const f=MO.files();MO.exp={mode:'run',pct:{}};MO.t0=performance.now();
+  const sp={};f.forEach((x,i)=>sp[x.k]={d:x.doc?.25:.35+Math.min(x.mb,140)/140*.55,s:x.doc?.7:(i%3)*.05});
+  MO.refresh();
+  const tick=()=>{const t=(performance.now()-MO.t0)/MO.dur;
+    f.forEach(x=>{const a=sp[x.k];const u=x.doc?Math.max(0,(t-.75)/a.d):Math.max(0,(t-a.s)/a.d);MO.exp.pct[x.k]=Math.min(100,u*100)});
+    MO.tickUI();
+    if(f.every(x=>MO.exp.pct[x.k]>=100)){MO.exp.mode='done';MO.exp.secs=(performance.now()-MO.t0)/1000;MO.refresh();MO.listeners.forEach(l=>l('done'));return}
+    requestAnimationFrame(tick)};
+  requestAnimationFrame(tick);MO.listeners.forEach(l=>l('run'))};
+let _lastFull=0;
+MO.tickUI=function(){
+  document.querySelectorAll('.tr[data-k]').forEach(n=>{const v=MO.exp.pct[n.dataset.k];if(v!=null)n.style.setProperty('--p',v+'%')});
+  document.querySelectorAll('[data-pc]').forEach(n=>n.textContent=Math.round(MO.exp.pct[n.dataset.pc]||0)+' %');
+  const now=performance.now();if(now-_lastFull>260){_lastFull=now;MO.refresh()}
+  const o=MO.overall();document.querySelectorAll('[data-total]').forEach(n=>n.style.width=o+'%');
+  document.querySelectorAll('[data-totalpc]').forEach(n=>n.textContent=Math.round(o)+' %');
+  document.querySelectorAll('[data-eta]').forEach(n=>n.textContent=MO.eta())};
+MO.eta=()=>{const o=MO.overall()/100;const s=Math.max(1,Math.round(MO.dur/1000*(1-o)));return 'Faltan '+s+' s'};
+MO.confetti=function(host,n=22){if(STILL||!host)return;const c=document.createElement('div');c.className='conf';
+  const cols=['#BF7F12','var(--sym-s)','var(--st)'];
+  for(let i=0;i<n;i++){const e=document.createElement('i');e.style.left=(6+Math.random()*88)+'%';e.style.background=cols[i%3];e.style.animationDelay=(Math.random()*.7)+'s';e.style.opacity=.9;e.style.transform='scale('+(.6+Math.random()*.7)+')';c.appendChild(e)}
+  host.appendChild(c);setTimeout(()=>c.remove(),4200)};
+MO.doneMark=(sz=64)=>`<svg class="markdone" width="${sz*20/64*1.0}" height="${sz}" viewBox="22 2 20 60"><path class="t" d="M32 2L42 31H22Z" fill="#BF7F12"/><path class="b" d="M22 33H42L32 62Z" fill="var(--sym-s)"/></svg>`;
+/* ---------- forma de onda ---------- */
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const ENV=[[0,.1],[.05,.18],[.08,.5],[.28,.56],[.30,.88],[.5,.86],[.52,.5],[.63,.55],[.65,.94],[.85,.92],[.87,.5],[1,.08]];
+const env=t=>{for(let i=0;i<ENV.length-1;i++){const[a,x]=ENV[i],[b,y]=ENV[i+1];if(t>=a&&t<=b)return x+(y-x)*(t-a)/(b-a)}return .1};
+const CLIPS=[.312,.668,.745];
+function waveSVG(w,h,n,opt={}){
+  const r=rng(opt.seed||7),bw=w/n,g=bw*(opt.gap??.32);let o='';
+  for(let i=0;i<n;i++){const t=(i+.5)/n;let a=Math.min(1,env(t)*(.62+.38*r()));
+    const cl=opt.clips&&CLIPS.some(c=>Math.abs(t-c)<.55/n*1.2);if(cl)a=1;
+    const bh=Math.max(3,a*h),cls=cl?'c':(opt.prog!=null&&t<=opt.prog?'p':'');
+    o+=`<rect class="${cls}" x="${(i*bw).toFixed(1)}" y="${((h-bh)/2).toFixed(1)}" width="${(bw-g).toFixed(1)}" height="${bh.toFixed(1)}" rx="${((bw-g)/2).toFixed(1)}"/>`}
+  return `<svg class="wv" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${o}</svg>`}
+/* medidores */
+function lufsMeter(w){const pos=v=>(v+24)/20*100;
+  return `<div class="meter"><div class="mh"><span>Loudness integrado</span><b>${nf(M.lufs)} LUFS</b></div>
+  <div class="mtrack"><i class="fill" style="width:${pos(M.lufs)}%"></i><i class="ref" style="left:${pos(-14)}%"></i></div>
+  <div class="mscale"><span style="left:0">−24</span><span style="left:${pos(-14)}%">−14 streaming</span><span style="left:${pos(-9.1)}%;display:none"></span><span style="left:100%">−4</span></div></div>`}
+function tpMeter(){const pos=v=>(v+6)/8*100;
+  return `<div class="meter"><div class="mh"><span>True peak máximo</span><b class="er">+${nf(M.tp)} dBTP</b></div>
+  <div class="mtrack"><i class="zone" style="width:${100-pos(0)}%"></i><i class="fill er" style="width:${pos(M.tp)}%"></i><i class="ref" style="left:${pos(-1)}%"></i></div>
+  <div class="mscale"><span style="left:0">−6</span><span style="left:${pos(-1)}%">−1</span><span style="left:${pos(0)}%">0</span><span style="left:100%">+2</span></div></div>`}
+function cover(s){return `<svg width="${s}" height="${s}" viewBox="0 0 100 100" role="img" aria-label="Portada" style="border-radius:${Math.max(6,s/16)}px;display:block;flex:none"><rect width="100" height="100" fill="#1B3A4D"/><rect y="60" width="100" height="40" fill="#12293A"/><circle cx="62" cy="42" r="19" fill="#EBDDC3"/><rect y="58" width="100" height="2.4" fill="#EBDDC3" opacity=".6"/><rect x="12" y="68" width="52" height="2.2" fill="#EBDDC3" opacity=".35"/><rect x="24" y="75" width="38" height="2.2" fill="#EBDDC3" opacity=".25"/><rect x="34" y="82" width="22" height="2.2" fill="#EBDDC3" opacity=".18"/></svg>`}
+function sw(on,id){return `<button class="sw" role="switch" aria-checked="${on}" aria-label="Activar ${id}"></button>`}
+
+const app=document.getElementById('app');
+let cur=+(Q.get('step')||3);if(Q.get('state')==='exporting'||Q.get('state')==='done')cur=4;
+const STEPS=['Máster','Datos','Destinos','Exportar'];
+const HEAD=[['Este es tu máster','Lo hemos medido sin tocarlo. Esto es lo que verán las plataformas.'],
+ ['¿Cómo se llama el tema?','Estos datos van en los nombres de archivo y en la ficha de lanzamiento.'],
+ ['¿Dónde vas a publicar?','Activa los destinos. Verás qué archivo recibe cada uno y si el máster cumple.'],
+ ['Todo listo para exportar','Revisa el resumen. Master Out crea la carpeta con un archivo correcto por destino.']];
+const fld=(l,v,c='',ok,h)=>`<div class="fld ${c}"><label>${l}</label><div class="rel"><input value="${v}" ${ok?'style="padding-right:34px"':''}>${ok?`<span class="okmark">${IC.check.replace('class="ic"','class="ic" style="width:15px;height:15px"')}</span>`:''}</div>${h?`<span class="hint">${h}</span>`:''}</div>`;
+const treePanel=(t)=>`<div class="card tp"><div class="th"><b>${t}</b><span id="tcount"></span></div><div class="tree" id="tree"></div><div class="tf" id="tfoot"></div></div>`;
+const panes=[
+/* 1 */`<div class="two wide"><div><div class="card wbox"><div style="display:flex;justify-content:space-between;align-items:center"><div class="chipf">${IC.file}<b>${M.file}</b> · ${M.fmt} · ${M.bits} bit · ${M.khz} kHz</div><div style="display:flex;gap:8px"><button class="btn sm">${IC.play}Escuchar</button><button class="btn sm">Cambiar máster</button></div></div>
+ <div class="wvw" style="margin-top:14px"><div class="wdraw">${waveSVG(716,200,118,{prog:.31,clips:true})}</div><div class="playhead" style="left:31%;top:-6px;bottom:-6px"></div></div>
+ <div class="ruler"><span>0:00</span><span>1:00</span><span>2:00</span><span>3:00</span><span>${M.dur}</span></div>
+ <div class="mrow">${lufsMeter()}${tpMeter()}</div></div></div>
+ <div style="display:flex;flex-direction:column;gap:16px"><div class="alert">${IC.er}<div><b>3 picos sobre 0 dBTP</b><span>Se marcan en rojo en la onda. Algunos destinos avisarán.</span></div></div>
+ <dl class="fx"><dt>Resolución</dt><dd>${M.bits} bit · ${M.khz} kHz</dd><dt>Canales</dt><dd>${M.ch}</dd><dt>Duración</dt><dd>${M.dur}</dd><dt>Tamaño</dt><dd>${M.size}</dd><dt>Rango (LRA)</dt><dd>${nf(M.lra)} LU</dd></dl>
+ <p class="chipf" style="color:var(--tx2);align-items:flex-start;line-height:1.4"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>Tu máster no se modifica. Master Out mide y avisa.</p></div></div>`,
+/* 2 */`<div class="two wide big"><div class="formg">${fld('Título',TIT)}${fld('Artista principal',ART)}${fld('Featuring','')}${fld('Versión','','',false,'Por ejemplo: Radio Edit')}${fld('Año','2026')}${fld('ISRC','ES-ABC-26-00417','',true,'Formato CC-XXX-YY-NNNNN')}
+  <div class="full"><button class="btn quiet" style="padding:0;height:auto">Más campos: compositores, editorial, sello, ℗ y ©, UPC${IC.down}</button></div></div>
+ <div class="card covbox">${cover(240)}<div class="chk"><span>${IC.check}3000×3000 px</span><span>${IC.check}Cuadrada</span><span>${IC.check}Perfil sRGB</span></div><button class="btn sm">Cambiar portada</button></div></div>`,
+/* 3 */`<div class="two"><div><div class="tabs" id="tabs"></div><div class="card list" id="list"></div></div>${treePanel('Así queda tu carpeta')}</div>`,
+/* 4 */`<div class="two"><div id="s4left"></div>${treePanel('Carpeta de salida')}</div>`];
+app.innerHTML=titlebar()+`<div class="stepper" id="stp"><div class="line"><i></i></div>${STEPS.map((s,i)=>`<button class="st" data-s="${i+1}"><span class="nd"></span><span class="sl">${s}</span></button>`).join('')}<div class="mk">${sym(36)}</div></div>
+<div class="main"><div id="panes" style="height:100%">${panes.map((p,i)=>`<section class="pane" data-p="${i+1}"><div class="hd"><h1>${HEAD[i][0]}</h1><p>${HEAD[i][1]}</p></div>${p}</section>`).join('')}</div></div>
+<div class="foot" id="foot"></div>`;
+themeInit();
+let tab='Streaming';
+function stepUI(){
+  document.querySelectorAll('.st').forEach(b=>{const i=+b.dataset.s;b.classList.toggle('done',i<cur);b.classList.toggle('cur',i===cur);b.querySelector('.nd').innerHTML=i<cur?IC.check:i});
+  document.querySelector('.stepper .line i').style.width=((cur-1)/3*100)+'%';
+  document.querySelector('.mk').style.left=(12.5+(cur-1)*25)+'%';
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('cur',+p.dataset.p===cur));
+  mountTrees();foot();dyn()}
+function go(n){cur=Math.max(1,Math.min(4,n));stepUI();const u=new URL(location);u.searchParams.set('step',cur);history.replaceState(0,'',u)}
+document.querySelectorAll('.st').forEach(b=>b.onclick=()=>go(+b.dataset.s));
+function mountTrees(){const pane=document.querySelector('.pane.cur');const el=pane.querySelector('#tree');
+  document.querySelectorAll('#tree').forEach(n=>n.removeAttribute('id'));
+  /* un solo árbol activo a la vez */
+  if(el){el.id='tree';MO.subs=MO.subs.filter(f=>!f.isTree);MO.mountTree(el);MO.subs[MO.subs.length-1].isTree=true}}
+function tabsHTML(){return GROUPS.map(g=>{const ds=D.filter(d=>d.g===g),n=ds.filter(d=>MO.on.has(d.id)).length;return `<button class="tab ${g===tab?'cur':''}" data-g="${g}">${g}<em>${n}/${ds.length}</em></button>`}).join('')}
+function listHTML(){return D.filter(d=>d.g===tab).map(d=>{const on=MO.on.has(d.id);return `<div class="row ${on?'on':'off'}" data-id="${d.id}"><button class="sw" role="switch" aria-checked="${on}" aria-label="${d.n}"></button>
+ <span class="mono ${on?'on':''}">${d.m}</span><div class="nm"><b>${d.n}</b><span class="sp2">${d.spec}</span>${on?`<span class="why ${d.sev}">${d.why}</span>`:''}</div>
+ <div class="rt"><span class="sevoff ${d.sev}">${IC[d.sev]}${SEVL[d.sev]}</span></div></div>`}).join('')}
+function dyn(){
+  const s=MO.stats();
+  if(cur===3){const t=document.getElementById('tabs'),l=document.getElementById('list');t.innerHTML=tabsHTML();l.innerHTML=listHTML();
+    t.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.g;dyn()});
+    l.querySelectorAll('.row').forEach(r=>r.onclick=()=>MO.toggle(r.dataset.id));
+    /* row layout: icono de semáforo como 3ª columna cuando está activo */
+    l.querySelectorAll('.row.on').forEach(r=>{const d=MO.byId[r.dataset.id];r.querySelector('.rt').innerHTML=`<span class="sev ${d.sev}">${IC[d.sev]}${SEVL[d.sev]}</span>`})}
+  if(cur===4){const h=document.querySelector('.pane.cur .hd');const m=MO.exp.mode;h.querySelector('h1').textContent=m==='run'?'Exportando tu entrega':m==='done'?'Entrega terminada':HEAD[3][0];h.querySelector('p').textContent=m==='run'?'Cada destino se procesa en paralelo. Puedes cancelar sin dejar archivos a medias.':m==='done'?'Abre la carpeta y sube cada archivo a su plataforma.':HEAD[3][1]}
+  const tc=document.getElementById('tcount');if(tc)tc.textContent=s.n+' archivos + '+s.docs+' documentos';
+  const tf=document.getElementById('tfoot');if(tf)tf.innerHTML=`<span><b>${s.n+s.docs}</b> archivos</span><span><b>${sizeStr(s.mb)}</b></span>`;
+  if(cur===4)s4()}
+function s4(){const el=document.getElementById('s4left'),e=MO.exp,s=MO.stats();let h;
+ const act=D.filter(d=>MO.on.has(d.id));
+ if(e.mode==='idle'){
+  h=`<div class="card rev"><div class="rv"><span class="k">Tema</span><span class="v">${ART} — ${TIT}</span><a>Cambiar</a></div>
+  <div class="rv"><span class="k">Máster</span><span class="v">${M.bits} bit · ${M.khz} kHz · ${nf(M.lufs)} LUFS · +${nf(M.tp)} dBTP</span><a>Ver</a></div>
+  <div class="rv"><span class="k">Carpeta</span><span class="v">~/Música/Entregas</span><a>Cambiar</a></div>
+  <div class="rv" style="align-items:flex-start"><span class="k" style="padding-top:4px">Destinos</span><div class="dchips">${act.map(d=>`<span class="dchip"><span class="${d.sev}">${IC[d.sev]}</span>${d.n}</span>`).join('')}</div><a data-go="3">Editar</a></div></div>
+  <div class="alert wn" style="margin-top:16px">${IC.wn}<div><b>${s.er} destinos no cumplen: ${act.filter(d=>d.sev==='er').map(d=>d.n).join(' y ')}</b><span>Puedes exportar igualmente. El máster no se modifica; para corregir el pico, vuelve a tu DAW.</span></div></div>`}
+ else if(e.mode==='run'){const o=MO.overall();
+  h=`<div class="card xph"><div style="display:flex;justify-content:space-between;align-items:flex-end"><span class="pct" data-totalpc>${Math.round(o)} %</span><span style="color:var(--tx2);font-size:14px" data-eta>${MO.eta()}</span></div><div class="bar"><i data-total style="width:${o}%"></i></div>
+   <div>${act.map(d=>{const fs=MO.files().filter(x=>x.d&&x.d.id===d.id);const p=fs.reduce((a,x)=>a+(MO.exp.pct[x.k]||0)*x.mb,0)/fs.reduce((a,x)=>a+x.mb,0);return `<div class="dp ${p>=100?'fin':''}"><span class="mono on">${d.m}</span><span>${d.n}</span><span class="bar"><i style="width:${p}%"></i></span><span class="pp">${p>=100?'Listo':Math.round(p)+' %'}</span></div>`}).join('')}</div></div>`}
+ else{h=`<div class="card xph" id="doneBox" style="padding:34px 28px;gap:22px"><div class="fin-h">${MO.doneMark(64)}<div><h2>Todo exportado</h2><p>${s.n+s.docs} archivos · ${sizeStr(s.mb)} · ${nf(MO.exp.secs||7.4)} s</p></div></div>
+   <div style="display:flex;gap:10px"><button class="btn pri" style="height:44px;padding:0 20px">${IC.reveal}Mostrar en Finder</button><button class="btn" style="height:44px;padding:0 18px" id="again">Nueva entrega</button></div>
+   <p style="color:var(--tx2);font-size:13px">El README explica qué archivo va a cada plataforma y por qué.</p></div>`}
+ el.innerHTML=h;el.querySelectorAll('[data-go]').forEach(a=>a.onclick=()=>go(+a.dataset.go));
+ if(e.mode==='done'&&!e.celebrated){e.celebrated=1;MO.confetti(document.getElementById('doneBox'))}
+ const ag=document.getElementById('again');if(ag)ag.onclick=()=>{MO.exp={mode:'idle',pct:{}};MO.refresh();foot()}}
+function foot(){const s=MO.stats(),e=MO.exp;let h='';const back=cur>1&&e.mode!=='run'?`<button class="btn" id="bk">${IC.left}Atrás</button>`:'<span></span>';
+ const sm=`<div class="sm"><span><b>${s.dest}</b> destinos</span><span><b>${s.n+s.docs}</b> archivos</span><span><b>${sizeStr(s.mb)}</b></span></div>`;
+ let nx;
+ if(cur<3)nx=`<button class="btn pri" id="nx">Siguiente: ${STEPS[cur]}${IC.chev}</button>`;
+ else if(cur===3)nx=`<button class="btn pri" id="nx">Siguiente: Exportar${IC.chev}</button>`;
+ else if(e.mode==='idle')nx=`<button class="btn pri" id="nx">Exportar ${s.dest} destinos</button>`;
+ else if(e.mode==='run')nx=`<button class="btn" id="cx">Cancelar</button>`;
+ else nx=`<span></span>`;
+ document.getElementById('foot').innerHTML=back+'<div class="sp"></div>'+(e.mode==='done'?'':sm)+nx;
+ const b=document.getElementById('bk');if(b)b.onclick=()=>go(cur-1);
+ const n=document.getElementById('nx');if(n)n.onclick=()=>cur===4?MO.start():go(cur+1)}
+MO.subs.push(()=>{dyn();if(cur===4)foot()});
+MO.listeners.push(()=>foot());
+if(Q.get('state')==='exporting')MO.snapshot();
+if(Q.get('state')==='done'){MO.files().forEach(x=>MO.exp.pct[x.k]=100);MO.exp.mode='done';MO.exp.celebrated=1;MO.exp.secs=7.4}
+document.querySelector('.stepper .line i').style.transition='none';
+stepUI();
+if(STILL){document.querySelector('.mk').style.transition='none'}
+</script></body></html>

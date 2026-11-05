@@ -275,6 +275,7 @@ pub fn validate_with_tools(
     let cmds = build_adm_commands(master_wav, workdir, rate);
     let mut log = String::new();
     let mut clip_out = String::new();
+    let mut clip_failed = false;
     for (i, cmd) in cmds.iter().enumerate() {
         let program = if cmd[0] == "afclip" {
             afclip
@@ -295,11 +296,13 @@ pub fn validate_with_tools(
             Run::Cancelled => return AdmReport::unavailable("reason.adm_cancelled", log),
             Run::Done(ok, text) => {
                 log.push_str(&text);
-                if !ok {
-                    return AdmReport::unavailable("reason.adm_failed", log);
-                }
                 if i == 3 {
+                    // afclip puede salir con código ≠ 0 justo cuando encuentra clips: se parsea
+                    // la salida igualmente y solo es fallo si no se entiende.
+                    clip_failed = !ok;
                     clip_out = text;
+                } else if !ok {
+                    return AdmReport::unavailable("reason.adm_failed", log);
                 }
             }
         }
@@ -319,6 +322,7 @@ pub fn validate_with_tools(
             aac_path: Some(aac),
             log,
         },
+        None if clip_failed => AdmReport::unavailable("reason.adm_failed", log),
         None => AdmReport::unavailable("reason.adm_parse", log),
     }
 }

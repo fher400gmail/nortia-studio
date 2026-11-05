@@ -337,6 +337,23 @@ mod fake_tools {
     }
 
     #[test]
+    fn afclip_exit_code_nonzero_with_clips_is_still_parsed() {
+        // afclip puede salir con código distinto de 0 justo cuando encuentra clips
+        let r = run(
+            "printf 'CLIPPED SAMPLES:\\n   total clipped samples    Left   on-sample:   4    inter-sample:   8\\n'; exit 1",
+            "exit 0",
+        );
+        assert_eq!(r.status, AdmStatus::Clipping);
+        assert_eq!(r.clipped_samples, 12);
+        // sin salida reconocible y con código 1: fallo del paso
+        let key = |r: AdmReport| match r.status {
+            AdmStatus::Unavailable { reason_key } => reason_key,
+            s => panic!("{s:?}"),
+        };
+        assert_eq!(key(run("echo roto; exit 1", "exit 0")), "reason.adm_failed");
+    }
+
+    #[test]
     fn cancel_stops_the_flow() {
         let d = tempfile::tempdir().unwrap();
         let wav = d.path().join("m.wav");
@@ -475,6 +492,12 @@ mod real_tools {
         };
         let ok = found("afconvert") && found("afclip");
         if !ok {
+            // CI define MASTEROUT_REQUIRE_ADM solo si instaló las herramientas: entonces su
+            // ausencia es un fallo, no un SKIP silencioso.
+            assert!(
+                std::env::var_os("MASTEROUT_REQUIRE_ADM").is_none(),
+                "MASTEROUT_REQUIRE_ADM definida pero faltan afconvert/afclip"
+            );
             eprintln!("SKIP: afconvert/afclip no están instalados en este macOS");
         }
         ok
@@ -484,7 +507,14 @@ mod real_tools {
         let d = tempfile::tempdir().unwrap();
         let wav = d.path().join("synthetic.wav");
         adm_smoke_case(dbtp, &wav).unwrap();
-        validate_adm(&wav, &d.path().join("adm"), &|| false)
+        let r = validate_adm(&wav, &d.path().join("adm"), &|| false);
+        // CI recoge el log crudo (órdenes y salida de afclip) como artefacto
+        if let Some(dir) = std::env::var_os("MASTEROUT_ADM_LOG_DIR") {
+            let dir = Path::new(&dir);
+            let _ = std::fs::create_dir_all(dir);
+            let _ = std::fs::write(dir.join(format!("afclip-raw-{dbtp:+.0}dbtp.txt")), &r.log);
+        }
+        r
     }
 
     #[test]

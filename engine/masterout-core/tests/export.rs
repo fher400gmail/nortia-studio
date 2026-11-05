@@ -52,14 +52,14 @@ fn synthetic_master(dir: &Path, secs: usize) -> PathBuf {
 }
 
 fn request(master: &Path, out_root: &Path, ids: &[&str]) -> ExportRequest {
-    ExportRequest {
-        master_path: master.to_path_buf(),
-        meta: meta(),
-        active_ids: ids.iter().map(|s| s.to_string()).collect(),
-        out_root: out_root.to_path_buf(),
-        lang: Lang::Es,
-        threads: Some(2),
-    }
+    ExportRequest::new(
+        master.to_path_buf(),
+        meta(),
+        ids.iter().map(|s| s.to_string()).collect(),
+        out_root.to_path_buf(),
+        Lang::Es,
+    )
+    .with_threads(2)
 }
 
 fn six_ids() -> Vec<&'static str> {
@@ -455,4 +455,120 @@ fn master_above_96k_is_rejected_with_i18n_key() {
         &|_| {},
     );
     assert!(d.is_err());
+}
+
+#[test]
+fn cancel_mid_export_leaves_no_partials() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 4);
+    let out = tmp.path().join("out");
+    let cancel = Arc::new(AtomicBool::new(false));
+    let req = request(
+        &master,
+        &out,
+        &[
+            "spotify",
+            "apple_adm",
+            "deezer",
+            "distributor_std",
+            "tunecore",
+        ],
+    )
+    .with_threads(1)
+    .with_cancel(cancel.clone());
+    let events = Mutex::new(Vec::new());
+    let d = export::run(&req, &|p| {
+        if matches!(p, Progress::JobDone { .. }) {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        events.lock().unwrap().push(p);
+    })
+    .unwrap();
+    let events = events.into_inner().unwrap();
+    let kept = match events.last() {
+        Some(Progress::Cancelled { files_kept }) => *files_kept,
+        other => panic!("se esperaba Cancelled, llegó {other:?}"),
+    };
+    assert!(!events.iter().any(|e| matches!(e, Progress::Finished(_))));
+    assert!(kept >= 1 && (kept as usize) < 5, "files_kept = {kept}");
+    assert_eq!(d.files.len(), kept as usize);
+    let mut all = Vec::new();
+    walk(&d.folder, &mut all);
+    assert!(all.iter().all(|p| !p.to_string_lossy().ends_with(".part")));
+    for p in &all {
+        if p.is_dir() {
+            assert!(
+                std::fs::read_dir(p).unwrap().next().is_some(),
+                "carpeta vacía {}",
+                p.display()
+            );
+        }
+    }
+    assert!(!d.folder.join("README.txt").exists());
+}
+
+#[test]
+fn cancel_before_any_file_removes_delivery_folder() {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let out = tmp.path().join("out");
+    let req = request(&master, &out, &["deezer"]).with_cancel(Arc::new(AtomicBool::new(true)));
+    let d = export::run(&req, &|_| {}).unwrap();
+    assert!(d.files.is_empty());
+    assert!(!d.folder.exists());
+}
+
+#[test]
+fn unwritable_out_root_reports_failure() {
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let out = tmp.path().join("not-a-dir");
+    std::fs::write(&out, b"x").unwrap();
+    let r = export::run(&request(&master, &out, &["deezer"]), &|_| {});
+    assert!(matches!(r, Err(masterout_core::audio::AudioError::Io(_))));
+}
+
+#[test]
+fn panicking_progress_callback_does_not_abort_run() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let out = tmp.path().join("out");
+    let boom = AtomicBool::new(true);
+    let finished = AtomicBool::new(false);
+    let d = export::run(&request(&master, &out, &["deezer", "spotify"]), &|p| {
+        if matches!(p, Progress::JobStarted { .. }) && boom.swap(false, Ordering::SeqCst) {
+            panic!("callback roto");
+        }
+        if matches!(p, Progress::Finished(_)) {
+            finished.store(true, Ordering::SeqCst);
+        }
+    })
+    .unwrap();
+    assert!(finished.load(Ordering::SeqCst));
+    assert!(d.failed.is_empty(), "{:?}", d.failed);
+    assert!(d.folder.join("README.txt").is_file());
+}
+
+#[test]
+fn english_export_uses_english_contract() {
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let out = tmp.path().join("out");
+    let mut req = request(&master, &out, &["distributor_std", "deezer"]);
+    req.lang = Lang::En;
+    let d = export::run(&req, &|_| {}).unwrap();
+    assert!(d.failed.is_empty(), "{:?}", d.failed);
+    let f = &d.folder;
+    assert!(f
+        .join("07 Distributor")
+        .join(name("Distributor", 16, 44_100, "wav"))
+        .is_file());
+    assert!(f.join("loudness-report.txt").is_file());
+    assert!(f.join("release-sheet.csv").is_file());
+    assert!(!f.join("informe-loudness.txt").exists());
 }

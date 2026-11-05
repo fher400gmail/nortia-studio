@@ -221,9 +221,10 @@ pub fn open_path(
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
-    check_reveal(&path, last.as_deref(), current_lang(&lang))?;
+    // se revela la ruta canónica ya validada, no el texto recibido
+    let checked = check_reveal(&path, last.as_deref(), current_lang(&lang))?;
     app.opener()
-        .reveal_item_in_dir(&path)
+        .reveal_item_in_dir(mastercheck_bridge::app_support::plain_path(&checked))
         .map_err(|e| BridgeError::from_key("err.io", current_lang(&lang), Some(e.to_string())))
 }
 

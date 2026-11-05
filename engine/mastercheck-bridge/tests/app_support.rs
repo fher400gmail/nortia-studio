@@ -491,4 +491,19 @@ mod panic_log {
         );
         assert_eq!(e, "5 ? temporal sin borrar /x/a.part: acceso denegado\n");
     }
+
+    #[test]
+    fn plain_path_drops_the_windows_verbatim_prefix_only() {
+        use mastercheck_bridge::app_support::plain_path;
+        use std::path::{Path, PathBuf};
+        assert_eq!(
+            plain_path(Path::new(r"\\?\C:\a\b")),
+            PathBuf::from(r"C:\a\b")
+        );
+        assert_eq!(
+            plain_path(Path::new(r"\\?\UNC\srv\s")),
+            PathBuf::from(r"\\?\UNC\srv\s")
+        );
+        assert_eq!(plain_path(Path::new("/x/y")), PathBuf::from("/x/y"));
+    }
 }

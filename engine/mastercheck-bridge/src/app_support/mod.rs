@@ -111,6 +111,16 @@ pub fn last_delivery(d: &crate::dto::DeliveryDto) -> Option<PathBuf> {
     (!d.folder.is_empty()).then(|| PathBuf::from(&d.folder))
 }
 
+/// Quita el prefijo `\\?\` que `canonicalize` pone en Windows (el explorador no lo siempre
+/// entiende); las rutas UNC verbatim se dejan como están.
+pub fn plain_path(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),
+        _ => p.to_path_buf(),
+    }
+}
+
 /// ¿Puede la interfaz pedir que se revele `path`? Solo la última entrega que conoce el backend y
 /// lo que hay dentro de ella. Se compara en forma canónica (sin `..` ni enlaces simbólicos que
 /// salgan) y la ruta tiene que existir. Cualquier otra cosa es `err.internal`, sin repetir en el

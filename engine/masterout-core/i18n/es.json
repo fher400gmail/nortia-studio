@@ -93,5 +93,9 @@
   "err.cover_too_small": "La portada es demasiado pequeña. Necesita al menos 1400 px en su lado mayor.",
   "err.cover_unreadable": "No se pudo leer la portada.",
   "err.cover_write": "No se pudo escribir la portada.",
-  "err.cover_too_large": "La portada es demasiado grande. Máximo 16384 px por lado y 120 megapíxeles."
+  "err.cover_too_large": "La portada es demasiado grande. Máximo 16384 px por lado y 120 megapíxeles.",
+  "err.encoder_unavailable": "Este equipo no puede crear el vídeo: falta el codificador H.264 del sistema. El resto de la entrega se ha exportado.",
+  "err.ffmpeg_failed": "No se pudo crear el vídeo. El resto de la entrega se ha exportado.",
+  "err.sidecar_missing": "Falta el componente de vídeo (ffmpeg) de master check. Reinstala la aplicación.",
+  "err.media_unreadable": "No se pudo leer el archivo de imagen o vídeo."
 }

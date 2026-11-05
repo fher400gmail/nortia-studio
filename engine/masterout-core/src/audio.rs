@@ -9,6 +9,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AudioBuffer {
     pub sample_rate: u32,
+    /// Muestras por canal; todos los canales tienen la misma longitud (el motor lo da por supuesto).
     pub channels: Vec<Vec<f32>>,
     pub source_bits: u16,
     pub source_float: bool,

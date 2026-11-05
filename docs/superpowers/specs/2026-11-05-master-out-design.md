@@ -103,3 +103,16 @@ Ajuste automático de loudness (nunca por defecto; quizá como herramienta apart
 ## 10. Plan de alto nivel (el detalle, en writing-plans)
 
 Hito 1 (semana 1): motor de medición y conversión con tests, sin interfaz. Hito 2 (semana 2): interfaz de tres columnas con vista previa en vivo y exportación. Hito 3 (semana 3): vídeo, Canvas, portada, ADM/afclip, informe y ficha; pruebas con másters reales; revisión de diseño. Hito 4 (semana 4): marca, icono, ficha de la App Store, TestFlight, envío.
+
+---
+
+## Adenda 05/11/2026 14:30 — cambios de alcance decididos por los CEOs (sustituyen a lo que contradigan arriba)
+
+1. **Canal de venta: solo propio.** No se publica en la Mac App Store por ahora. Venta desde la web de nortia. con pasarela que actúa de vendedor (merchant of record) y entrega archivo + clave de licencia. Mac: build firmada con Developer ID y notarizada (obligatorio para que Gatekeeper la abra). Sección 8 ("tienda") y los puntos de sandbox/App Review de la sección 5 quedan anulados.
+2. **Plataformas: Mac primero, después Windows.** iPhone/iPad/Android fuera.
+3. **Stack: motor en Rust + interfaz Tauri 2** (HTML/CSS/JS en webview nativo), un solo código para Mac y Windows. Sustituye a SwiftUI/AVFoundation/Core Audio de la sección 5. Las piezas solo-Mac (afconvert/afclip para Apple Digital Masters) se activan solo en macOS; en Windows la tarjeta de Apple entrega el WAV 24 bit nativo y marca la validación AAC como "no disponible en Windows".
+4. **Fábrica: GitHub Actions** (runners macOS y Windows); tests del motor también en Linux. Fer no tiene Xcode.
+5. **Idioma: la app habla el idioma del sistema** (mínimo español e inglés en v1; textos externalizados). README, informe de loudness y ficha de lanzamiento se generan en ese idioma.
+6. **Mínimo macOS 14**; Windows 10 (1803+) / 11 con WebView2.
+7. **Lectura de WAV robusta:** los másters reales traen chunks `JUNK` antes de `fmt ` (Pro Tools/Logic) y picos > 0 dBTP (medidos: hasta +1,2 dBTP). El lector recorre chunks; la medición y los avisos deben funcionar con esos archivos.
+8. **Licencias:** nada GPL en el bundle. FLAC con `flacenc` (Apache-2.0) o `libflac-sys` (BSD-3); MP3 con el programa `lame` como proceso aparte (LGPL, con licencia y enlace al código) o AAC si no es viable; vídeo H.264 con codificador del sistema (VideoToolbox en Mac, Media Foundation en Windows) o `openh264` (BSD) — se decide en el hito 3 con un spike.

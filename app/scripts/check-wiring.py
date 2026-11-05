@@ -128,6 +128,10 @@ check("\\\\?\\" in ps and "ffprobe" in ps, "smoke-win.ps1 prueba rutas \\\\?\\ c
 check("hevc" in ps.lower() and "::warning::" in ps, "smoke-win.ps1 avisa si no hay HEVC")
 mac = read("app", "scripts", "smoke-mac.sh")
 check("MASTERCHECK_SMOKE_COVER" in mac and "smoke_verify.py" in mac, "smoke-mac.sh usa portada y smoke_verify.py")
+check("CFBundleExecutable" in mac and "mastercheck-app" not in mac, "smoke-mac.sh lee CFBundleExecutable (mainBinaryName cambia el nombre del ejecutable)")
+check("mastercheck-app" not in ps, "smoke-win.ps1 no fija el nombre del ejecutable")
+inst = [st for st in steps("windows") if "APP_EXE=" in json.dumps(st)]
+check(len(inst) == 1 and "Count -ne 1" in inst[0]["run"], "windows descubre en runtime el único .exe de la app (y falla si no es único)")
 
 print("RESULTADO:", "FALLA" if errors else "OK")
 sys.exit(1 if errors else 0)

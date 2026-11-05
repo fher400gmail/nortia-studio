@@ -10,7 +10,9 @@
 set -euo pipefail
 APP="$1"; WORK="$2"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-EXE="$APP/Contents/MacOS/mastercheck-app"
+# El nombre del ejecutable lo fija mainBinaryName (tauri.conf.json): se lee del Info.plist.
+NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist")
+EXE="$APP/Contents/MacOS/$NAME"
 test -x "$EXE" || { echo "no existe el ejecutable: $EXE"; ls -la "$APP/Contents/MacOS" || true; exit 2; }
 # el sidecar empaquetado (externalBin) va junto al ejecutable, sin sufijo de triple
 for b in ffmpeg ffprobe; do

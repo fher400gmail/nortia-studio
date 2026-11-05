@@ -1,5 +1,5 @@
 # Humo headless de master check en Windows (PowerShell).
-# Uso: pwsh -File smoke-win.ps1 -Exe "<ruta a master check.exe / mastercheck-app.exe>" -Work "<carpeta>"
+# Uso: pwsh -File smoke-win.ps1 -Exe "<ruta al .exe instalado por NSIS (lo descubre el workflow: el único que no es ffmpeg/ffprobe/uninstall)>" -Work "<carpeta>"
 # Mismo guion que smoke-mac.sh, más:
 #   - ffprobe debe aceptar rutas canonicalizadas con prefijo \\?\ (las que produce media::probe);
 #   - si hevc_mf no existe en el equipo, Apple Motion solo sale en 2048x2732 y hay ::warning::

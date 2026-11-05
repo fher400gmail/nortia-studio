@@ -196,9 +196,11 @@ jobs:
           $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$dir" -PassThru
           if (-not $p.WaitForExit(300000)) { $p.Kill(); throw 'el instalador no terminó en 5 minutos' }
           Get-ChildItem $dir | Format-Table Name, Length | Out-String | Write-Host
-          $exe = Get-ChildItem $dir -Filter *.exe | Where-Object { $_.Name -notmatch '^(uninstall|ffmpeg|ffprobe)' } | Select-Object -First 1
-          if (-not $exe) { throw "no hay ejecutable de la app en $dir" }
-          "APP_EXE=$($exe.FullName)" >> $env:GITHUB_ENV
+          # el nombre lo fija mainBinaryName: se descubre, y debe haber exactamente uno
+          $exes = @(Get-ChildItem $dir -Filter *.exe | Where-Object { $_.Name -notmatch '^(uninstall|ffmpeg|ffprobe)' })
+          if ($exes.Count -ne 1) { throw "se esperaba un único ejecutable de la app en $dir y hay $($exes.Count): $($exes.Name -join ', ')" }
+          Write-Host "ejecutable de la app: $($exes[0].Name)"
+          "APP_EXE=$($exes[0].FullName)" >> $env:GITHUB_ENV
       - name: "Humo headless en Windows (portada, Canvas, YouTube, MP3, HEVC y rutas extendidas del sistema de archivos)"
         shell: pwsh
         run: ./app/scripts/smoke-win.ps1 -Exe $env:APP_EXE -Work "$env:RUNNER_TEMP\humo"

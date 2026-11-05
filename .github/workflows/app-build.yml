@@ -40,9 +40,20 @@ jobs:
       - name: clippy (feature app)
         working-directory: app/src-tauri
         run: cargo clippy -p mastercheck-app --features app --all-targets -- -D warnings
+      - name: cargo fmt --check (src-tauri)
+        working-directory: app/src-tauri
+        run: cargo fmt --check
       - name: tests de la lógica pura
         working-directory: app/src-tauri
         run: cargo test --no-default-features
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: tests de la UI (node)
+        working-directory: app
+        run: |
+          npm ci || npm install
+          npm test
 
   macos:
     name: macos-15 · build
@@ -59,7 +70,7 @@ jobs:
           workspaces: app/src-tauri
       - name: Build universal (sin firma ni notarización)
         working-directory: app
-        run: npx --yes @tauri-apps/cli@^2 build --target universal-apple-darwin
+        run: npx --yes @tauri-apps/cli@2.12.4 build --target universal-apple-darwin
       - name: Empaquetar el .app en zip
         run: |
           B=app/src-tauri/target/universal-apple-darwin/release/bundle
@@ -112,11 +123,10 @@ jobs:
           workspaces: app/src-tauri
       - name: Build (sin firma)
         working-directory: app
-        run: npx --yes @tauri-apps/cli@^2 build
+        run: npx --yes @tauri-apps/cli@2.12.4 build
       - uses: actions/upload-artifact@v4
         with:
           name: master-check-windows
           path: |
             app/src-tauri/target/release/bundle/nsis/*.exe
-            app/src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error

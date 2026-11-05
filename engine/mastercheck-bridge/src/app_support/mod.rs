@@ -47,18 +47,9 @@ pub fn app_info(version: &str, exe_dir: &Path, default_out_root: Option<String>)
     }
 }
 
-/// Segunda exportación mientras hay una en curso. Clave estable `err.busy`; el texto vive aquí
-/// porque es un error de la app, no del motor.
+/// Segunda exportación mientras hay una en curso. Clave estable `err.busy`, texto por i18n.
 pub fn busy_error(lang: EngineLang) -> BridgeError {
-    let message = match lang {
-        EngineLang::Es => "Ya hay una exportación en curso.",
-        EngineLang::En => "An export is already running.",
-    };
-    BridgeError {
-        key: "err.busy".into(),
-        message: message.into(),
-        detail: None,
-    }
+    BridgeError::from_key("err.busy", lang, None)
 }
 
 /// Solo imágenes (`.png`, `.jpg`, `.jpeg`) pueden autorizarse por `allow_asset`.

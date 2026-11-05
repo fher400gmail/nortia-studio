@@ -5,6 +5,7 @@
 set -euo pipefail
 APP="$1"; WORK="$2"
 EXE="$APP/Contents/MacOS/mastercheck-app"
+test -x "$EXE" || { echo "no existe el ejecutable: $EXE"; ls -la "$APP/Contents/MacOS" || true; exit 2; }
 mkdir -p "$WORK"
 WAV="$WORK/máster de prueba.wav"
 OUT="$WORK/salida humo"
@@ -27,8 +28,13 @@ PY
 ls -la "$WAV"
 
 set +e
-LANG=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 MASTERCHECK_SMOKE="$WAV;$OUT" perl -e 'alarm 60; exec @ARGV' "$EXE"
+LANG=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 MASTERCHECK_SMOKE="$WAV;$OUT" "$EXE" &
+PID=$!
+( sleep 60; kill -9 "$PID" 2>/dev/null ) &
+WATCHDOG=$!
+wait "$PID"
 CODE=$?
+kill "$WATCHDOG" 2>/dev/null
 set -e
 echo "código de salida: $CODE"
 test "$CODE" -eq 0

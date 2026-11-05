@@ -27,6 +27,8 @@ for banned in libx264 libx265 libfdk_aac; do
   if grep -q " $banned " <<<"$ENCLIST"; then fail "encoder prohibido $banned"; fi
 done
 
+"$FF" -hide_banner -h "encoder=$ENC" || true
+
 echo "== material sintético =="
 "$PY" - <<'PYEOF'
 import math, struct, wave, zlib
@@ -54,20 +56,22 @@ PYEOF
 ls -l in.wav in.png
 
 case "$ENC" in
-  h264_videotoolbox) EXTRA=(-allow_sw 1) ;;
-  *) EXTRA=() ;;
+  h264_videotoolbox) EXTRA=(-allow_sw 1); PROFILE=high ;;
+  # h264_mf no define la constante "high"; se usa el valor numérico AV_PROFILE_H264_HIGH (100)
+  h264_mf) EXTRA=(); PROFILE=100 ;;
+  *) EXTRA=(); PROFILE=high ;;
 esac
 run() { echo "+ ffmpeg $*"; "$FF" -hide_banner -y -loglevel warning "$@"; }
 
 echo "== canvas =="
 run -framerate 30 -loop 1 -i in.png -t 6 -an \
   -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,format=yuv420p" \
-  -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -profile:v high -b:v 5M -movflags +faststart canvas.mp4
+  -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -profile:v "$PROFILE" -b:v 5M -movflags +faststart canvas.mp4
 
 echo "== youtube =="
 run -framerate 30 -loop 1 -i in.png -i in.wav -t 8 \
   -vf "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,format=yuv420p" \
-  -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -g 15 -bf 2 -profile:v high -b:v 8M \
+  -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -g 15 -bf 2 -profile:v "$PROFILE" -b:v 8M \
   -c:a aac -b:a 384k -ar 48000 -movflags +faststart youtube.mp4
 
 echo "== mp3 =="

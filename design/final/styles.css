@@ -193,7 +193,9 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .meta{display:flex;gap:14px;align-items:flex-start;flex:none}
 .cov{width:84px;height:84px;border-radius:20px;position:relative;flex:none;display:grid;place-items:center;overflow:hidden;cursor:pointer;color:var(--ink-3);transition:transform var(--t-spring) var(--spring),box-shadow var(--t-base) var(--ease),color var(--t-base) var(--ease)}
 .cov svg.art{width:100%;height:100%;display:block}
-.cov:not(.has){background:var(--g-bg);outline:1.5px dashed var(--ctl);outline-offset:-1.5px}
+.cov.empty{background:#0B0B0D;color:#CFCFD4;outline:1.5px dashed rgba(255,255,255,.22);outline-offset:-1.5px}
+.cov.empty .cov-lbl{font-size:11px;line-height:1.15;font-weight:500;text-align:center;letter-spacing:.01em}
+.cov.empty:hover,.cov.empty.over{color:#fff;outline-color:rgba(255,255,255,.55)}
 .cov .ic{width:26px;height:26px}
 .cov:hover,.cov.over{transform:scale(1.04) rotate(-1deg);color:var(--brand-ink);box-shadow:var(--g-shadow-lift),0 0 0 3px var(--focus)}
 .cov:active{transform:scale(.97);transition-duration:90ms}

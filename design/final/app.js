@@ -187,9 +187,9 @@ const Views = (() => {
   const hero = () => S.loaded
     ? `<div class="hero glass dz ${S.mode === 'done' ? 'fin' : ''}" id="hero">${heroBar()}<div class="wvw" id="wave"></div></div>`
     : `<div class="hero glass dz empty ${S.over ? 'over' : ''}" id="hero"><button class="dzone" data-act="song"><span class="mk">${Icons.mark(64)}</span><b>Suelta tu canción</b>${S.err ? `<small class="er" role="alert">${esc(S.err)}</small>` : ''}</button></div>`;
-  const cover = () => S.cover
-    ? `<div class="cov glass has" data-act="cover" role="button" tabindex="0" title="Cambiar portada" aria-label="Cambiar portada">${S.cover === 'sample' ? Icons.cover(84) : `<img src="${S.cover}" alt="Portada" style="width:100%;height:100%;object-fit:cover">`}</div>`
-    : `<div class="cov glass" data-act="cover" role="button" tabindex="0" aria-label="Añadir portada">${Icons.img}</div>`;
+  const cover = () => (S.cover && S.cover !== 'sample')
+    ? `<div class="cov has" data-act="cover" role="button" tabindex="0" title="Cambiar portada" aria-label="Cambiar portada"><img src="${S.cover}" alt="Portada" style="width:100%;height:100%;object-fit:cover"></div>`
+    : `<div class="cov empty" data-act="cover" role="button" tabindex="0" aria-label="Arrastrar portada"><span class="cov-lbl">Arrastrar<br>portada</span></div>`;
   const more = () => { const f = (l, k, i, v = '', p = '') => `<div class="f" style="--i:${i}"><label for="m-${k}">${l}</label><input id="m-${k}" data-m="${k}" value="${v}" placeholder="${p}" autocomplete="off"></div>`;
     return `<div class="pop" id="pop-more" role="dialog" aria-label="Más datos">${f('Con (feat.)', 'feat', 0)}${f('Versión', 'ver', 1, '', 'Radio Edit')}${f('Año', 'year', 2, '2026')}${f('ISRC', 'isrc', 3, '', 'CC-XXX-YY-NNNNN')}${f('Compositor/a', 'comp', 4)}${f('Sello', 'label', 5)}</div>`; };
   const sum = () => `<span class="sumw"><button class="sum" data-act="pop" data-p="tree" aria-expanded="false" aria-controls="pop-tree"><span data-sum></span>${Icons.down}</button><div class="pop" id="pop-tree" role="dialog" aria-label="Archivos que se crearán"><div class="tree" id="tree"></div></div></span>`;

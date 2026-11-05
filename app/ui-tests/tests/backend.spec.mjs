@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createMock, detect, suggestFromName, MOCK_THUMB } from '../../ui/backend.js';
 import { fmtLufs, fmtDbtp, fmtDuration, fmtRate, fmtSpec, fmtBytes, fmtNumber, shortPath } from '../../ui/format.js';
 import { setDict, t, tn } from '../../ui/i18n.js';
-import { isCancelled } from '../../ui/flow.js';
+import { isCancelled, resolveDefaults, SAFE_OFF, cancelOnFirstEvent, awaitingMaterial, finalNotes } from '../../ui/flow.js';
 import { readFileSync } from 'node:fs';
 
 const SAMPLE = '/m/Vera Alcón - Luz de Noviembre (master v3).wav';
@@ -280,4 +280,104 @@ test('about_texts_exist_in_both_languages_and_name_the_licenses', () => {
     assert.match(d['about.licenses'], /LGPL/);
     assert.match(d['about.licenses'], /LAME/);
   }
+});
+
+/* ───────────── tarea 7: mejoras de la revisión final del hito 2 ───────────── */
+
+test('default_on_missing_falls_back_to_the_safe_set_and_warns', () => {
+  const all = ['spotify', 'apple_adm', 'cover', 'apple_motion'];
+  const warns = [];
+  const safe = resolveDefaults(undefined, all, m => warns.push(m));
+  assert.deepEqual([...safe].sort(), ['apple_adm', 'cover', 'spotify']);
+  assert.ok(!safe.has('apple_motion') && SAFE_OFF.includes('apple_motion'));
+  assert.equal(warns.length, 1, 'se registra el aviso');
+  // lista vacía válida del motor: se respeta; una lista del motor manda sobre el conjunto seguro
+  assert.equal(resolveDefaults([], all, m => warns.push(m)).size, 0);
+  assert.deepEqual([...resolveDefaults(['spotify', 'apple_motion'], all)], ['spotify', 'apple_motion']);
+  assert.equal(warns.length, 1);
+  for (const bad of [null, 'spotify', 7, {}]) assert.ok(!resolveDefaults(bad, all, () => {}).has('apple_motion'));
+});
+
+test('cancel_pressed_before_the_export_registers_is_forwarded_on_the_first_event', async () => {
+  const sent = [];
+  let canceling = false;
+  const on = cancelOnFirstEvent(() => canceling, async () => { sent.push('cancel'); });
+  canceling = true; // el usuario pulsa antes de que el motor registre la exportación
+  on({ kind: 'analyzed' });
+  on({ kind: 'planned' });
+  assert.deepEqual(sent, ['cancel'], 'una sola vez, con el primer evento');
+  // sin cancelación pedida no se reenvía nada
+  const quiet = []; const on2 = cancelOnFirstEvent(() => false, async () => { quiet.push(1); });
+  on2({ kind: 'analyzed' }); on2({ kind: 'job_started' });
+  assert.deepEqual(quiet, []);
+  // un error al reenviar no rompe el progreso
+  const on3 = cancelOnFirstEvent(() => true, async () => { throw new Error('x'); });
+  assert.doesNotThrow(() => on3({ kind: 'analyzed' }));
+});
+
+test('mock_export_emits_preparing_with_a_fraction_before_the_first_job', async () => {
+  const be = createMock({ fast: true });
+  const events = [];
+  await be.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['spotify', 'deezer'] }, e => events.push(e));
+  const prep = events.filter(e => e.kind === 'preparing');
+  assert.ok(prep.length >= 1);
+  assert.ok(prep.every(e => e.fraction > 0 && e.fraction <= 1));
+  assert.equal(prep.at(-1).fraction, 1);
+  assert.ok(events.indexOf(prep.at(-1)) < events.findIndex(e => e.kind === 'job_started'));
+});
+
+test('delivery_verdicts_carry_the_final_adm_verdict_for_apple', async () => {
+  const be = createMock({ fast: true, adm: 'clip' });
+  const d = await be.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['spotify', 'apple_adm'] }, () => {});
+  const v = Object.fromEntries(d.verdicts.map(x => [x.preset_id, x]));
+  assert.equal(v.apple_adm.verdict, 'warn');
+  assert.match(v.apple_adm.verdict_text, /0 dB/);
+  assert.equal(v.spotify.verdict, 'warn', 'el mock da pico real > 0 a los destinos con pérdida');
+  const en = createMock({ fast: true, lang: 'en', adm: 'clip' });
+  const d2 = await en.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['apple_adm'] }, () => {});
+  assert.equal(d2.verdicts[0].verdict_text, 'clips when encoded');
+  const plain = await createMock({ fast: true }).export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['apple_adm'] }, () => {});
+  assert.equal(plain.verdicts[0].verdict, 'ok');
+});
+
+test('final_notes_list_only_verdicts_that_got_worse_than_the_plan_with_the_chip_name', () => {
+  setDict('es', JSON.parse(readFileSync(new URL('../../ui/i18n/es.json', import.meta.url))));
+  const byPreset = { apple_adm: 'apple', spotify: 'spotify' };
+  const notes = finalNotes([
+    { preset_id: 'apple_adm', verdict: 'warn', verdict_text: 'pasa de 0 dB al codificar' },
+    { preset_id: 'spotify', verdict: 'warn', verdict_text: 'El pico real supera 0 dBTP' },
+    { preset_id: 'cover', verdict: 'ok', verdict_text: '' }
+  ], byPreset, t, { apple_adm: 'ok', spotify: 'warn' });
+  assert.deepEqual(notes, [{ id: 'apple', preset_id: 'apple_adm', name: 'Apple Music', text: 'pasa de 0 dB al codificar' }]);
+  assert.deepEqual(finalNotes(undefined, byPreset, t), []);
+});
+
+test('chip_awaits_material_only_when_it_accepts_a_drop_and_has_none', () => {
+  const base = { media: new Set(['portada', 'canvas']), id: 'canvas', disabled: true, own: false, cover: false, sidecar: true };
+  assert.equal(awaitingMaterial(base), true);
+  assert.equal(awaitingMaterial({ ...base, id: 'spotify' }), false, 'no acepta soltar');
+  assert.equal(awaitingMaterial({ ...base, disabled: false }), false);
+  assert.equal(awaitingMaterial({ ...base, own: true }), false);
+  assert.equal(awaitingMaterial({ ...base, cover: true }), false, 'con portada no espera material: el motivo es otro');
+  assert.equal(awaitingMaterial({ ...base, sidecar: false }), false, 'sin ffmpeg soltar no sirve');
+  assert.equal(awaitingMaterial({ ...base, id: 'portada', sidecar: false }), true, 'la portada no necesita ffmpeg');
+});
+
+test('app_js_has_no_user_visible_literals_outside_i18n', () => {
+  const src = readFileSync(new URL('../../ui/app.js', import.meta.url), 'utf8');
+  for (const bad of ["' %'", "'0 %'", "'×'", '&lt;1 KB', "'32 bit float'", ' bit`', "(id, 'documents')"]) assert.ok(!src.includes(bad), `literal fuera de i18n: ${bad}`);
+  for (const lang of ['es', 'en']) {
+    const d = JSON.parse(readFileSync(new URL(`../../ui/i18n/${lang}.json`, import.meta.url)));
+    for (const k of ['pct', 'size.lt_1kb', 'fmt.bits', 'fmt.float32', 'fmt.wav', 'chip.long.documents', 'row.failed', 'preparing', 'done.verdicts', 'accept.drop']) assert.ok(d[k], `${lang}: ${k}`);
+  }
+  const es = JSON.parse(readFileSync(new URL('../../ui/i18n/es.json', import.meta.url)));
+  const en = JSON.parse(readFileSync(new URL('../../ui/i18n/en.json', import.meta.url)));
+  setDict('es', es); assert.equal(t('pct', { n: 45 }), '45 %');
+  setDict('en', en); assert.equal(t('pct', { n: 45 }), '45%');
+  assert.equal(t('fmt.float32'), '32-bit float');
+});
+
+test('styles_have_no_looping_mark_animation', () => {
+  const css = readFileSync(new URL('../../ui/styles.css', import.meta.url), 'utf8');
+  assert.ok(!css.includes('@keyframes mkb'), 'BRAND §4.5: el símbolo no se anima en bucle');
 });

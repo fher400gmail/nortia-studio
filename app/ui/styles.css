@@ -187,7 +187,6 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .dzone .mk{display:flex}
 .dzone .mk svg{width:auto;height:clamp(40px,8vh,68px)}
 @keyframes breathe{0%,100%{box-shadow:0 0 0 0 transparent,inset 0 0 0 0 transparent;border-color:var(--ctl)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--brand) 9%,transparent),inset 0 0 34px color-mix(in srgb,var(--brand) 8%,transparent);border-color:color-mix(in srgb,var(--brand) 65%,var(--ctl))}}
-@keyframes mkb{50%{transform:translateY(-4px)}}
 .dzone:hover,.hero.over .dzone{animation:none;border-color:var(--brand);background:color-mix(in srgb,var(--brand) 7%,transparent);transform:scale(1.004)}
 .dzone:active{transform:scale(.995);transition-duration:90ms}
 .hero.over .dzone{border-style:solid;box-shadow:0 0 0 5px color-mix(in srgb,var(--brand) 14%,transparent),0 0 40px 2px color-mix(in srgb,var(--brand) 26%,transparent),inset 0 0 36px color-mix(in srgb,var(--brand) 10%,transparent)}
@@ -407,3 +406,14 @@ body.still *,body.still *::before,body.still *::after{animation:none!important}
 /* avisos del motor en el estado listo (calma: ámbar, nunca el acento) */
 .noteline{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-2);max-width:560px}
 .noteline b{font-weight:600;color:var(--amber-ink)}
+
+/* ───────────── hito 3 · tarea 7 ───────────── */
+/* ficha apagada solo por falta de material que acepta soltar: borde discontinuo sutil + pista corta */
+.chipw .chip.acc{outline:1.5px dashed color-mix(in srgb,var(--ctl) 80%,transparent);outline-offset:-3px;gap:4px}
+.chip .dh{font-size:10.5px;line-height:1;font-weight:500;color:var(--ink-3);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.chip.dis .dh{opacity:1!important}
+.chipw.over .chip .dh{color:var(--brand-ink)}
+/* veredicto final de un destino tras exportar (aviso de estado: ocre, con icono y palabra; nunca el acento) */
+.statusline{margin:0;display:flex;align-items:flex-start;gap:7px;font-size:12.5px;line-height:1.45;color:var(--ink-2);max-width:560px;text-align:left}
+.statusline .ic{width:15px;height:15px;flex:none;margin-top:1px;color:var(--amber-ink)}
+.statusline b{font-weight:600;color:var(--amber-ink)}

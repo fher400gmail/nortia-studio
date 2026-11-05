@@ -8,7 +8,7 @@
                  &cover=1|rect &own=canvas,ytv,motion  → portada y material propio de ejemplo */
 import { backend } from './backend.js';
 import { loadLang, t, tn, getLang } from './i18n.js';
-import { isCancelled } from './flow.js';
+import { isCancelled, resolveDefaults, cancelOnFirstEvent, awaitingMaterial, finalNotes } from './flow.js';
 import { fmtLufs, fmtDbtp, fmtDuration, fmtMB, fmtRate, fmtSpec, shortPath } from './format.js';
 
 /* ───────────── Data: tabla de fichas de la interfaz ↔ destinos del motor ───────────── */
@@ -21,10 +21,12 @@ const Data = (() => {
   /* fichas que necesitan el sidecar de ffmpeg (MP3 y vídeo) */
   const needsSidecar = new Set(['mp3', 'canvas', 'ytv', 'motion']);
   /* fichas encendidas al empezar: `default_on` de presets.json, que el motor da en app_info
-     (una sola fuente de verdad). Hasta que llega, todas; si no llega la lista, también. */
-  let onIds = null;
-  const setDefaults = list => { onIds = Array.isArray(list) ? new Set(list) : null; };
-  const defaultOn = id => !onIds || onIds.has(preset[id]);
+     (una sola fuente de verdad). Hasta que llega, y si no llega la lista, el conjunto seguro
+     (todo salvo Apple Motion, como el prototipo aprobado) con un aviso en consola. */
+  const presetIds = Object.values(preset);
+  let onIds = resolveDefaults(undefined, presetIds);
+  const setDefaults = list => { onIds = resolveDefaults(list, presetIds, m => console.warn(m)); };
+  const defaultOn = id => onIds.has(preset[id]);
   const defaults = () => new Set(ids.filter(defaultOn));
   const byPreset = Object.fromEntries(Object.entries(preset).map(([k, v]) => [v, k]));
   const ext = { flac: '.flac', wav: '.wav', mp3: '.mp3', mp4: '.mp4', jpg: '.jpg', png: '.png' };
@@ -67,6 +69,8 @@ const Icons = (() => {
     x: s('<path d="M7 7l10 10M17 7L7 17"/>', 'stroke-width="2.4"'),
     moon: s('<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>'),
     sun: s('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>'),
+    /* aviso de estado: triángulo con filete (el color lo pone el contexto; lleva siempre palabra) */
+    warn: s('<path d="M12 4.5l9 15.5H3z"/><path d="M12 10v4.2M12 17.2v.1"/>', 'stroke-width="2"'),
     checkDraw: '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5.5 12.5l4.2 4.2L18.5 8"/></svg>',
     /* símbolo barra de nortia. studio (punto estirado 2:1), en dos mitades para la entrada por polos */
     mark: (h, id = '') => `<svg width="${h / 2}" height="${h}" viewBox="0 0 28 56" aria-hidden="true"><path d="M0 14a14 14 0 0 1 28 0v14H0z" fill="var(--brand)"/><path d="M0 28h28v14a14 14 0 0 1-28 0z" fill="var(--brand)"/></svg>`,
@@ -177,7 +181,7 @@ const Store = (() => {
     mode: 'idle', loaded: false, busy: false, artist: '', title: '', m: {}, cover: null, coverPath: null,
     err: '', banner: '', pp: 0, pt: 0, fresh: true, flash: 0, over: false,
     master: null, waveform: [], plan: null, planSeq: 0, outRoot: '', info: { sidecar_available: true, os: 'mac' },
-    media: {}, notes: [],
+    media: {}, notes: [], vnotes: [], prep: null,
     on: Data.defaults(), rows: [], delivery: null, cancelled: false, canceling: false
   };
   if (Q.has('drag')) st.over = true;
@@ -194,6 +198,9 @@ const Store = (() => {
   const own = id => id === 'portada' ? (st.cover ? { name: baseName(st.coverPath) || t('cover.alt'), thumb: st.cover } : null) : (st.media[id] || null);
   /* motor: ruta del material propio por destino (la portada viaja en `meta.cover_path`) */
   const mediaInputs = () => Object.fromEntries(Object.entries(st.media).map(([id, m]) => [Data.preset[id], m.path]));
+  /* la ficha espera material (portada o el suyo) y acepta que se lo suelten: se insinúa con borde discontinuo */
+  const awaiting = id => awaitingMaterial({ media: Data.media, id, disabled: !!disabledReason(id), own: !!own(id), cover: !!st.cover, sidecar: st.info && st.info.sidecar_available });
+  const plannedVerdicts = () => Object.fromEntries((st.plan ? st.plan.jobs : []).map(j => [j.preset_id, j.verdict]));
   const notesOf = jobs => [...new Set(jobs.flatMap(j => j.warnings || []))];
   const selected = () => Data.ids.filter(id => st.on.has(id) && !disabledReason(id));
   const selectedJobs = () => selected().map(id => job(id)).filter(j => j && j.enabled);
@@ -207,7 +214,7 @@ const Store = (() => {
       year: nz(st.m.year), isrc: nz(st.m.isrc), composer: nz(st.m.comp), label: nz(st.m.label), copyright: null, cover_path: st.coverPath
     };
   };
-  return { st, job, disabledReason, own, mediaInputs, notesOf, selected, selectedJobs, allOn, docs, stats, meta };
+  return { st, job, disabledReason, own, awaiting, plannedVerdicts, mediaInputs, notesOf, selected, selectedJobs, allOn, docs, stats, meta };
 })();
 const S = Store.st;
 
@@ -221,10 +228,12 @@ const Views = (() => {
     if (own) return t('media.own', { name: own.name }) + notes;
     return (Data.media.has(id) ? t('media.hint.' + id) : '') + notes;
   };
+  /* nombre de un destino del motor; «documents» (documentos de la entrega) y los desconocidos tienen el suyo */
+  const destName = id => { const k = 'chip.long.' + (Data.byPreset[id] || id), s = t(k); return s === k ? id : s; };
   const dest = id => {
-    const why = Store.disabledReason(id), on = S.on.has(id) && !why, own = Store.own(id), title = chipTitle(id);
+    const why = Store.disabledReason(id), on = S.on.has(id) && !why, own = Store.own(id), title = chipTitle(id), acc = Store.awaiting(id);
     const mono = own && own.thumb ? `<img class="mthumb" src="${esc(own.thumb)}" alt="">` : Icons.gly[id];
-    const btn = `<button class="chip glass ${on ? 'on' : ''} ${why ? 'dis' : ''} ${own ? 'has-media' : ''}" role="switch" aria-checked="${on}" ${why ? 'aria-disabled="true"' : ''} ${title ? `title="${esc(title)}"` : ''} data-act="toggle" data-id="${id}"><span class="mono">${mono}</span><span class="cn">${esc(t('chip.' + id))}</span><i class="ck">${Icons.checkDraw}</i></button>`;
+    const btn = `<button class="chip glass ${on ? 'on' : ''} ${why ? 'dis' : ''} ${own ? 'has-media' : ''} ${acc ? 'acc' : ''}" role="switch" aria-checked="${on}" ${why ? 'aria-disabled="true"' : ''} ${title ? `title="${esc(title)}"` : ''} data-act="toggle" data-id="${id}"><span class="mono">${mono}</span><span class="cn">${esc(t('chip.' + id))}</span>${acc ? `<small class="dh">${esc(t('accept.drop'))}</small>` : ''}<i class="ck">${Icons.checkDraw}</i></button>`;
     if (!Data.media.has(id)) return btn;
     const clear = own ? `<span class="mx" role="button" tabindex="0" data-act="media-clear" data-mid="${id}" aria-label="${esc(t('media.clear', { name: own.name }))}" title="${esc(t('media.clear', { name: own.name }))}">${Icons.x}</span>` : '';
     const pick = `<span class="mp" role="button" tabindex="0" data-act="media-pick" data-mid="${id}" aria-label="${esc(t('media.pick'))}" title="${esc(t('media.pick'))}">${Icons.plus}</span>`;
@@ -232,7 +241,7 @@ const Views = (() => {
   };
   const dur = () => (S.master ? S.master.duration_secs : 0);
   const timeTxt = () => S.pp > 0 ? fmtDuration(S.pp * dur()) + ' / ' + fmtDuration(dur()) : fmtDuration(dur());
-  const format = m => `WAV ${m.is_float ? '32 bit float' : m.bits + ' bit'} · ${fmtRate(m.sample_rate, lg())}`;
+  const format = m => t('fmt.wav', { depth: m.is_float ? t('fmt.float32') : t('fmt.bits', { n: m.bits }), rate: fmtRate(m.sample_rate, lg()) });
   const lpill = () => {
     const m = S.master, over = m.true_peak_dbtp > 0;
     return `<span class="loudw"><button class="lpill glass" data-act="pop" data-p="detail" aria-expanded="false" aria-controls="pop-detail"><i></i>${fmtLufs(m.integrated_lufs, lg())} · ${t(over ? 'loud.over' : 'loud.ok')}</button>
@@ -241,7 +250,7 @@ const Views = (() => {
   };
   const heroBar = () => S.mode === 'idle'
     ? `<div class="hbar"><button class="play" data-act="play" data-playing="${!!S.pt}" aria-label="${t(S.pt ? 'pause' : 'play')}">${S.pt ? Icons.pause : Icons.play}</button><span class="tm" data-time>${timeTxt()}</span><span class="sp"></span>${lpill()}<button class="ib" data-act="song" title="${esc(t('song.change'))}" aria-label="${esc(t('song.change'))}">${Icons.reset}</button></div>`
-    : `<div class="hbar"><span class="ttl"><b>${esc(S.title)}</b>${esc(S.artist)}</span><span class="sp"></span>${S.mode === 'creating' ? '<span class="pct" data-pc>0 %</span>' : `<span class="pct" role="img" aria-label="${esc(t('done.completed'))}">${Icons.check}</span>`}</div>`;
+    : `<div class="hbar"><span class="ttl"><b>${esc(S.title)}</b>${esc(S.artist)}</span><span class="sp"></span>${S.mode === 'creating' ? `<span class="pct" data-pc>${t('pct', { n: 0 })}</span>` : `<span class="pct" role="img" aria-label="${esc(t('done.completed'))}">${Icons.check}</span>`}</div>`;
   const hero = () => S.loaded
     ? `<div class="hero glass dz ${S.mode === 'done' ? 'fin' : S.mode === 'creating' ? 'making' : ''}" id="hero">${heroBar()}<div class="wvw" id="wave"></div></div>`
     : `<div class="hero glass dz empty ${S.over ? 'over' : ''}" id="hero"><button class="dzone" data-act="song"><span class="mk">${Icons.mark(64)}</span><b>${t('drop.title')}</b>${S.err ? `<small class="er" role="alert">${esc(S.err)}</small>` : ''}</button></div>`;
@@ -257,11 +266,12 @@ const Views = (() => {
   const row = (x, done) => `<div class="fr ${done ? '' : 'in'}" ${x.title ? `title="${esc(x.title)}"` : ''}>${Icons.file}<span class="fn">${esc(x.name)}<em>${esc(x.ext)}</em></span><span class="r ${x.state === 'done' || done ? 'ok' : ''}" ${x.state === 'fail' ? 'style="color:var(--err)"' : ''}>${x.state === 'done' || done ? Icons.check : ''}</span></div>`;
 
   function html() {
-    if (S.mode === 'creating') return `${hero()}<div class="flist glass" data-flist></div><div class="go busy" role="status"><i class="spin"></i>${t('creating')}<button class="cx" data-act="cancel"${S.canceling ? ' disabled' : ''}>${t('cancel')}</button></div>`;
+    if (S.mode === 'creating') return `${hero()}<div class="flist glass" data-flist></div><div class="go busy" role="status"><i class="spin"></i><span data-busy>${t('creating')}</span><button class="cx" data-act="cancel"${S.canceling ? ' disabled' : ''}>${t('cancel')}</button></div>`;
     if (S.mode === 'done') {
       const f = S.delivery ? S.delivery.failed : [];
       return `${hero()}<div class="donebox">${Icons.doneMark}<h1>${t('done.title', { n: '<span data-n></span>', name: '<span data-fname></span>' })}</h1>
-      ${f.length ? `<p class="warnline" role="alert"><b>${t('done.failed')}</b> ${f.map(([id, msg]) => esc((Data.byPreset[id] ? t('chip.long.' + Data.byPreset[id]) : id) + ': ' + msg)).join(' · ')}</p>` : ''}
+      ${f.length ? `<p class="warnline" role="alert"><b>${t('done.failed')}</b> ${f.map(([id, msg]) => esc(destName(id) + ': ' + msg)).join(' · ')}</p>` : ''}
+      ${S.vnotes.length ? `<p class="statusline" role="status">${Icons.warn}<span><b>${t('done.verdicts')}</b> ${S.vnotes.map(n => esc(n.name + ': ' + n.text)).join(' · ')}</span></p>` : ''}
       ${S.notes.length ? `<p class="noteline"><b>${t('done.notes')}</b> ${S.notes.map(esc).join(' ')}</p>` : ''}
       <div class="acts"><button class="bb pri" data-act="open">${Icons.folder}<span>${t('open')}</span></button><button class="bb glass" data-act="again">${Icons.plus}<span>${t('again')}</span></button></div>${sum()}</div>`;
     }
@@ -275,7 +285,7 @@ const Views = (() => {
       ${S.banner ? `<p class="banner" role="alert">${esc(S.banner)}</p>` : ''}
       <button class="go" data-act="create">${Icons.folderPlus}${t('create')}</button>${folderLine()}`;
   }
-  return { html, row, timeTxt, dest, chipTitle };
+  return { html, row, timeTxt, dest, chipTitle, destName };
 })();
 
 /* ───────────── Plan: el motor decide qué destinos hay, nombres y tamaños ───────────── */
@@ -327,7 +337,7 @@ const App = (() => {
       let h = `<div class="tr dir">${Icons.folder}<div class="nm">${esc(folderName())}/</div></div>`;
       /* agrupadas por carpeta (varios destinos comparten carpeta) */
       entries.filter(x => x.fo).sort((a, b) => (a.fo < b.fo ? -1 : a.fo > b.fo ? 1 : 0)).forEach(x => { if (x.fo !== last) { last = x.fo; h += `<div class="tr dir" style="padding-left:16px">${Icons.folder}<div class="nm">${esc(x.fo)}/</div></div>`; } h += `<div class="tr" style="padding-left:32px">${Icons.file}<div class="nm">${esc(x.name)}</div><span class="sz">${fmtMB(x.bytes, lg())}</span></div>`; });
-      entries.filter(x => !x.fo).forEach(x => h += `<div class="tr" style="padding-left:18px">${Icons.file}<div class="nm">${esc(x.name)}</div><span class="sz">${x.bytes < 1e4 ? '&lt;1 KB' : fmtMB(x.bytes, lg())}</span></div>`);
+      entries.filter(x => !x.fo).forEach(x => h += `<div class="tr" style="padding-left:18px">${Icons.file}<div class="nm">${esc(x.name)}</div><span class="sz">${x.bytes < 1e4 ? esc(t('size.lt_1kb')) : fmtMB(x.bytes, lg())}</span></div>`);
       tr.innerHTML = h;
     }
     const adv = $('#pop-adv');
@@ -349,6 +359,10 @@ const App = (() => {
     $$(`[data-id="${id}"]`).forEach(b => {
       const why = Store.disabledReason(id), on = S.on.has(id) && !why;
       b.classList.toggle('on', on); b.classList.toggle('dis', !!why); b.setAttribute('aria-checked', on);
+      const acc = Store.awaiting(id), hint = $('.dh', b);
+      b.classList.toggle('acc', acc);
+      if (acc && !hint) b.insertAdjacentHTML('beforeend', `<small class="dh">${esc(t('accept.drop'))}</small>`);
+      else if (!acc && hint) hint.remove();
       const tt = Views.chipTitle(id);
       if (why) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
       if (tt) b.title = tt; else b.removeAttribute('title');
@@ -420,18 +434,22 @@ const Create = (() => {
       c.classList.toggle('ok', r.state === 'done');
       c.style.color = r.state === 'fail' ? 'var(--err)' : '';
       if (r.state === 'done') c.innerHTML = Icons.check;
-      else if (r.state === 'fail') c.textContent = '×';
-      else c.textContent = Math.round((r.frac || 0) * 100) + ' %';
+      else if (r.state === 'fail') { c.innerHTML = Icons.x; c.setAttribute('role', 'img'); c.setAttribute('aria-label', t('row.failed')); }
+      else c.textContent = t('pct', { n: Math.round((r.frac || 0) * 100) });
     });
     list.scrollTop = list.scrollHeight;
-    const pr = pct(); Wave.setProgress(pr); $$('[data-pc]').forEach(e => e.textContent = Math.round(pr * 100) + ' %');
+    const pr = pct(); Wave.setProgress(pr); $$('[data-pc]').forEach(e => e.textContent = t('pct', { n: Math.round(pr * 100) }));
+    /* mientras el motor prepara las muestras (antes del primer destino) la barra lo dice con su fracción */
+    const busy = $('[data-busy]');
+    if (busy) busy.textContent = S.prep != null && S.rows.every(r => r.state === 'wait') ? t('preparing') + ' ' + t('pct', { n: Math.round(S.prep * 100) }) : t('creating');
   }
   const docRows = () => Store.docs().map(d => { const [name, ext] = split(d); return { kind: 'doc', name, ext, state: 'done' }; });
   const jobRows = jobs => jobs.map(j => { const ui = Data.byPreset[j.preset_id]; return { kind: 'job', preset_id: j.preset_id, name: t('chip.long.' + ui), ext: Data.ext[j.container] || '', title: j.file_name, state: 'wait', frac: 0 }; });
 
   function onEvent(ev) {
     const row = S.rows.find(r => r.preset_id === ev.preset_id);
-    if (ev.kind === 'job_started' && row) { row.state = 'run'; row.frac = 0; }
+    if (ev.kind === 'preparing') S.prep = ev.fraction || 0;
+    else if (ev.kind === 'job_started' && row) { row.state = 'run'; row.frac = 0; }
     else if (ev.kind === 'job_progress' && row) { row.state = 'run'; row.frac = ev.fraction || 0; }
     else if (ev.kind === 'job_done' && row) row.state = 'done';
     else if (ev.kind === 'job_failed' && row) { row.state = 'fail'; row.error = ev.error; }
@@ -442,17 +460,19 @@ const Create = (() => {
   async function start() {
     const jobs = Store.selectedJobs();
     Player.stop();
-    S.rows = jobRows(jobs); S.mode = 'creating'; S.delivery = null; S.cancelled = false; S.canceling = false; S.banner = '';
+    S.rows = jobRows(jobs); S.mode = 'creating'; S.delivery = null; S.cancelled = false; S.canceling = false; S.banner = ''; S.prep = null; S.vnotes = [];
     S.notes = Store.notesOf(jobs);
     App.render();
     if (STILL) return still();
     const req = { master_path: S.master.path, out_root: S.outRoot, meta: Store.meta(), active_ids: jobs.map(j => j.preset_id), media_inputs: Store.mediaInputs() };
     try {
-      const d = await backend.export(req, onEvent);
+      /* cancelar antes de que el motor registre la exportación no llega a nada: se reenvía con el primer evento */
+      const forward = cancelOnFirstEvent(() => S.canceling, () => backend.cancelExport());
+      const d = await backend.export(req, ev => { forward(ev); onEvent(ev); });
       if (isCancelled(S.cancelled, d)) { S.mode = 'idle'; S.rows = []; App.render(); return; }
       S.rows.filter(r => r.kind === 'job' && r.state !== 'fail').forEach(r => r.state = 'done');
       S.rows.push(...docRows());
-      S.delivery = d; refresh();
+      S.delivery = d; S.vnotes = finalNotes(d.verdicts, Data.byPreset, t, Store.plannedVerdicts()); refresh();
       hold = setTimeout(() => { S.mode = 'done'; App.render(); }, 380);
     } catch (e) { S.mode = 'idle'; S.rows = []; S.banner = errText(e); App.render(); }
   }
@@ -559,7 +579,7 @@ const Events = (() => {
   }
   function again() {
     Player.stop();
-    Object.assign(S, { mode: 'idle', loaded: false, cover: null, coverPath: null, artist: '', title: '', m: {}, master: null, waveform: [], plan: null, delivery: null, rows: [], banner: '', err: '', media: {}, notes: [] });
+    Object.assign(S, { mode: 'idle', loaded: false, cover: null, coverPath: null, artist: '', title: '', m: {}, master: null, waveform: [], plan: null, delivery: null, rows: [], banner: '', err: '', media: {}, notes: [], vnotes: [], prep: null });
     S.on = Data.defaults();
     App.render();
   }
@@ -660,7 +680,7 @@ async function boot() {
     else if (state === 'done') {
       const jobs = Store.selectedJobs();
       S.delivery = await backend.export({ master_path: S.master.path, out_root: S.outRoot, meta: Store.meta(), active_ids: jobs.map(j => j.preset_id), media_inputs: Store.mediaInputs() }, () => {});
-      S.notes = Store.notesOf(jobs);
+      S.notes = Store.notesOf(jobs); S.vnotes = finalNotes(S.delivery.verdicts, Data.byPreset, t, Store.plannedVerdicts());
       S.mode = 'done'; App.render();
     }
   }

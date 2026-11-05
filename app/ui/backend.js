@@ -43,6 +43,7 @@ const TEXT = {
     'warn.cover_cropped': 'La portada no era cuadrada: se ha recortado desde el centro.',
     'warn.cover_upscaled': 'La portada es más pequeña que 3000×3000 y se ha ampliado. Para máxima calidad usa una de 3000×3000 o más.',
     'tag.cover': 'Portada',
+    adm_clipping: 'pasa de 0 dB al codificar',
     apple_needs_24bit: 'Apple Digital Masters exige un máster de 24 bit',
     youtube_music_needs_16bit: 'Se necesita un máster de al menos 16 bit',
     'tag.distributor': 'Distribuidora'
@@ -58,6 +59,7 @@ const TEXT = {
     'warn.cover_cropped': 'The cover was not square: it was cropped from the center.',
     'warn.cover_upscaled': 'The cover is smaller than 3000×3000 and was enlarged. For best quality use one of 3000×3000 or more.',
     'tag.cover': 'Cover',
+    adm_clipping: 'clips when encoded',
     apple_needs_24bit: 'Apple Digital Masters requires a 24-bit master',
     youtube_music_needs_16bit: 'A master of at least 16 bit is required',
     'tag.distributor': 'Distributor'
@@ -108,9 +110,10 @@ function bridgeError(lang, key, detail = null) {
 /**
  * Backend simulado. Opciones: `fast` (progreso casi instantáneo), `lang` inicial,
  * `sidecar` (false simula que no hay ffmpeg: sin MP3 ni vídeo), `defaultOff` (ids de preset con
- * `default_on: false`, como presets.json), `os`.
+ * `default_on: false`, como presets.json), `os`, `adm` ('clip' simula que el AAC de Apple Digital
+ * Masters pasa de 0 dB al codificar: el veredicto final de la ficha de Apple es un aviso).
  */
-export function createMock({ fast = false, lang = 'es', sidecar = true, defaultOff = ['apple_motion'], os = 'mac', version = '0.1.0-mock', dropCancelEvent = false } = {}) {
+export function createMock({ fast = false, lang = 'es', sidecar = true, defaultOff = ['apple_motion'], os = 'mac', version = '0.1.0-mock', dropCancelEvent = false, adm = null } = {}) {
   let curLang = lang;
   let cancelled = false;
   let folderIx = 0;
@@ -197,10 +200,13 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
       const files = [];
       onProgress({ kind: 'analyzed' });
       onProgress({ kind: 'planned' });
+      /* el motor prepara una vez las muestras de cada combinación (bits, frecuencia) antes del primer destino */
+      const combos = [...new Set(jobs.filter(j => j.bits).map(j => `${j.bits}/${j.sample_rate}`))];
+      for (let i = 0; i < combos.length; i++) { await wait(120); onProgress({ kind: 'preparing', fraction: (i + 1) / combos.length }); }
       for (const j of jobs) {
         if (cancelled) {
           if (!dropCancelEvent) onProgress({ kind: 'cancelled' });
-          return { folder: root, cancelled: true, files, failed: [], failed_keys: [], failed_details: [], elapsed_ms: 0 };
+          return { folder: root, cancelled: true, files, failed: [], failed_keys: [], failed_details: [], verdicts: [], elapsed_ms: 0 };
         }
         onProgress({ kind: 'job_started', preset_id: j.preset_id });
         const ms = 280 + Math.min(j.estimated_bytes / 1e6, 140) / 140 * 500;
@@ -212,7 +218,11 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
         onProgress({ kind: 'job_done', preset_id: j.preset_id, path, bytes: j.estimated_bytes });
       }
       DOCS[curLang].forEach((d, i) => files.push([`${root}/${d}`, [3000, 4000, 1000, 2000][i]]));
-      const delivery = { folder: root, cancelled: false, files, failed: [], failed_keys: [], failed_details: [], elapsed_ms: 1200 };
+      /* veredicto final por destino: el de ADM puede empeorar el de Apple tras codificar el AAC */
+      const verdicts = jobs.map(j => (adm === 'clip' && j.preset_id === 'apple_adm' && j.verdict === 'ok')
+        ? { preset_id: j.preset_id, verdict: 'warn', verdict_text: tx('adm_clipping') }
+        : { preset_id: j.preset_id, verdict: j.verdict, verdict_text: j.verdict_text });
+      const delivery = { folder: root, cancelled: false, files, failed: [], failed_keys: [], failed_details: [], verdicts, elapsed_ms: 1200 };
       onProgress({ kind: 'finished', delivery });
       return delivery;
     },
@@ -272,7 +282,7 @@ export function detect(g = globalThis) {
   const forced = q.get('backend');
   const hasTauri = !!(g.__TAURI_INTERNALS__ || g.__TAURI__);
   if (forced === 'tauri' || (!forced && hasTauri)) return createTauri(g);
-  return createMock({ fast: q.has('fast') || q.has('still'), lang: q.get('lang') === 'en' ? 'en' : 'es', sidecar: q.get('sidecar') !== '0', defaultOff: q.has('off') ? q.get('off').split(',') : undefined, os: q.get('os') === 'win' ? 'win' : 'mac' });
+  return createMock({ fast: q.has('fast') || q.has('still'), lang: q.get('lang') === 'en' ? 'en' : 'es', sidecar: q.get('sidecar') !== '0', defaultOff: q.has('off') ? q.get('off').split(',') : undefined, os: q.get('os') === 'win' ? 'win' : 'mac', adm: q.get('adm') });
 }
 
 export const backend = detect();

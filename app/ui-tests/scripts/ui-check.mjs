@@ -8,8 +8,8 @@ const { server, base } = await serve();
 const browser = await chromium.launch();
 
 const T = {
-  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, sidecar: /falta ffmpeg/i, noComponent: /no disponible/i, dist: 'Distribuidora' },
-  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, sidecar: /ffmpeg is missing/i, noComponent: /not available/i, dist: 'Distributor' }
+  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', preparing: 'Preparando…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, sidecar: /falta ffmpeg/i, noComponent: /no disponible/i, dist: 'Distribuidora', dropHint: 'Arrastra la portada', adm: /Apple Music: pasa de 0 dB al codificar/ },
+  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', preparing: 'Preparing…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, sidecar: /ffmpeg is missing/i, noComponent: /not available/i, dist: 'Distributor', dropHint: 'Drop the cover', adm: /Apple Music: clips when encoded/ }
 };
 
 let failures = 0;
@@ -64,6 +64,10 @@ async function run(lang) {
     assert.ok((await chip.getAttribute('title') || '').length > 5, `${lang}: tooltip de ${id}`);
   }
   assert.match(await page.locator('.chip[data-id=canvas]').getAttribute('title'), lang === 'es' ? /Falta la portada/ : /The cover is missing/);
+  // y lo insinúan: borde discontinuo y una pista corta («Arrastra la portada»), no solo el tooltip
+  assert.equal(await page.locator('.chip.acc').count(), 4, `${lang}: 4 fichas esperan material`);
+  assert.equal((await page.locator('.chip[data-id=canvas] .dh').textContent()).trim(), tx.dropHint, `${lang}: pista visible`);
+  assert.equal(await page.locator('.chip[data-id=spotify] .dh').count(), 0);
   const before = await page.locator('.chip.on').count();
   await page.click('.chip[data-id=canvas]', { force: true });
   assert.equal(await page.locator('.chip.on').count(), before, `${lang}: la ficha deshabilitada no se activa`);
@@ -81,6 +85,7 @@ async function run(lang) {
   assert.equal(await page.locator('.chip[data-id=canvas] .mthumb').count(), 1);
   assert.match(await page.locator('.chip[data-id=canvas]').getAttribute('title'), /bucle\.mp4/);
   assert.equal(await page.locator('.chip[data-id=ytv]').getAttribute('aria-disabled'), 'true', `${lang}: el resto sigue sin portada`);
+  assert.equal(await page.locator('.chip[data-id=canvas] .dh').count(), 0, `${lang}: con material propio ya no hay pista`);
   await page.click('[data-act=media-clear][data-mid=canvas]');
   await page.waitForSelector('.chip[data-id=canvas]:not(.has-media)');
   assert.equal(await page.locator('.chip[data-id=canvas]').getAttribute('aria-disabled'), 'true');
@@ -96,7 +101,7 @@ async function run(lang) {
   // crear → listo
   await page.click('.go[data-act=create]');
   await page.waitForSelector('.go.busy');
-  assert.match((await page.textContent('.go.busy')).trim(), new RegExp(tx.creating));
+  assert.match((await page.textContent('.go.busy')).trim(), new RegExp(`${tx.creating}|${tx.preparing}`), `${lang}: crea o prepara`);
   await page.waitForSelector('.donebox');
   assert.match((await page.textContent('.donebox h1')).trim(), tx.done, `${lang}: título de listo`);
   assert.equal((await page.textContent('[data-act=open]')).trim(), tx.open);
@@ -115,6 +120,12 @@ async function run(lang) {
   assert.equal(await page.locator('.chip[data-id=tidal]').getAttribute('aria-checked'), 'true');
   await page.click('[data-act=preset]');
   assert.equal(await page.locator('.chip[data-id=tidal]').getAttribute('aria-checked'), 'false', `${lang}: el preset apaga las fichas default_on:false`);
+
+  // el AAC de Apple Digital Masters pasa de 0 dB: aviso de estado al terminar (no error)
+  await page.goto(`${base}/index.html?backend=mock&lang=${lang}&theme=light&fast=1&state=done&adm=clip`);
+  await page.waitForSelector('.donebox');
+  assert.match((await page.textContent('.statusline')).trim(), tx.adm, `${lang}: aviso de ADM`);
+  assert.equal(await page.locator('.warnline').count(), 0, `${lang}: no es un error`);
 
   // Acerca de: versión, licencias y enlace al documento de terceros; Esc lo cierra
   await page.click('#aboutBtn');

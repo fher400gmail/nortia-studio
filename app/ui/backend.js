@@ -233,7 +233,7 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
     async openPath() {},
     /** Abre el documento de licencias y fuentes (terceros) incluido en la app. */
     legalOpened: 0,
-    async openLegal() { be.legalOpened++; },
+    async openLegal() { if (be.legalFails) throw new Error('err.internal'); be.legalOpened++; },
     async allowAsset() {},
     /** Miniatura de una imagen o un vídeo: el mock devuelve siempre el mismo PNG pequeño. */
     async mediaThumbnail() { return MOCK_THUMB; },

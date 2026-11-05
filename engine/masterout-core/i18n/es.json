@@ -105,7 +105,7 @@
   "reason.adm_mac_only": "La validación de Apple Digital Masters solo está disponible en macOS.",
   "reason.adm_tools_missing": "Faltan las herramientas de Apple (afconvert y afclip). Instálalas desde https://www.apple.com/apple-music/apple-digital-masters/",
   "reason.adm_parse": "No se entendió la respuesta de afclip.",
-  "reason.adm_failed": "Falló la conversión a AAC con las herramientas de Apple.",
+  "reason.adm_failed": "Falló la conversión a AAC o la lectura del clipping con las herramientas de Apple.",
   "reason.adm_cancelled": "Validación cancelada.",
   "report.adm_clipping": "Apple Digital Masters: {n} muestras con clipping en el AAC",
   "report.adm_unavailable": "Apple Digital Masters: no disponible: {reason}",

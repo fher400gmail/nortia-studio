@@ -261,6 +261,13 @@ test('mock_app_info_default_on_follows_presets_and_can_be_overridden', async () 
   assert.ok(!d2.includes('tidal') && d2.includes('amazon'));
 });
 
+test('open_legal_failure_rejects_so_the_ui_can_show_it', async () => {
+  const be = createMock();
+  be.legalFails = true;
+  await assert.rejects(() => be.openLegal());
+  assert.equal(be.legalOpened, 0);
+});
+
 test('about_info_and_legal_link_in_both_backends', async () => {
   const be = createMock();
   const info = await be.appInfo();

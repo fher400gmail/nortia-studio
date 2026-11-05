@@ -109,6 +109,7 @@
   "about.licenses": "master check uses FFmpeg (LGPL 2.1 or later) and LAME (LGPL 2), as a separate program with no GPL components. The exact source code, build configuration and licenses are in the third-party document.",
   "about.others": "Also: Tauri (Apache-2.0/MIT), flac-codec, ebur128, rubato and image (MIT/Apache-2.0), and the Hanken Grotesk typeface (SIL OFL 1.1).",
   "about.legal": "Licenses and source code",
+  "about.legal_failed": "The licenses document could not be opened.",
   "about.maker": "nortia. studio",
   "pct": "{n}%",
   "size.lt_1kb": "<1 KB",

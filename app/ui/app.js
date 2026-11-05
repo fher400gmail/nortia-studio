@@ -352,6 +352,7 @@ const App = (() => {
       <div class="kv"><span>${esc(t('about.component'))}</span>${i.sidecar_release ? `<b class="mono">${esc(i.sidecar_release)}</b>` : `<b>${esc(t('about.component.none'))}</b>`}</div>
       <p>${esc(t('about.licenses'))}</p><p>${esc(t('about.others'))}</p>
       <button class="lnk link-b" data-act="legal">${esc(t('about.legal'))}</button>
+      ${S.aboutErr ? `<p class="warnline" role="alert">${Icons.x} ${esc(t('about.legal_failed'))}</p>` : ''}
       <p class="abt-mk">${esc(t('about.maker'))}</p>`;
   }
   /* actualiza una ficha sin recrearla (conserva la animación) */
@@ -606,7 +607,7 @@ const Events = (() => {
       if (act === 'pop') return App.togglePop(a.dataset.p);
       if (act === 'toggle') { if (S.mode !== 'idle' || Store.disabledReason(a.dataset.id)) return; S.on.has(a.dataset.id) ? S.on.delete(a.dataset.id) : S.on.add(a.dataset.id); App.setDest(a.dataset.id, 1); App.live(); }
       else if (act === 'preset') { Data.ids.forEach(id => { if (Data.defaultOn(id)) S.on.add(id); else S.on.delete(id); App.setDest(id, Data.defaultOn(id) && !Store.disabledReason(id)); }); App.live(); }
-      else if (act === 'legal') backend.openLegal().catch(err => console.warn(err));
+      else if (act === 'legal') { S.aboutErr = false; backend.openLegal().catch(err => { console.warn(err); S.aboutErr = true; App.paintAbout(); }).then(() => { if (!S.aboutErr) App.paintAbout(); }); }
       else if (act === 'song') pickSong();
       else if (act === 'cover') pickCover();
       else if (act === 'media-pick') pickMedia(a.dataset.mid);

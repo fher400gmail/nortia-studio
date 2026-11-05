@@ -90,8 +90,8 @@ fn readme_lists_each_active_job_once_in_order() {
 #[test]
 fn readme_marks_upsampling_and_disabled() {
     let m = meta();
-    let ms = master(48000, 24);
-    let jobs = plan::resolve(&ms, &m, &["tunecore"]);
+    let ms = master(44100, 24);
+    let jobs = plan::resolve(&ms, &m, &["youtube_music"]);
     let r = readme(Lang::Es, &summary(&m, &ms, &jobs));
     assert!(r.contains(&t(Lang::Es, "readme.upsampling")));
 
@@ -141,4 +141,22 @@ fn release_sheet_txt_in_both_languages_no_missing_keys() {
         assert!(!readme(lang, &s).contains('⟦'));
         assert!(!loudness_report(lang, &s).contains('⟦'));
     }
+}
+
+#[test]
+fn english_documents_are_fully_localized() {
+    let (m, ms) = (meta(), master(96000, 24));
+    let jobs = plan::resolve(&ms, &m, &["distributor_std", "spotify", "apple_adm"]);
+    let sm = summary(&m, &ms, &jobs);
+    let en = loudness_report(Lang::En, &sm);
+    assert!(en.contains("Standard distributor"), "{en}");
+    assert!(!en.contains("Distribuidora"), "{en}");
+    let tag = format!("[{}] ", t(Lang::En, "verdict.tag.fail"));
+    let tag_w = format!("[{}] ", t(Lang::En, "verdict.tag.warn"));
+    assert!(en.contains(&tag) || en.contains(&tag_w), "{en}");
+    assert!(!en.contains("[OK] OK"));
+    let rd = readme(Lang::En, &sm);
+    assert!(!rd.contains("estándar"), "{rd}");
+    let es = loudness_report(Lang::Es, &sm);
+    assert!(es.contains("Distribuidora estándar"), "{es}");
 }

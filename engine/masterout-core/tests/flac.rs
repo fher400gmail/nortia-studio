@@ -136,3 +136,18 @@ fn rejects_unsupported_bits_and_out_of_range() {
     assert!(flac::write(&p, &[vec![0; 10]], 44100, 20, None).is_err());
     assert!(flac::write(&p, &[vec![40000; 10]], 44100, 16, None).is_err());
 }
+
+#[test]
+fn write_at_96k_works_and_above_is_a_clean_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("a.flac");
+    flac::write(&p, &sine(24, 96_000, 4800, 2), 96_000, 24, None).unwrap();
+    assert!(p.exists());
+    let q = dir.path().join("b.flac");
+    let err = flac::write(&q, &sine(24, 192_000, 4800, 2), 192_000, 24, None).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        masterout_core::audio::AudioError::UnsupportedFormat("FLAC > 96 kHz".into()).to_string()
+    );
+    assert!(!q.exists());
+}

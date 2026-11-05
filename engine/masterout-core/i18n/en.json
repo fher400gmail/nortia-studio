@@ -40,5 +40,22 @@
   "export.err.container": "unsupported container: {ext}",
   "export.err.threadpool": "could not start the worker threads: {detail}",
   "export.err.id3": "could not write ID3 tags: {detail}",
-  "export.err.documents": "could not write the delivery documents: {detail}"
+  "export.err.documents": "could not write the delivery documents: {detail}",
+  "preset.spotify": "Spotify",
+  "preset.apple_adm": "Apple Music (Digital Masters)",
+  "preset.amazon": "Amazon Music",
+  "preset.tidal": "Tidal",
+  "preset.deezer": "Deezer",
+  "preset.youtube_music": "YouTube Music",
+  "preset.youtube_video": "YouTube video",
+  "preset.distributor_std": "Standard distributor (16 bit / 44.1 kHz)",
+  "preset.distributor_hires": "High-resolution distributor",
+  "preset.tunecore": "TuneCore (24 bit)",
+  "preset.mp3_promo": "MP3 promo 320 kbps",
+  "preset.cover": "Cover",
+  "preset.canvas": "Canvas",
+  "verdict.tag.ok": "OK",
+  "verdict.tag.warn": "WARN",
+  "verdict.tag.fail": "FAIL",
+  "err.rate_over_96k": "master check supports masters up to 96 kHz"
 }

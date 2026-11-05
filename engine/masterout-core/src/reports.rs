@@ -3,7 +3,7 @@
 use crate::i18n::{t, tf, Lang};
 use crate::loudness::Verdict;
 use crate::plan::{Job, MasterInfo, ReleaseMeta, Resolved};
-use crate::presets::{self, Container};
+use crate::presets::Container;
 
 pub struct DeliverySummary<'a> {
     pub meta: &'a ReleaseMeta,
@@ -34,11 +34,8 @@ fn khz(lang: Lang, rate: u32) -> String {
     localize(lang, format!("{}", f64::from(rate) / 1000.0))
 }
 
-fn preset_name(id: &str) -> String {
-    presets::all()
-        .into_iter()
-        .find(|p| p.id == id)
-        .map_or_else(|| id.to_string(), |p| p.name)
+fn preset_name(lang: Lang, id: &str) -> String {
+    t(lang, &format!("preset.{id}"))
 }
 
 fn container_label(j: &Job) -> String {
@@ -52,12 +49,15 @@ fn verdict_text(lang: Lang, v: &Verdict) -> String {
     }
 }
 
-fn verdict_prefix(v: &Verdict) -> &'static str {
-    match v {
-        Verdict::Ok => "OK",
-        Verdict::Warn(_) => "WARN",
-        Verdict::Fail(_) => "FAIL",
-    }
+fn verdict_prefix(lang: Lang, v: &Verdict) -> String {
+    t(
+        lang,
+        match v {
+            Verdict::Ok => "verdict.tag.ok",
+            Verdict::Warn(_) => "verdict.tag.warn",
+            Verdict::Fail(_) => "verdict.tag.fail",
+        },
+    )
 }
 
 fn header(s: &DeliverySummary) -> String {
@@ -95,7 +95,7 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
             } => {
                 out.push_str(&format!(
                     "{}  →  {}: {}\n",
-                    preset_name(preset_id),
+                    preset_name(lang, preset_id),
                     t(lang, "readme.disabled"),
                     t(lang, reason_key)
                 ));
@@ -149,8 +149,8 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
         match r {
             Resolved::Job(j) => out.push_str(&format!(
                 "{}: [{}] {}\n",
-                preset_name(&j.preset_id),
-                verdict_prefix(&j.verdict),
+                preset_name(lang, &j.preset_id),
+                verdict_prefix(lang, &j.verdict),
                 verdict_text(lang, &j.verdict)
             )),
             Resolved::Disabled {
@@ -158,7 +158,7 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
                 reason_key,
             } => out.push_str(&format!(
                 "{}: {}\n",
-                preset_name(preset_id),
+                preset_name(lang, preset_id),
                 t(lang, reason_key)
             )),
         }

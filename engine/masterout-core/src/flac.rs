@@ -80,6 +80,9 @@ pub fn write(
     if bits != 16 && bits != 24 {
         return Err(unsupported(format!("FLAC de {bits} bit")));
     }
+    if sample_rate > 96_000 {
+        return Err(unsupported("FLAC > 96 kHz"));
+    }
     let channels = samples_i32.len();
     if channels == 0 || channels > 2 {
         return Err(AudioError::TooManyChannels(channels as u16));

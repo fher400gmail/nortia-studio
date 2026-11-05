@@ -89,19 +89,18 @@ fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset) -> Resolved 
         RatePolicy::Native => master.sample_rate,
         RatePolicy::Fixed(r) => r,
     };
-    let is_audio_pcm = matches!(p.container, Container::Wav | Container::Flac);
+    let container = p.container;
+    let is_audio_pcm = matches!(container, Container::Wav | Container::Flac);
     let needs_resample = sample_rate != master.sample_rate;
-    let needs_dither = is_audio_pcm && bits < master_bits;
+    // Regla de dither: bits destino < bits origen, origen float, o remuestreo a <= 24 bit.
+    // Dither si baja de bits, si el máster es float, o si se remuestrea a <= 24 bit
+    // (el audio remuestreado tiene más precisión que un entero).
+    let needs_dither =
+        is_audio_pcm && (bits < master_bits || master.is_float || (needs_resample && bits <= 24));
     let is_upsampling = sample_rate > master.sample_rate || (is_audio_pcm && bits > master_bits);
 
-    let file_name = if p.container == Container::Mp3 {
-        naming::media_file_name(
-            &meta.artist,
-            &meta.title,
-            &p.tag,
-            "",
-            p.container.extension(),
-        )
+    let file_name = if container == Container::Mp3 {
+        naming::media_file_name(&meta.artist, &meta.title, &p.tag, "", container.extension())
     } else {
         naming::audio_file_name(
             &meta.artist,
@@ -109,7 +108,7 @@ fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset) -> Resolved 
             &p.tag,
             bits,
             sample_rate,
-            p.container.extension(),
+            container.extension(),
         )
     };
     let verdict = loudness::verdict(
@@ -121,7 +120,7 @@ fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset) -> Resolved 
         preset_id: p.id.clone(),
         subfolder: p.subfolder.clone(),
         file_name,
-        container: p.container,
+        container,
         bits,
         sample_rate,
         needs_resample,

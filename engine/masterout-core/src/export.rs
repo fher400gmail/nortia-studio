@@ -74,6 +74,10 @@ fn unsupported(msg: impl Into<String>) -> AudioError {
 /// Lee el máster y mide su loudness.
 pub fn analyze(master_path: &Path) -> Result<(AudioBuffer, MasterInfo), AudioError> {
     let buf = wav::read(master_path)?;
+    if buf.sample_rate > 96_000 {
+        // Clave i18n `err.rate_over_96k`: la interfaz la traduce.
+        return Err(unsupported("err.rate_over_96k"));
+    }
     let loudness = loudness::measure(&buf)?;
     let info = MasterInfo {
         sample_rate: buf.sample_rate,

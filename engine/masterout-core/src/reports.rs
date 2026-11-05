@@ -2,6 +2,7 @@
 
 use crate::i18n::{t, tf, Lang};
 use crate::loudness::Verdict;
+use crate::media::adm::{AdmReport, AdmStatus};
 use crate::plan::{Job, MasterInfo, MediaKind, ReleaseMeta, Resolved};
 use crate::presets::Container;
 
@@ -131,7 +132,47 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
     out
 }
 
+/// Veredicto de un destino con el resultado de Apple Digital Masters: si el AAC tiene clipping,
+/// el destino `apple_adm` pasa a `Warn("adm_clipping")` (un `Fail` previo se conserva).
+pub fn verdict_with_adm(preset_id: &str, v: &Verdict, adm: Option<&AdmReport>) -> Verdict {
+    match adm {
+        Some(a)
+            if preset_id == "apple_adm"
+                && a.status == AdmStatus::Clipping
+                && !matches!(v, Verdict::Fail(_)) =>
+        {
+            Verdict::Warn("adm_clipping".into())
+        }
+        _ => v.clone(),
+    }
+}
+
+/// Línea del informe para el resultado de Apple Digital Masters.
+pub fn adm_line(lang: Lang, a: &AdmReport) -> String {
+    match &a.status {
+        AdmStatus::Unavailable { reason_key } => tf(
+            lang,
+            "report.adm_unavailable",
+            &[("reason", &t(lang, reason_key))],
+        ),
+        _ => tf(
+            lang,
+            "report.adm_clipping",
+            &[("n", &a.clipped_samples.to_string())],
+        ),
+    }
+}
+
 pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
+    loudness_report_with_adm(lang, s, None)
+}
+
+/// Informe de loudness con el resultado de la validación Apple Digital Masters (si se hizo).
+pub fn loudness_report_with_adm(
+    lang: Lang,
+    s: &DeliverySummary,
+    adm: Option<&AdmReport>,
+) -> String {
     let l = &s.master.loudness;
     let mut out = String::new();
     out.push_str(&format!("{}\n{}\n\n", t(lang, "report.title"), header(s)));
@@ -173,8 +214,8 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
             Resolved::Job(j) => out.push_str(&format!(
                 "{}: [{}] {}\n",
                 preset_name(lang, &j.preset_id),
-                verdict_prefix(lang, &j.verdict),
-                verdict_text(lang, &j.verdict)
+                verdict_prefix(lang, &verdict_with_adm(&j.preset_id, &j.verdict, adm)),
+                verdict_text(lang, &verdict_with_adm(&j.preset_id, &j.verdict, adm))
             )),
             Resolved::Disabled {
                 preset_id,
@@ -185,6 +226,11 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
                 t(lang, reason_key)
             )),
         }
+    }
+    if let Some(a) = adm {
+        out.push('\n');
+        out.push_str(&adm_line(lang, a));
+        out.push('\n');
     }
     out
 }

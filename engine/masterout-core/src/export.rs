@@ -7,6 +7,7 @@ use crate::dither::{self, Dither};
 use crate::flac::{self, FlacTags};
 use crate::i18n::{t, Lang};
 use crate::loudness;
+use crate::media::adm::{self, AdmReport};
 use crate::media::image::{self as cover_image, CoverOptions, CoverOutput};
 use crate::media::mp3::{self, Id3Tags};
 use crate::media::video::{
@@ -313,6 +314,8 @@ struct Ctx<'a> {
     temp: &'a Path,
     /// Portadas ya conformadas, por ruta de origen.
     covers: Mutex<HashMap<PathBuf, Arc<Result<CoverOutput, AudioError>>>>,
+    /// Resultado de la validación Apple Digital Masters (destino `apple_adm`), para el informe.
+    adm: Mutex<Option<AdmReport>>,
 }
 
 /// Dither de un destino: lo decide el plan (`needs_dither`), nunca la detección automática.
@@ -696,6 +699,12 @@ impl Ctx<'_> {
                 )
             })?,
         };
+        // Apple Digital Masters: se valida el WAV recién escrito (solo hace algo en macOS).
+        if job.preset_id == "apple_adm" && !self.cancelled() {
+            step(0.9);
+            let report = adm::validate_adm(&path, &self.temp.join("adm"), &|| self.cancelled());
+            *self.adm.lock().unwrap_or_else(|e| e.into_inner()) = Some(report);
+        }
         Ok(Some(vec![(path, bytes)]))
     }
 }
@@ -891,6 +900,7 @@ pub fn run(
         platform: req.platform,
         temp: &temp.0,
         covers: Mutex::new(HashMap::new()),
+        adm: Mutex::new(None),
     };
 
     let outcomes: Vec<Outcome> = pool.install(|| {
@@ -947,6 +957,7 @@ pub fn run(
             })
             .collect()
     });
+    let adm_report = ctx.adm.lock().unwrap_or_else(|e| e.into_inner()).take();
     drop(ctx);
 
     let mut files = Vec::new();
@@ -1001,7 +1012,7 @@ pub fn run(
         (names.readme, reports::readme(req.lang, &summary)),
         (
             names.loudness_report,
-            reports::loudness_report(req.lang, &summary),
+            reports::loudness_report_with_adm(req.lang, &summary, adm_report.as_ref()),
         ),
         (names.sheet_csv, reports::release_sheet_csv(&summary)),
         (

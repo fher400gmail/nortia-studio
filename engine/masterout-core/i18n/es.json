@@ -99,5 +99,13 @@
   "reason.no_cover": "Falta la portada: arrastra una imagen a la ficha de portada.",
   "reason.no_sidecar": "Falta el componente de vídeo y MP3 (ffmpeg) de master check. Reinstala la aplicación.",
   "reason.encoder_unavailable": "Este equipo no puede crear vídeo: falta el codificador H.264 del sistema.",
-  "reason.hevc_unavailable": "Este equipo no tiene codificador HEVC: Apple Motion se entrega solo en 2048×2732 (H.264) y se omite el de 3840×3840."
+  "reason.hevc_unavailable": "Este equipo no tiene codificador HEVC: Apple Motion se entrega solo en 2048×2732 (H.264) y se omite el de 3840×3840.",
+  "reason.adm_mac_only": "La validación de Apple Digital Masters solo está disponible en macOS.",
+  "reason.adm_tools_missing": "Faltan las herramientas de Apple (afconvert/afclip). Instala las herramientas de Apple Digital Masters.",
+  "reason.adm_parse": "No se entendió la respuesta de afclip.",
+  "reason.adm_failed": "Falló la conversión a AAC con las herramientas de Apple.",
+  "reason.adm_cancelled": "Validación cancelada.",
+  "report.adm_clipping": "Apple Digital Masters: {n} muestras con clipping en el AAC",
+  "report.adm_unavailable": "Apple Digital Masters: no disponible: {reason}",
+  "adm_clipping": "El AAC de Apple Digital Masters tiene muestras con clipping"
 }

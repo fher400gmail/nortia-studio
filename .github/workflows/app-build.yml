@@ -68,6 +68,20 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$B/macos/master check.app" "out/master-check-macos-app.zip"
           cp "$B"/dmg/*.dmg out/
           ls -la out
+      - name: Verificar el .app (Info.plist, binario, arquitecturas)
+        run: |
+          APP="app/src-tauri/target/universal-apple-darwin/release/bundle/macos/master check.app"
+          P="$APP/Contents/Info.plist"
+          ls -la "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          MIN=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$P")
+          ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$P")
+          EXE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$P")
+          echo "LSMinimumSystemVersion=$MIN CFBundleIdentifier=$ID CFBundleExecutable=$EXE"
+          test "$MIN" = "14.0"
+          test "$ID" = "studio.nortia.mastercheck"
+          test -x "$APP/Contents/MacOS/$EXE"
+          lipo -archs "$APP/Contents/MacOS/$EXE"
+          du -sh "$APP" out/*
       - uses: actions/upload-artifact@v4
         with:
           name: master-check-macos

@@ -11,20 +11,23 @@ echo "ffmpeg $VER"
 TAR="ffmpeg-$VER.tar.xz"
 curl_r -o "$DEST/$TAR" "https://ffmpeg.org/releases/$TAR"
 GOT=$(sha256_of "$DEST/$TAR")
-if PUB=$(curl_r "https://ffmpeg.org/releases/$TAR.sha256" 2>/dev/null | awk '{print $1}' | head -n1) && [ -n "$PUB" ]; then
-  [ "$GOT" = "$PUB" ] || { echo "SHA256 de $TAR no coincide: $GOT != $PUB" >&2; exit 1; }
-  echo "SHA256 de $TAR verificado contra ffmpeg.org: $GOT"
+# 1) Firma GPG: obligatoria (GOODSIG + VALIDSIG con la huella fijada). Nunca se omite.
+command -v gpg >/dev/null || { echo "falta gpg: la verificación de firma es obligatoria" >&2; exit 1; }
+curl_r -o "$DEST/$TAR.asc" "https://ffmpeg.org/releases/$TAR.asc"
+curl_r -o "$DEST/ffmpeg-devel.asc" "https://ffmpeg.org/ffmpeg-devel.asc"
+GNUPGHOME=$(mktemp -d); export GNUPGHOME
+gpg --batch --import "$DEST/ffmpeg-devel.asc"
+GPGSTATUS=$(gpg --batch --status-fd 1 --verify "$DEST/$TAR.asc" "$DEST/$TAR" 2>/dev/null || true)
+grep -q "^\[GNUPG:\] GOODSIG " <<<"$GPGSTATUS" || { echo "firma GPG no es GOODSIG" >&2; exit 1; }
+grep -q "^\[GNUPG:\] VALIDSIG $FFMPEG_GPG_FPR " <<<"$GPGSTATUS" || { echo "firma GPG no válida para la huella fijada" >&2; exit 1; }
+rm -f "$DEST/ffmpeg-devel.asc"
+echo "firma GPG verificada (huella $FFMPEG_GPG_FPR); SHA256 calculado: $GOT"
+# 2) .sha256 publicado: comprobación adicional si existe (nunca sustituye a la firma).
+if PUB=$(curl -fsSL --retry 1 "https://ffmpeg.org/releases/$TAR.sha256" 2>/dev/null | awk '{print $1}' | head -n1) && [ -n "$PUB" ]; then
+  [ "$GOT" = "$PUB" ] || { echo "SHA256 de $TAR no coincide con el publicado: $GOT != $PUB" >&2; exit 1; }
+  echo "SHA256 coincide con el publicado en ffmpeg.org"
 else
-  echo "ffmpeg.org no publica .sha256; verificando firma GPG" >&2
-  command -v gpg >/dev/null || { echo "sin .sha256 ni gpg" >&2; exit 1; }
-  curl_r -o "$DEST/$TAR.asc" "https://ffmpeg.org/releases/$TAR.asc"
-  curl_r -o "$DEST/ffmpeg-devel.asc" "https://ffmpeg.org/ffmpeg-devel.asc"
-  GNUPGHOME=$(mktemp -d); export GNUPGHOME
-  gpg --batch --import "$DEST/ffmpeg-devel.asc"
-  gpg --batch --status-fd 1 --verify "$DEST/$TAR.asc" "$DEST/$TAR" | grep -q "VALIDSIG $FFMPEG_GPG_FPR" \
-    || { echo "firma GPG no válida" >&2; exit 1; }
-  rm -f "$DEST/ffmpeg-devel.asc"
-  echo "firma GPG verificada; SHA256 calculado: $GOT"
+  echo "ffmpeg.org no publica .sha256 (solo se aplica la firma GPG)"
 fi
 LAME_TAR="$DEST/lame-$LAME_VERSION.tar.gz"
 ok=0

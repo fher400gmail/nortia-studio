@@ -14,28 +14,33 @@ sha256_of() {
 
 ncpu() { nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2; }
 
-# Última versión 7.x publicada en ffmpeg.org/releases (o $FFMPEG_VERSION si está fijada).
-resolve_ffmpeg_version() {
-  if [ -n "${FFMPEG_VERSION:-}" ]; then echo "$FFMPEG_VERSION"; return; fi
-  curl_r https://ffmpeg.org/releases/ \
-    | grep -oE 'ffmpeg-7\.[0-9]+(\.[0-9]+)?\.tar\.xz' | sed -E 's/^ffmpeg-//; s/\.tar\.xz$//' \
-    | sort -uV | tail -n1
-}
+# Versión de ffmpeg fijada (no flota a la última). Se puede sobrescribir con $FFMPEG_VERSION.
+FFMPEG_VERSION_PINNED=7.1.5
+resolve_ffmpeg_version() { echo "${FFMPEG_VERSION:-$FFMPEG_VERSION_PINNED}"; }
 
-# Flags comunes (LGPL, mínimo imprescindible). Los específicos de cada SO se añaden en su script.
+# Lista blanca de componentes: fuente única para los flags de configure Y para el inventario de accept.sh.
+ALLOW_PROTOCOLS="file,pipe"
+ALLOW_DEMUXERS="wav,aiff,flac,mp3,mov,matroska,image2,png_pipe,mjpeg,webp_pipe"
+ALLOW_DECODERS="pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_s16be,pcm_s24be,pcm_s32be,pcm_f32be,alac,flac,mp3,aac,h264,hevc,vp9,png,mjpeg,webp"
+ALLOW_PARSERS="aac,h264,hevc,vp9,mjpeg,png,webp,flac,mpegaudio"
+ALLOW_BSFS="aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata,vp9_superframe,vp9_superframe_split"
+ALLOW_MUXERS="mp4,mov,ipod,mp3,image2"
+# boxblur es GPL-only en ffmpeg 7.1 (se desactivaría en silencio): no se incluye.
+ALLOW_FILTERS="scale,crop,zoompan,gblur,overlay,format,fps,setsar,trim,atrim,aresample,aformat,anull,null,color,loop,pad"
+ALLOW_ENCODERS_BASE="aac,libmp3lame,png,mjpeg"
+
 FFMPEG_BASE_FLAGS=(
   --disable-gpl --disable-nonfree --disable-autodetect --disable-everything
   --disable-doc --disable-network --disable-debug
   --enable-zlib
-  --enable-protocol=file,pipe
-  --enable-demuxer=wav,aiff,flac,mp3,mov,matroska,image2,png_pipe,mjpeg,webp_pipe
-  --enable-decoder=pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,flac,mp3,aac,h264,hevc,vp9,png,mjpeg,webp
-  --enable-parser=aac,h264,hevc,vp9,mjpeg,png,webp,flac,mpegaudio
-  --enable-bsf=aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata,vp9_superframe,vp9_superframe_split
-  --enable-muxer=mp4,mov,ipod,mp3,image2
-  --enable-filter=scale,crop,zoompan,gblur,boxblur,overlay,format,fps,setsar,trim,atrim,aresample,aformat,anull,null,color,loop,pad
+  --enable-protocol="$ALLOW_PROTOCOLS"
+  --enable-demuxer="$ALLOW_DEMUXERS"
+  --enable-decoder="$ALLOW_DECODERS"
+  --enable-parser="$ALLOW_PARSERS"
+  --enable-bsf="$ALLOW_BSFS"
+  --enable-muxer="$ALLOW_MUXERS"
+  --enable-filter="$ALLOW_FILTERS"
   --enable-indev=lavfi
   --enable-libmp3lame
 )
-# Codificadores comunes; el H.264 del sistema se suma después.
-FFMPEG_ENCODERS_BASE="aac,libmp3lame,png,mjpeg"
+FFMPEG_ENCODERS_BASE="$ALLOW_ENCODERS_BASE"

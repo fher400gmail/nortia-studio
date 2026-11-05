@@ -61,5 +61,5 @@ done
 tar xJf "$OUT/ffmpeg-$VER.tar.xz" -C "$WORK" "ffmpeg-$VER/COPYING.LGPLv2.1"
 cp "$WORK/ffmpeg-$VER/COPYING.LGPLv2.1" "$OUT/LICENSE.LGPLv2.1"
 cp "$WORK/lame-arm64/COPYING" "$OUT/COPYING.LGPL"
-cp "$WORK/lame-arm64/LICENSE" "$OUT/LICENSE.lame" 2>/dev/null || true
+cp "$WORK/lame-arm64/LICENSE" "$OUT/LICENSE.lame"
 echo "ffmpeg $VER · LAME $LAME_VERSION" > "$OUT/VERSIONS.txt"

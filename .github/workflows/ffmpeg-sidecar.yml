@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ffmpeg-sidecar-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -18,7 +22,7 @@ jobs:
       ffmpeg_version: ${{ steps.v.outputs.ffmpeg_version }}
       tag: ${{ steps.v.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - id: v
         run: |
           source tools/ffmpeg/common.sh
@@ -34,28 +38,26 @@ jobs:
     env:
       FFMPEG_VERSION: ${{ needs.prepare.outputs.ffmpeg_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Dependencias de compilación
         run: brew install nasm pkg-config
       - name: Compilar (arm64 + x86_64, lipo)
         run: tools/ffmpeg/build-macos.sh "$RUNNER_TEMP/work" "$PWD/dist"
-      - name: Comprobar enlaces dinámicos
+      - name: Comprobar enlaces (lista blanca) y minos 14.0
         run: |
           for f in dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin; do
             for a in arm64 x86_64; do
               echo "--- $f ($a)"; otool -arch $a -L "$f"
-              if otool -arch $a -L "$f" | grep -E '/opt/homebrew|/usr/local'; then echo "enlace a lib no del sistema"; exit 1; fi
+              # solo librerías del sistema (/usr/lib, /System/Library)
+              if otool -arch $a -L "$f" | tail -n +2 | grep -vE '^[[:space:]]+(/usr/lib/|/System/Library/)'; then echo "enlace fuera de la lista blanca"; exit 1; fi
+              otool -arch $a -l "$f" | grep -A4 LC_BUILD_VERSION | tee /dev/stderr | grep -q 'minos 14.0' || { echo "minos != 14.0"; exit 1; }
             done
           done
       - name: Pruebas de aceptación (slice arm64)
-        run: tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept"
-      - name: Slice x86_64 (Rosetta, informativo)
-        continue-on-error: true
-        run: |
-          arch -x86_64 dist/ffmpeg-universal-apple-darwin -hide_banner -version | head -n 2
-      - name: SHA256SUMS
-        run: tools/ffmpeg/finalize.sh dist
-      - uses: actions/upload-artifact@v4
+        run: ACCEPT_ARCH=arm64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-arm64"
+      - name: Pruebas de aceptación (slice x86_64 bajo Rosetta)
+        run: ACCEPT_ARCH=x86_64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-x86_64"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ffmpeg-sidecar-macos
           path: dist/
@@ -64,15 +66,15 @@ jobs:
   windows:
     needs: prepare
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     env:
       FFMPEG_VERSION: ${{ needs.prepare.outputs.ffmpeg_version }}
     defaults:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
-      - uses: msys2/setup-msys2@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2.27.0
         with:
           msystem: MINGW64
           update: false
@@ -83,7 +85,7 @@ jobs:
             nasm make pkg-config diffutils curl tar xz
       - name: Caché del build (binarios y fuentes)
         id: cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: dist
           key: win-build-${{ hashFiles('tools/ffmpeg/build-windows.sh', 'tools/ffmpeg/common.sh', 'tools/ffmpeg/fetch-sources.sh') }}-${{ needs.prepare.outputs.ffmpeg_version }}
@@ -92,21 +94,19 @@ jobs:
         run: tools/ffmpeg/build-windows.sh "$RUNNER_TEMP/work" "$PWD/dist"
       - name: Guardar caché del build
         if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: dist
           key: win-build-${{ hashFiles('tools/ffmpeg/build-windows.sh', 'tools/ffmpeg/common.sh', 'tools/ffmpeg/fetch-sources.sh') }}-${{ needs.prepare.outputs.ffmpeg_version }}
-      - name: Comprobar DLLs
+      - name: Comprobar DLLs importadas (lista blanca)
         run: |
           for f in dist/ffmpeg-x86_64-pc-windows-msvc.exe dist/ffprobe-x86_64-pc-windows-msvc.exe; do
             echo "--- $f"; objdump -p "$f" | grep 'DLL Name'
-            if objdump -p "$f" | grep -iE 'libwinpthread|libgcc|zlib1|libmp3lame'; then echo "DLL no estática"; exit 1; fi
+            if objdump -p "$f" | grep 'DLL Name' | sed 's/.*DLL Name: *//' | grep -viE '^(advapi32|bcrypt|kernel32|msvcrt|ole32|oleaut32|shell32|user32|gdi32|ws2_32|mfplat|mf|mfreadwrite|mfuuid|strmiids|uuid)\.dll$'; then echo "DLL fuera de la lista blanca"; exit 1; fi
           done
       - name: Pruebas de aceptación
         run: tools/ffmpeg/accept.sh dist/ffmpeg-x86_64-pc-windows-msvc.exe dist/ffprobe-x86_64-pc-windows-msvc.exe h264_mf dist "$RUNNER_TEMP/accept"
-      - name: SHA256SUMS
-        run: tools/ffmpeg/finalize.sh dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ffmpeg-sidecar-windows
           path: dist/
@@ -122,12 +122,12 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.prepare.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ffmpeg-sidecar-macos
           path: art/macos
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ffmpeg-sidecar-windows
           path: art/windows
@@ -136,14 +136,17 @@ jobs:
           mkdir rel
           cp art/macos/ffmpeg-universal-apple-darwin art/macos/ffprobe-universal-apple-darwin rel/
           cp art/windows/ffmpeg-x86_64-pc-windows-msvc.exe art/windows/ffprobe-x86_64-pc-windows-msvc.exe rel/
-          # comunes (idénticos en ambos SO)
-          cp art/macos/ffmpeg-*.tar.xz art/macos/lame-*.tar.gz art/macos/LICENSE.LGPLv2.1 art/macos/COPYING.LGPL rel/
-          for os in macos windows; do
-            for f in SHA256SUMS configure_line.txt buildconf.txt; do
-              ext="${f##*.}"; [ "$ext" = "$f" ] && n="$f-$os" || n="${f%.*}-$os.$ext"
-              cp "art/$os/$f" "rel/$n"
-            done
-          done
+          # comunes (idénticos en ambos SO): fuentes, firma, licencias
+          cp art/macos/ffmpeg-*.tar.xz art/macos/ffmpeg-*.tar.xz.asc art/macos/lame-*.tar.gz \
+             art/macos/LICENSE.LGPLv2.1 art/macos/COPYING.LGPL art/macos/LICENSE.lame rel/
+          cmp art/macos/ffmpeg-*.tar.xz art/windows/ffmpeg-*.tar.xz
+          cmp art/macos/lame-*.tar.gz art/windows/lame-*.tar.gz
+          cp art/macos/configure_line.txt rel/configure_line-macos.txt
+          cp art/windows/configure_line.txt rel/configure_line-windows.txt
+          cp art/macos/buildconf-arm64.txt rel/buildconf-macos-arm64.txt
+          cp art/macos/buildconf-x86_64.txt rel/buildconf-macos-x86_64.txt
+          cp art/windows/buildconf.txt rel/buildconf-windows.txt
+          tools/ffmpeg/finalize.sh rel
           ls -l rel
       - name: Crear o actualizar release
         run: |

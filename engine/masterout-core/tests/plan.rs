@@ -76,6 +76,55 @@ fn fixed_destinations_convert_with_dither_when_lowering_bits() {
 }
 
 #[test]
+fn dither_rule_lower_bits_float_or_resampled_up_to_24() {
+    // 16/48 -> Deezer 16/44.1: mismos bits pero remuestreo: dither.
+    let r = resolve(&master(48000, 16), &meta(), &["deezer"]);
+    assert!(job(&r[0]).needs_dither);
+    // Nativo sin remuestreo: sin dither.
+    let r = resolve(&master(44100, 16), &meta(), &["deezer"]);
+    assert!(!job(&r[0]).needs_dither);
+    // Float: siempre dither al entregar PCM.
+    let mut m = master(96000, 24);
+    m.is_float = true;
+    let r = resolve(&m, &meta(), &["spotify"]);
+    assert!(job(&r[0]).needs_dither);
+    // 24 bit remuestreado a 24 bit (YouTube Music 44,1 -> 48): dither.
+    let r = resolve(&master(44100, 24), &meta(), &["youtube_music"]);
+    assert!(job(&r[0]).needs_dither);
+}
+
+#[test]
+fn preset_contract_table_id_subfolder_tag() {
+    let expected = [
+        ("spotify", "01 Spotify", "Spotify"),
+        ("apple_adm", "02 Apple Music", "Apple Digital Masters"),
+        ("amazon", "03 Amazon Music", "Amazon Music"),
+        ("tidal", "04 Tidal", "Tidal"),
+        ("deezer", "05 Deezer", "Deezer"),
+        ("youtube_music", "06 YouTube", "YouTube Music"),
+        ("youtube_video", "06 YouTube", "YouTube"),
+        ("distributor_std", "07 Distribuidora", "Distribuidora"),
+        (
+            "distributor_hires",
+            "07 Distribuidora",
+            "Distribuidora Hi-Res",
+        ),
+        ("tunecore", "07 Distribuidora", "TuneCore"),
+        ("mp3_promo", "08 Promo", "MP3 320"),
+        ("cover", "09 Imagen", "Portada"),
+        ("canvas", "09 Imagen", "Canvas"),
+    ];
+    let all = presets::all();
+    assert_eq!(all.len(), expected.len());
+    for (p, (id, sub, tag)) in all.iter().zip(expected) {
+        assert_eq!(
+            (p.id.as_str(), p.subfolder.as_str(), p.tag.as_str()),
+            (id, sub, tag)
+        );
+    }
+}
+
+#[test]
 fn apple_disabled_for_16bit_master() {
     let r = resolve(&master(44100, 16), &meta(), &["apple_adm"]);
     match &r[0] {
@@ -91,11 +140,11 @@ fn apple_disabled_for_16bit_master() {
 }
 
 #[test]
-fn tunecore_marks_upsampling_and_no_metadata() {
+fn tunecore_is_native_rate_24bit_without_metadata() {
     let r = resolve(&master(48000, 24), &meta(), &["tunecore"]);
     let j = job(&r[0]);
-    assert_eq!((j.bits, j.sample_rate), (24, 192000));
-    assert!(j.is_upsampling);
+    assert_eq!((j.bits, j.sample_rate), (24, 48000));
+    assert!(!j.is_upsampling);
     assert!(!j.embed_metadata);
 }
 
@@ -193,7 +242,7 @@ fn distributor_tags_and_note_sources() {
         job(&r[1]).file_name,
         "Vera Alcón - Luz de Noviembre [Distribuidora Hi-Res] 24bit-96kHz.wav"
     );
-    assert!(job(&r[2]).file_name.contains("[TuneCore] 24bit-192kHz"));
+    assert!(job(&r[2]).file_name.contains("[TuneCore] 24bit-96kHz"));
     for p in presets::all() {
         let note = ["tidal", "deezer", "youtube_music"].contains(&p.id.as_str());
         assert_eq!(p.source_kind, if note { "note" } else { "url" }, "{}", p.id);

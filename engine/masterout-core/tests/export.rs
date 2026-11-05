@@ -115,7 +115,7 @@ fn exports_full_tree_for_synthetic_master() {
         f.join("07 Distribuidora")
             .join(name("Distribuidora", 16, 44_100, "wav")),
         f.join("07 Distribuidora")
-            .join(name("TuneCore", 24, 192_000, "wav")),
+            .join(name("TuneCore", 24, 96_000, "wav")),
         f.join("README.txt"),
         f.join("informe-loudness.txt"),
         f.join("ficha-lanzamiento.csv"),
@@ -168,7 +168,7 @@ fn written_wavs_have_expected_headers() {
         ("02 Apple Music", "Apple Digital Masters", 24, 96_000, true),
         ("05 Deezer", "Deezer", 16, 44_100, true),
         ("07 Distribuidora", "Distribuidora", 16, 44_100, true),
-        ("07 Distribuidora", "TuneCore", 24, 192_000, false),
+        ("07 Distribuidora", "TuneCore", 24, 96_000, false),
     ];
     for (sub, tag, bits, sr, meta) in cases {
         let p = d.folder.join(sub).join(name(tag, bits, sr, "wav"));
@@ -436,4 +436,23 @@ fn integer_master_native_destination_has_no_dither() {
     )))
     .unwrap();
     assert_eq!(o.channels, wav::read(&master).unwrap().channels);
+}
+
+#[test]
+fn master_above_96k_is_rejected_with_i18n_key() {
+    let tmp = tempfile::tempdir().unwrap();
+    let ch: Vec<i32> = (0..192_000).map(|i| (i % 100) * 1000).collect();
+    let master = tmp.path().join("hires.wav");
+    common::write_wav(&master, 192_000, 24, &[ch.clone(), ch], Default::default());
+    match export::analyze(&master) {
+        Err(masterout_core::audio::AudioError::UnsupportedFormat(k)) => {
+            assert_eq!(k, "err.rate_over_96k")
+        }
+        other => panic!("{:?}", other.map(|_| ())),
+    }
+    let d = export::run(
+        &request(&master, &tmp.path().join("out"), &["spotify"]),
+        &|_| {},
+    );
+    assert!(d.is_err());
 }

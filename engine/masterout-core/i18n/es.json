@@ -40,5 +40,22 @@
   "export.err.container": "contenedor no soportado: {ext}",
   "export.err.threadpool": "no se pudieron iniciar los hilos de trabajo: {detail}",
   "export.err.id3": "no se pudieron escribir las etiquetas ID3: {detail}",
-  "export.err.documents": "no se pudieron escribir los documentos de la entrega: {detail}"
+  "export.err.documents": "no se pudieron escribir los documentos de la entrega: {detail}",
+  "preset.spotify": "Spotify",
+  "preset.apple_adm": "Apple Music (Digital Masters)",
+  "preset.amazon": "Amazon Music",
+  "preset.tidal": "Tidal",
+  "preset.deezer": "Deezer",
+  "preset.youtube_music": "YouTube Music",
+  "preset.youtube_video": "Vídeo YouTube",
+  "preset.distributor_std": "Distribuidora estándar (16 bit / 44,1 kHz)",
+  "preset.distributor_hires": "Distribuidora alta resolución",
+  "preset.tunecore": "TuneCore (24 bit)",
+  "preset.mp3_promo": "MP3 promo 320 kbps",
+  "preset.cover": "Portada",
+  "preset.canvas": "Canvas",
+  "verdict.tag.ok": "OK",
+  "verdict.tag.warn": "AVISO",
+  "verdict.tag.fail": "FALLO",
+  "err.rate_over_96k": "master check admite másters de hasta 96 kHz"
 }

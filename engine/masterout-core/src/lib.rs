@@ -2,4 +2,5 @@
 //! El motor nunca cambia el nivel del audio.
 
 pub mod audio;
+pub mod dither;
 pub mod wav;

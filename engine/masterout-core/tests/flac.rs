@@ -1,3 +1,5 @@
+mod common;
+
 use masterout_core::flac::{self, FlacTags};
 use std::f64::consts::PI;
 use std::process::Command;
@@ -171,4 +173,79 @@ fn cancel_is_checked_every_64_blocks() {
     ));
     // Se detuvo en la tercera comprobación (bloque 128), no al final.
     assert_eq!(calls.get(), 3);
+}
+
+/// Tono fuerte (medio fondo de escala) más ruido uniforme determinista de ~18 bit: el residuo
+/// de la predicción es grande (parámetros de Rice > 14), como en un máster real a 24 bit.
+fn loud_sine_plus_noise(frames: usize) -> Vec<Vec<i32>> {
+    let amp = f64::from((1i32 << 23) - 1) * 0.5;
+    let mut state = 0x9E37_79B9_7F4A_7C15u64;
+    (0..2)
+        .map(|c| {
+            (0..frames)
+                .map(|i| {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    let noise = ((state >> 40) as i32 - (1 << 23)) >> 6; // +-2^17
+                    let t = i as f64 / 44_100.0;
+                    let tone = amp * (2.0 * PI * (220.0 + 110.0 * c as f64) * t).sin();
+                    (tone as i32 + noise).clamp(-(1 << 23), (1 << 23) - 1)
+                })
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn loud_24bit_flac_compresses_below_80_percent_of_pcm() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("loud.flac");
+    let s = loud_sine_plus_noise(44_100 * 20);
+    flac::write(&p, &s, 44_100, 24, None).unwrap();
+    let raw = (s[0].len() * 2 * 3) as f64;
+    let size = std::fs::metadata(&p).unwrap().len() as f64;
+    assert!(
+        size < raw * 0.80,
+        "FLAC {size} B = {:.1} % del PCM ({raw} B)",
+        100.0 * size / raw
+    );
+    let (info, dec) = decode(&p);
+    assert_eq!(info.bits_per_sample, 24);
+    let expect: Vec<i32> = s[0].iter().zip(&s[1]).flat_map(|(l, r)| [*l, *r]).collect();
+    assert_eq!(dec, expect);
+}
+
+#[test]
+fn real_master_flac_compresses_below_85_percent_of_wav() {
+    let Some(dir) = common::fixtures_dir() else {
+        return;
+    };
+    let wav = dir.join("m44_24.wav");
+    let audio = masterout_core::wav::read(&wav).unwrap();
+    let scale = f64::from(1u32 << 23);
+    let s: Vec<Vec<i32>> = audio
+        .channels
+        .iter()
+        .map(|c| {
+            c.iter()
+                .map(|&x| (f64::from(x) * scale).round() as i32)
+                .collect()
+        })
+        .collect();
+    let tmp = tempfile::tempdir().unwrap();
+    let p = tmp.path().join("m44.flac");
+    flac::write(&p, &s, audio.sample_rate, 24, None).unwrap();
+    let wav_size = std::fs::metadata(&wav).unwrap().len() as f64;
+    let size = std::fs::metadata(&p).unwrap().len() as f64;
+    // ffmpeg -compression_level 5 da ~82 % en este máster (muy fuerte); el listón es 85 %.
+    assert!(
+        size < wav_size * 0.85,
+        "FLAC {size} B = {:.1} % del WAV ({wav_size} B)",
+        100.0 * size / wav_size
+    );
+    let (info, dec) = decode(&p);
+    assert_eq!(info.bits_per_sample, 24);
+    let expect: Vec<i32> = s[0].iter().zip(&s[1]).flat_map(|(l, r)| [*l, *r]).collect();
+    assert!(dec == expect, "audio decodificado distinto del original");
 }

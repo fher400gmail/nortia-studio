@@ -93,6 +93,7 @@
   "err.cover_too_large": "The cover is too large. Maximum 16384 px per side and 120 megapixels.",
   "err.encoder_unavailable": "This computer cannot create the video: the system H.264 encoder is missing. The rest of the delivery was exported.",
   "err.ffmpeg_failed": "This file could not be created. The rest of the delivery was exported.",
+  "err.ffmpeg_timeout": "Creating this file took too long and was cancelled. The rest of the delivery was exported.",
   "err.sidecar_missing": "The master check video component (ffmpeg) is missing. Reinstall the app.",
   "err.media_unreadable": "The image or video file could not be read.",
   "preset.apple_motion": "Apple Motion",

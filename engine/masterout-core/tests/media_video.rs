@@ -397,7 +397,10 @@ fn missing_sidecar_is_err_sidecar_missing() {
     };
     let e = run_ffmpeg(&sc, &v(&["-version"]), &|| false).unwrap_err();
     assert_eq!(e.key_and_detail().0, "err.sidecar_missing");
-    let e = probe(&sc, Path::new("x.mp4")).unwrap_err();
+    let d = tempfile::tempdir().unwrap();
+    let f = d.path().join("x.mp4");
+    std::fs::write(&f, b"x").unwrap();
+    let e = probe(&sc, &f).unwrap_err();
     assert_eq!(e.key_and_detail().0, "err.sidecar_missing");
 }
 
@@ -888,6 +891,7 @@ fn script_sidecar(dir: &Path, body: &str) -> SidecarPaths {
 #[cfg(unix)]
 #[test]
 fn capabilities_detect_missing_hevc_and_missing_h264() {
+    let _g = CAPS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     use masterout_core::media::capabilities;
     let d = tempfile::tempdir().unwrap();
     // un "ffmpeg" que rechaza hevc_videotoolbox (como un Windows sin extensión HEVC)
@@ -906,6 +910,7 @@ fn capabilities_detect_missing_hevc_and_missing_h264() {
 
 #[test]
 fn capabilities_with_the_real_ffmpeg_and_cached() {
+    let _g = CAPS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let Some(sc) = sidecar() else { return };
     use masterout_core::media::capabilities;
     let a = capabilities(&sc, Platform::current());
@@ -922,4 +927,138 @@ fn capabilities_with_the_real_ffmpeg_and_cached() {
         })
         .count();
     assert_eq!(left, 0);
+}
+
+/// Las pruebas de capacidades comparten el directorio temporal: se serializan.
+static CAPS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(unix)]
+fn pid_alive(pid: &str) -> bool {
+    Path::new(&format!("/proc/{}", pid.trim())).exists()
+}
+
+#[cfg(unix)]
+#[test]
+fn capabilities_time_out_on_a_hung_encoder_and_kill_it() {
+    let _g = CAPS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    // gating cfg(unix): el sidecar falso es un script de shell (en Windows haría falta un .cmd)
+    use masterout_core::media::capabilities;
+    let d = tempfile::tempdir().unwrap();
+    let pidfile = d.path().join("pid");
+    let sc = script_sidecar(
+        d.path(),
+        &format!("echo $$ > '{}'\nexec sleep 60", pidfile.display()),
+    );
+    let t = std::time::Instant::now();
+    let c = capabilities(&sc, Platform::MacOS);
+    assert!(
+        t.elapsed() < std::time::Duration::from_secs(12),
+        "{:?}",
+        t.elapsed()
+    );
+    assert!(!c.h264 && !c.hevc, "{c:?}");
+    let pid = std::fs::read_to_string(&pidfile).unwrap();
+    assert!(!pid_alive(&pid), "el hijo debe haber muerto");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_timeout_is_not_cached_as_definitive() {
+    let _g = CAPS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    use masterout_core::media::capabilities;
+    let d = tempfile::tempdir().unwrap();
+    let flag = d.path().join("ok");
+    // primero cuelga; cuando existe `ok`, codifica bien
+    let sc = script_sidecar(
+        d.path(),
+        &format!(
+            "if [ -e '{}' ]; then last=\"\"; for a; do last=\"$a\"; done; : > \"$last\"; exit 0; fi\nexec sleep 60",
+            flag.display()
+        ),
+    );
+    assert!(!capabilities(&sc, Platform::Windows).h264);
+    std::fs::write(&flag, b"").unwrap();
+    assert!(
+        capabilities(&sc, Platform::Windows).h264,
+        "el fallo por plazo no se cachea"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn run_ffmpeg_deadline_kills_and_reports_timeout() {
+    use masterout_core::media::video::run_ffmpeg_with_deadline;
+    let d = tempfile::tempdir().unwrap();
+    let sc = script_sidecar(d.path(), "exec sleep 60");
+    let out = d.path().join("x.mp4");
+    let args = vec![
+        "-i".to_string(),
+        "a".into(),
+        out.to_string_lossy().into_owned(),
+    ];
+    let e = run_ffmpeg_with_deadline(
+        &sc,
+        &args,
+        &|| false,
+        Some(std::time::Duration::from_millis(300)),
+    )
+    .unwrap_err();
+    assert_eq!(e.key_and_detail().0, "err.ffmpeg_timeout");
+    assert!(!out.exists() && !d.path().join("x.mp4.part").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn cancel_kills_a_video_job_and_leaves_no_part_file() {
+    use masterout_core::media::video::run_ffmpeg;
+    let d = tempfile::tempdir().unwrap();
+    let pidfile = d.path().join("pid");
+    let sc = script_sidecar(
+        d.path(),
+        &format!(
+            "echo $$ > '{}'\nlast=\"\"; for a; do last=\"$a\"; done\n: > \"$last\"\nexec sleep 60",
+            pidfile.display()
+        ),
+    );
+    let out = d.path().join("v.mp4");
+    let args = vec![
+        "-i".to_string(),
+        "a".into(),
+        out.to_string_lossy().into_owned(),
+    ];
+    let t = std::time::Instant::now();
+    let e = run_ffmpeg(&sc, &args, &|| {
+        t.elapsed() > std::time::Duration::from_millis(400)
+    })
+    .unwrap_err();
+    assert!(matches!(e, AudioError::Cancelled));
+    assert!(!out.exists() && !d.path().join("v.mp4.part").exists());
+    assert!(!pid_alive(&std::fs::read_to_string(&pidfile).unwrap()));
+}
+
+#[cfg(unix)]
+#[test]
+fn probe_passes_an_absolute_path_never_an_option_lookalike() {
+    let d = tempfile::tempdir().unwrap();
+    let log = d.path().join("args");
+    let sc = script_sidecar(
+        d.path(),
+        &format!(
+            "for a; do last=\"$a\"; done\necho \"$last\" > '{}'\necho '{{}}'",
+            log.display()
+        ),
+    );
+    let f = d.path().join("-evil.mp4");
+    std::fs::write(&f, b"x").unwrap();
+    let _ = probe(&sc, &f);
+    let got = std::fs::read_to_string(&log).unwrap();
+    assert!(got.trim().starts_with('/'), "{got}");
+    // ruta inexistente: error de archivo ilegible, sin lanzar ffprobe
+    assert_eq!(
+        probe(&sc, &d.path().join("-no.mp4"))
+            .unwrap_err()
+            .key_and_detail()
+            .0,
+        "err.media_unreadable"
+    );
 }

@@ -151,6 +151,21 @@ fn resolve_media(
             Some(_) => {}
         }
     }
+    // Material propio: debe existir, ser un fichero y tener una extensión admitida.
+    if let Some(path) = &own {
+        let videos = kind != MediaKind::Cover;
+        if !crate::media::usable_media_file(path, true, videos) {
+            return disabled(p, "err.media_unreadable");
+        }
+    }
+    // La portada de la entrega (la usan MP3, Canvas, YouTube y Apple Motion sin material propio)
+    if kind != MediaKind::Cover && own.is_none() {
+        if let Some(c) = &cx.cover {
+            if !crate::media::usable_media_file(c, true, false) {
+                return disabled(p, "err.media_unreadable");
+            }
+        }
+    }
     let mut warnings = Vec::new();
     // La portada de la entrega solo hace falta si el destino no trae material propio.
     // En la ficha de portada, el material propio ES la portada.
@@ -162,6 +177,9 @@ fn resolve_media(
     if kind == MediaKind::Cover {
         match cover_src {
             None => return disabled(p, "reason.no_cover"),
+            Some(path) if !crate::media::usable_media_file(&path, true, false) => {
+                return disabled(p, "err.media_unreadable")
+            }
             Some(path) => {
                 match cover_image::inspect_cover(&path, &cover_image::CoverOptions::default()) {
                     Ok(w) => warnings = w,
@@ -173,8 +191,10 @@ fn resolve_media(
         if cx.cover.is_none() {
             return disabled(p, "reason.no_cover");
         }
-        if let Err(key) = cx.check_cover() {
-            return disabled(p, &key);
+        // el vídeo se hace con la portada de la entrega: hereda sus avisos (recortada/ampliada)
+        match cx.check_cover() {
+            Ok(w) => warnings = w,
+            Err(key) => return disabled(p, &key),
         }
     }
 
@@ -327,7 +347,12 @@ fn resolve_one(
         own_media: None,
         extra_files: Vec::new(),
         hevc_skipped: false,
-        warnings: Vec::new(),
+        // el MP3 lleva la portada de la entrega incrustada: hereda sus avisos
+        warnings: if container == Container::Mp3 && cx.cover.is_some() {
+            cx.check_cover().unwrap_or_default()
+        } else {
+            Vec::new()
+        },
     })
 }
 

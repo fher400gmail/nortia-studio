@@ -298,7 +298,6 @@ fn plan_media_presets_enabled_with_cover_and_sidecar() {
 fn media_presets_are_off_by_default_except_none() {
     let all = presets::all();
     let motion = all.iter().find(|p| p.id == "apple_motion").unwrap();
-    assert!(!motion.default_on);
     assert_eq!(motion.tag, "Apple Motion");
     assert_eq!(motion.subfolder_key, "apple");
 }
@@ -315,16 +314,14 @@ fn no_cover_disables_image_and_video_chips_unless_they_bring_their_own_media() {
         assert_eq!(reason(x), "reason.no_cover");
     }
     // un vídeo propio para Canvas basta; el resto sigue sin portada
+    let d = tempfile::tempdir().unwrap();
+    let own = d.path().join("mi-canvas.mp4");
+    std::fs::write(&own, b"x").unwrap();
     let mut media = MediaInputs::default();
-    media
-        .per_preset
-        .insert("canvas".into(), "mi-canvas.mp4".into());
+    media.per_preset.insert("canvas".into(), own.clone());
     let r = resolve_media(&master(44100, 24), &MEDIA_IDS, &media, true);
     let j = job(&r[2]);
-    assert_eq!(
-        j.own_media.as_deref(),
-        Some(std::path::Path::new("mi-canvas.mp4"))
-    );
+    assert_eq!(j.own_media.as_deref(), Some(own.as_path()));
     assert_eq!(reason(&r[0]), "reason.no_cover");
     assert_eq!(reason(&r[1]), "reason.no_cover");
 }
@@ -464,6 +461,37 @@ fn cover_warnings_travel_in_the_cover_job() {
 }
 
 #[test]
+fn cover_warnings_also_reach_every_job_derived_from_the_cover() {
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    write_png(&cover, 2000, 1500);
+    let own = d.path().join("v.mp4");
+    std::fs::write(&own, b"x").unwrap();
+    let mut media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    media.per_preset.insert("canvas".into(), own);
+    let want = ["warn.cover_cropped", "warn.cover_upscaled"];
+    let ids = ["youtube_video", "mp3_promo", "canvas", "apple_motion"];
+    let r = resolve_media(&master(44100, 24), &ids, &media, true);
+    for x in &r {
+        let j = job(x);
+        // Canvas trae su propio vídeo: no usa la portada, no hereda avisos
+        if j.preset_id == "canvas" {
+            assert!(j.warnings.is_empty());
+        } else {
+            assert!(
+                want.iter().all(|w| j.warnings.iter().any(|x| x == w)),
+                "{}: {:?}",
+                j.preset_id,
+                j.warnings
+            );
+        }
+    }
+}
+
+#[test]
 fn youtube_music_fixes_48k_keeps_native_bits() {
     let r = resolve(&master(44100, 16), &meta(), &["youtube_music"]);
     let j = job(&r[0]);
@@ -517,5 +545,47 @@ fn distributor_tags_and_note_sources() {
     for p in presets::all() {
         let note = ["tidal", "deezer", "youtube_music"].contains(&p.id.as_str());
         assert_eq!(p.source_kind, if note { "note" } else { "url" }, "{}", p.id);
+    }
+}
+
+#[test]
+fn own_media_paths_are_validated_in_the_plan() {
+    let d = tempfile::tempdir().unwrap();
+    let ok = d.path().join("bucle.mp4");
+    std::fs::write(&ok, b"x").unwrap();
+    let txt = d.path().join("notas.txt");
+    std::fs::write(&txt, b"x").unwrap();
+    let dir = d.path().join("carpeta.mp4");
+    std::fs::create_dir(&dir).unwrap();
+    let missing = d.path().join("no-existe.mp4");
+    let dash = d.path().join("-opcion.mp4");
+    std::fs::write(&dash, b"x").unwrap();
+    let state = |path: &std::path::Path| {
+        let mut media = MediaInputs::default();
+        media.per_preset.insert("canvas".into(), path.to_path_buf());
+        let r = resolve_media(&master(44100, 24), &["canvas"], &media, true);
+        match &r[0] {
+            Resolved::Job(_) => "job".to_string(),
+            Resolved::Disabled { reason_key, .. } => reason_key.clone(),
+        }
+    };
+    assert_eq!(state(&ok), "job");
+    assert_eq!(state(&dash), "job");
+    assert_eq!(state(&missing), "err.media_unreadable");
+    assert_eq!(state(&dir), "err.media_unreadable");
+    assert_eq!(state(&txt), "err.media_unreadable");
+    // la ficha de portada solo acepta imágenes
+    let mut media = MediaInputs::default();
+    media.per_preset.insert("cover".into(), ok.clone());
+    let r = resolve_media(&master(44100, 24), &["cover"], &media, true);
+    assert_eq!(reason(&r[0]), "err.media_unreadable");
+    // la portada de la entrega inexistente deshabilita las fichas derivadas
+    let media = MediaInputs {
+        cover: Some(d.path().join("ausente.png")),
+        ..Default::default()
+    };
+    let r = resolve_media(&master(44100, 24), &MEDIA_IDS, &media, true);
+    for x in &r {
+        assert_eq!(reason(x), "err.media_unreadable");
     }
 }

@@ -142,7 +142,9 @@ fn plan_dto_media_chips_follow_cover_and_sidecar() {
         assert_eq!(j.enabled, j.preset_id == "cover", "{}", j.preset_id);
     }
     // material propio: un vídeo propio habilita el Canvas aun sin portada
-    let own = HashMap::from([("canvas".to_string(), "/v/mio.mp4".to_string())]);
+    let mio = tmp.path().join("mio.mp4");
+    std::fs::write(&mio, b"x").unwrap();
+    let own = HashMap::from([("canvas".to_string(), mio.to_string_lossy().into_owned())]);
     let p = plan_with(
         &master(),
         &meta(None),
@@ -158,6 +160,26 @@ fn plan_dto_media_chips_follow_cover_and_sidecar() {
             .unwrap()
             .enabled
     );
+    // una ruta que no existe o que no es un vídeo deja la ficha deshabilitada con el motivo
+    for bad in ["/v/no-existe.mp4", "/etc/hostname"] {
+        let own = HashMap::from([("canvas".to_string(), bad.to_string())]);
+        let p = plan_with(
+            &master(),
+            &meta(None),
+            &ids(&["canvas"]),
+            &own,
+            Lang::Es,
+            ALL,
+        );
+        let j = &p.jobs[0];
+        assert!(!j.enabled, "{bad}");
+        assert!(
+            j.disabled_reason
+                .as_deref()
+                .is_some_and(|r| !r.starts_with("err.")),
+            "{bad}: texto localizado"
+        );
+    }
     assert!(
         !p.jobs
             .iter()

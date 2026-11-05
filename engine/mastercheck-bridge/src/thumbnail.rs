@@ -8,16 +8,16 @@ use masterout_core::audio::AudioError;
 use masterout_core::export::default_sidecar;
 use masterout_core::i18n::Lang;
 use masterout_core::media::image::{MAX_PIXELS, MAX_SIDE};
-use masterout_core::media::video::run_ffmpeg;
+use masterout_core::media::video::run_ffmpeg_with_deadline;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 /// Lado mayor de la miniatura.
 pub const THUMB_PX: u32 = 160;
 
 /// Extensiones de imagen y vídeo que acepta una ficha (el sidecar sabe decodificarlas).
-pub const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp"];
-pub const VIDEO_EXTS: &[&str] = &["mp4", "mov", "m4v", "mkv", "webm"];
+pub use masterout_core::media::{IMAGE_EXTS, VIDEO_EXTS};
 
 fn ext(path: &Path) -> Option<String> {
     path.extension()
@@ -120,7 +120,7 @@ fn ffmpeg_thumbnail(path: &Path) -> Result<String, AudioError> {
             out.to_string_lossy().into_owned(),
         ])
         .collect();
-    let r = run_ffmpeg(&sidecar, &args, &|| false);
+    let r = run_ffmpeg_with_deadline(&sidecar, &args, &|| false, Some(Duration::from_secs(10)));
     let bytes = r.and_then(|()| std::fs::read(&out).map_err(AudioError::Io));
     let _ = std::fs::remove_file(&out);
     let bytes = bytes.map_err(|e| match e.key_and_detail().0.as_str() {

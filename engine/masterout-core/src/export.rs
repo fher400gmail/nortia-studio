@@ -852,16 +852,21 @@ pub fn run(
     let mut meta = req.meta.clone();
     meta.title = naming::fallback_title(&meta.title, &req.master_path);
     let ids: Vec<&str> = req.active_ids.iter().map(String::as_str).collect();
-    let plan = plan::resolve_in(
-        &info,
-        &meta,
-        &ids,
-        &req.media,
-        req.lang,
-        req.sidecar
+    let probe_cancel = || {
+        req.cancel
             .as_ref()
-            .map(|sc| media::capabilities(sc, req.platform)),
-    );
+            .is_some_and(|c| c.load(Ordering::Relaxed))
+    };
+    // cancelada durante la sonda: sin códecs; el resto del flujo emite `Cancelled`
+    let caps = req.sidecar.as_ref().map(|sc| {
+        media::capabilities_cancellable(sc, req.platform, &probe_cancel).unwrap_or(
+            media::MediaCaps {
+                h264: false,
+                hevc: false,
+            },
+        )
+    });
+    let plan = plan::resolve_in(&info, &meta, &ids, &req.media, req.lang, caps);
     emit(Progress::Planned(plan.clone()));
 
     let threads = req.threads.unwrap_or_else(num_cpus::get_physical).max(1);

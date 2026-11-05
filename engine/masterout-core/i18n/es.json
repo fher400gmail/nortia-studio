@@ -93,6 +93,7 @@
   "err.cover_too_large": "La portada es demasiado grande. Máximo 16384 px por lado y 120 megapíxeles.",
   "err.encoder_unavailable": "Este equipo no puede crear el vídeo: falta el codificador H.264 del sistema. El resto de la entrega se ha exportado.",
   "err.ffmpeg_failed": "No se pudo crear este archivo. El resto de la entrega se ha exportado.",
+  "err.ffmpeg_timeout": "La creación del archivo tardó demasiado y se canceló. El resto de la entrega se ha exportado.",
   "err.sidecar_missing": "Falta el componente de vídeo (ffmpeg) de master check. Reinstala la aplicación.",
   "err.media_unreadable": "No se pudo leer el archivo de imagen o vídeo.",
   "preset.apple_motion": "Apple Motion",

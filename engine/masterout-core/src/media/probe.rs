@@ -161,8 +161,14 @@ pub fn moov_before_mdat(path: &Path) -> Option<bool> {
     }
 }
 
-/// Ejecuta ffprobe sobre `path`.
+/// Plazo de ffprobe: un archivo corrupto o un disco de red no deben bloquear la aplicación.
+const PROBE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Ejecuta ffprobe sobre `path`. La ruta se pasa canonicalizada (absoluta), así que nunca
+/// puede empezar por `-` y leerse como opción.
 pub fn probe(sidecar: &SidecarPaths, path: &Path) -> Result<MediaInfo, AudioError> {
+    let path = std::fs::canonicalize(path).map_err(|e| unreadable(e.to_string()))?;
+    let path = path.as_path();
     let mut cmd = Command::new(&sidecar.ffprobe);
     cmd.args([
         "-v",
@@ -177,14 +183,57 @@ pub fn probe(sidecar: &SidecarPaths, path: &Path) -> Result<MediaInfo, AudioErro
     .stdout(Stdio::piped())
     .stderr(Stdio::piped());
     super::video::no_window(&mut cmd);
-    let out = cmd.output().map_err(|e| {
+    let spawn_err = |e: std::io::Error| {
         let key = if e.kind() == std::io::ErrorKind::NotFound {
             "err.sidecar_missing"
         } else {
             "err.ffmpeg_failed"
         };
         AudioError::UnsupportedFormat(format!("{key}: {}: {e}", sidecar.ffprobe.display()))
-    })?;
+    };
+    let mut child = cmd.spawn().map_err(spawn_err)?;
+    // las dos tuberías se drenan en hilos para que un archivo grande no bloquee a ffprobe
+    let mut so = child.stdout.take();
+    let mut se = child.stderr.take();
+    let t_out = std::thread::spawn(move || {
+        let mut v = Vec::new();
+        if let Some(p) = so.as_mut() {
+            let _ = std::io::Read::read_to_end(p, &mut v);
+        }
+        v
+    });
+    let t_err = std::thread::spawn(move || {
+        let mut v = Vec::new();
+        if let Some(p) = se.as_mut() {
+            let _ = std::io::Read::read_to_end(p, &mut v);
+        }
+        v
+    });
+    let started = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(st)) => break st,
+            Ok(None) if started.elapsed() >= PROBE_DEADLINE => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(AudioError::UnsupportedFormat(format!(
+                    "err.ffmpeg_timeout: {}",
+                    sidecar.ffprobe.display()
+                )));
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(20)),
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(AudioError::Io(e));
+            }
+        }
+    };
+    let out = std::process::Output {
+        status,
+        stdout: t_out.join().unwrap_or_default(),
+        stderr: t_err.join().unwrap_or_default(),
+    };
     if !out.status.success() {
         let msg = String::from_utf8_lossy(&out.stderr);
         return Err(unreadable(msg.trim()));

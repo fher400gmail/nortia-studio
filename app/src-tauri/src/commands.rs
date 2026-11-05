@@ -60,21 +60,28 @@ pub async fn analyze(
     Ok(res)
 }
 
+/// El plan puede sondear los codificadores (ffmpeg, con plazo) la primera vez: va en un hilo
+/// aparte para no congelar la ventana.
 #[tauri::command]
-pub fn plan(
+pub async fn plan(
     lang: State<'_, LangState>,
     master: MasterDto,
     meta: ReleaseMetaDto,
     active_ids: Vec<String>,
     media_inputs: Option<HashMap<String, String>>,
-) -> PlanDto {
-    planning::plan(
-        &master,
-        &meta,
-        &active_ids,
-        &media_inputs.unwrap_or_default(),
-        current_lang(&lang),
-    )
+) -> Result<PlanDto, BridgeError> {
+    let lang = current_lang(&lang);
+    tauri::async_runtime::spawn_blocking(move || {
+        planning::plan(
+            &master,
+            &meta,
+            &active_ids,
+            &media_inputs.unwrap_or_default(),
+            lang,
+        )
+    })
+    .await
+    .map_err(|e| internal(lang, e.to_string()))
 }
 
 #[tauri::command]

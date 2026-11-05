@@ -555,6 +555,18 @@ pub fn run_ffmpeg(
     args: &[String],
     cancel: &dyn Fn() -> bool,
 ) -> Result<(), AudioError> {
+    run_ffmpeg_with_deadline(sidecar, args, cancel, None)
+}
+
+/// Como `run_ffmpeg`, con un plazo opcional: al vencer mata a ffmpeg, borra el `.part` y
+/// devuelve `err.ffmpeg_timeout`.
+pub fn run_ffmpeg_with_deadline(
+    sidecar: &SidecarPaths,
+    args: &[String],
+    cancel: &dyn Fn() -> bool,
+    deadline: Option<Duration>,
+) -> Result<(), AudioError> {
+    let started = std::time::Instant::now();
     let target = video_output(args);
     let mut real: Vec<String> = args.to_vec();
     let part = target.as_deref().map(part_path);
@@ -591,6 +603,15 @@ pub fn run_ffmpeg(
             let _ = reader.join();
             cleanup();
             return Err(AudioError::Cancelled);
+        }
+        if deadline.is_some_and(|d| started.elapsed() >= d) {
+            // sin join del lector: si algo heredó el pipe no debe bloquear la salida
+            kill(&mut child);
+            cleanup();
+            return Err(AudioError::UnsupportedFormat(format!(
+                "err.ffmpeg_timeout: {}",
+                sidecar.ffmpeg.display()
+            )));
         }
         match child.try_wait() {
             Ok(Some(st)) => break st,

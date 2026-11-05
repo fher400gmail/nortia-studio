@@ -404,3 +404,54 @@ fn i18n_keys_exist_in_both_languages() {
         }
     }
 }
+
+/// Primera ejecución real de todo el flujo (afconvert -> CAF -> AAC -> decodificación ->
+/// afclip) con las herramientas de Apple. Solo en macOS (el job `engine-tests` de macos-15);
+/// si `afconvert` o `afclip` no están, se salta con un mensaje. Si el formato de `afclip`
+/// difiere del esperado, el fallo trae el log crudo de cada paso.
+#[cfg(target_os = "macos")]
+mod real_tools {
+    use super::*;
+
+    fn tools_present() -> bool {
+        let found = |n: &str| {
+            ["/usr/bin", "/usr/local/bin"]
+                .iter()
+                .any(|d| Path::new(d).join(n).is_file())
+                || std::env::var_os("PATH")
+                    .is_some_and(|p| std::env::split_paths(&p).any(|d| d.join(n).is_file()))
+        };
+        let ok = found("afconvert") && found("afclip");
+        if !ok {
+            eprintln!("SKIP: afconvert/afclip no están instalados en este macOS");
+        }
+        ok
+    }
+
+    fn run(dbtp: f64) -> AdmReport {
+        let d = tempfile::tempdir().unwrap();
+        let wav = d.path().join("synthetic.wav");
+        adm_smoke_case(dbtp, &wav).unwrap();
+        validate_adm(&wav, &d.path().join("adm"), &|| false)
+    }
+
+    #[test]
+    fn minus_one_dbtp_master_has_no_clipping() {
+        if !tools_present() {
+            return;
+        }
+        let r = run(-1.0);
+        assert_eq!(r.status, AdmStatus::Ok, "log crudo:\n{}", r.log);
+        assert_eq!(r.clipped_samples, 0, "log crudo:\n{}", r.log);
+    }
+
+    #[test]
+    fn plus_one_dbtp_master_clips() {
+        if !tools_present() {
+            return;
+        }
+        let r = run(1.0);
+        assert_eq!(r.status, AdmStatus::Clipping, "log crudo:\n{}", r.log);
+        assert!(r.clipped_samples > 0, "log crudo:\n{}", r.log);
+    }
+}

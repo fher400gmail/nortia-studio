@@ -272,7 +272,7 @@ struct TempGuard<'a> {
 impl Drop for TempGuard<'_> {
     fn drop(&mut self) {
         if self.armed {
-            crate::fsutil::remove_temp(self.path);
+            let _ = crate::fsutil::remove_temp(self.path);
         }
     }
 }
@@ -571,7 +571,7 @@ impl Ctx<'_> {
                         Ok(b) => out.push((to.clone(), b)),
                         Err(e) => {
                             for (p, _) in &out {
-                                crate::fsutil::remove_temp(p);
+                                let _ = crate::fsutil::remove_temp(p);
                             }
                             return Err(e);
                         }
@@ -622,7 +622,7 @@ impl Ctx<'_> {
                         Err(e) => {
                             // un destino es todo o nada
                             for (p, _) in &out {
-                                crate::fsutil::remove_temp(p);
+                                let _ = crate::fsutil::remove_temp(p);
                             }
                             return Err(e);
                         }
@@ -761,7 +761,7 @@ struct TempFile(PathBuf);
 
 impl Drop for TempFile {
     fn drop(&mut self) {
-        crate::fsutil::remove_temp(&self.0);
+        let _ = crate::fsutil::remove_temp(&self.0);
     }
 }
 

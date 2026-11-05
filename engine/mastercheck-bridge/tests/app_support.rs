@@ -481,4 +481,14 @@ mod panic_log {
         assert_eq!(e, "1762300800 src/export.rs:42 algo falló\n");
         assert_eq!(format_entry(1, None, "x"), "1 ? x\n");
     }
+
+    #[test]
+    fn a_leaked_temp_is_logged_with_its_path_and_error() {
+        let e = mastercheck_bridge::app_support::panic_log::leak_entry(
+            5,
+            std::path::Path::new("/x/a.part"),
+            "acceso denegado",
+        );
+        assert_eq!(e, "5 ? temporal sin borrar /x/a.part: acceso denegado\n");
+    }
 }

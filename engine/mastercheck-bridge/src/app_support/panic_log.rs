@@ -98,3 +98,22 @@ pub fn install(dir: PathBuf) {
         let _ = append(&dir, &entry);
     }));
 }
+
+/// Anota en el mismo registro un temporal que no se pudo borrar tras los reintentos (ruta, error).
+pub fn install_leak_log(dir: PathBuf) {
+    masterout_core::fsutil::set_failure_hook(move |path, e| {
+        let secs = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let _ = append(&dir, &leak_entry(secs, path, &e.to_string()));
+    });
+}
+
+/// Línea del registro para un temporal que quedó sin borrar.
+pub fn leak_entry(unix_secs: u64, path: &Path, error: &str) -> String {
+    format_entry(
+        unix_secs,
+        None,
+        &format!("temporal sin borrar {}: {error}", path.display()),
+    )
+}

@@ -579,7 +579,7 @@ pub fn run_ffmpeg_with_deadline(
     // `kill` ya espera al hijo; aun así en Windows el archivo puede seguir abierto un instante
     let cleanup = || {
         if let Some(p) = &part {
-            crate::fsutil::remove_temp(p);
+            let _ = crate::fsutil::remove_temp(p);
         }
     };
     let mut cmd = Command::new(&sidecar.ffmpeg);

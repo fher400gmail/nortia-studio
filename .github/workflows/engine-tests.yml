@@ -1,0 +1,74 @@
+name: engine
+
+on:
+  push:
+    paths:
+      - "engine/**"
+      - ".github/workflows/engine-tests.yml"
+  pull_request:
+    paths:
+      - "engine/**"
+      - ".github/workflows/engine-tests.yml"
+
+concurrency:
+  group: engine-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Instalar lame y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y lame ffmpeg
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features
+
+  macos:
+    name: macos-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Instalar lame y ffmpeg
+        run: brew install lame ffmpeg
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features
+
+  windows:
+    name: windows-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Instalar lame y ffmpeg
+        continue-on-error: true
+        shell: bash
+        run: choco install lame ffmpeg -y
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features

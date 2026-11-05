@@ -107,9 +107,10 @@ function bridgeError(lang, key, detail = null) {
 
 /**
  * Backend simulado. Opciones: `fast` (progreso casi instantáneo), `lang` inicial,
- * `sidecar` (false simula que no hay ffmpeg: sin MP3 ni vídeo), `os`.
+ * `sidecar` (false simula que no hay ffmpeg: sin MP3 ni vídeo), `defaultOff` (ids de preset con
+ * `default_on: false`, como presets.json), `os`.
  */
-export function createMock({ fast = false, lang = 'es', sidecar = true, os = 'mac', version = '0.1.0-mock', dropCancelEvent = false } = {}) {
+export function createMock({ fast = false, lang = 'es', sidecar = true, defaultOff = ['apple_motion'], os = 'mac', version = '0.1.0-mock', dropCancelEvent = false } = {}) {
   let curLang = lang;
   let cancelled = false;
   let folderIx = 0;
@@ -119,7 +120,7 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, os = 'ma
     kind: 'mock',
     async setLang(l) { curLang = l === 'es' ? 'es' : 'en'; },
     async systemLang() { return curLang; },
-    async appInfo() { return { version, os, sidecar_available: sidecar, default_out_root: MOCK_FOLDERS[curLang][0] }; },
+    async appInfo() { return { version, os, sidecar_available: sidecar, default_on: PRESETS.map(p => p.id).filter(id => !defaultOff.includes(id)), default_out_root: MOCK_FOLDERS[curLang][0] }; },
 
     async analyze(path, bins = 600) {
       const file = baseName(path);
@@ -267,7 +268,7 @@ export function detect(g = globalThis) {
   const forced = q.get('backend');
   const hasTauri = !!(g.__TAURI_INTERNALS__ || g.__TAURI__);
   if (forced === 'tauri' || (!forced && hasTauri)) return createTauri(g);
-  return createMock({ fast: q.has('fast') || q.has('still'), lang: q.get('lang') === 'en' ? 'en' : 'es', sidecar: q.get('sidecar') !== '0', os: q.get('os') === 'win' ? 'win' : 'mac' });
+  return createMock({ fast: q.has('fast') || q.has('still'), lang: q.get('lang') === 'en' ? 'en' : 'es', sidecar: q.get('sidecar') !== '0', defaultOff: q.has('off') ? q.get('off').split(',') : undefined, os: q.get('os') === 'win' ? 'win' : 'mac' });
 }
 
 export const backend = detect();

@@ -589,3 +589,31 @@ fn own_media_paths_are_validated_in_the_plan() {
         assert_eq!(reason(x), "err.media_unreadable");
     }
 }
+
+/// `presets.json` es la única fuente de los valores iniciales de la interfaz: todo encendido
+/// salvo Apple Motion (pesa y tarda), como aprobó Fer en el prototipo.
+#[test]
+fn default_on_table_matches_the_approved_prototype() {
+    let got: Vec<(String, bool)> = presets::all()
+        .into_iter()
+        .map(|p| (p.id, p.default_on))
+        .collect();
+    let want = [
+        ("spotify", true),
+        ("apple_adm", true),
+        ("amazon", true),
+        ("tidal", true),
+        ("deezer", true),
+        ("youtube_music", true),
+        ("youtube_video", true),
+        ("distributor_std", true),
+        ("distributor_hires", true),
+        ("tunecore", true),
+        ("mp3_promo", true),
+        ("cover", true),
+        ("canvas", true),
+        ("apple_motion", false),
+    ];
+    let want: Vec<(String, bool)> = want.iter().map(|(i, d)| (i.to_string(), *d)).collect();
+    assert_eq!(got, want);
+}

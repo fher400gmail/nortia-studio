@@ -21,6 +21,14 @@ fn app_info_reports_os_and_sidecar() {
     assert_eq!(info.version, "0.1.0");
     let json = serde_json::to_value(&info).unwrap();
     assert!(json.get("sidecar_available").is_some());
+    let on: Vec<&str> = json["default_on"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(on.len(), 13);
+    assert!(on.contains(&"cover") && !on.contains(&"apple_motion"));
     assert!(json.get("lame_available").is_none());
 }
 

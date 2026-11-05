@@ -4,7 +4,8 @@
    por http (p. ej. `python3 -m http.server`): los módulos ES y fetch no funcionan con file://.
    Querystring: ?backend=mock|tauri &lang=es|en &theme=light|dark &state=empty|normal|creating|done
                 &os=mac|win &still=1 &fast=1 &pop=adv|more|tree|detail &drag=1 &sidecar=0
-                (mock) &cover=1|rect &own=canvas,ytv,motion  → portada y material propio de ejemplo */
+                (mock) &off=tidal,apple_motion → ids de preset con default_on:false (por defecto apple_motion)
+                 &cover=1|rect &own=canvas,ytv,motion  → portada y material propio de ejemplo */
 import { backend } from './backend.js';
 import { loadLang, t, tn, getLang } from './i18n.js';
 import { isCancelled } from './flow.js';
@@ -19,13 +20,16 @@ const Data = (() => {
   const media = new Set(['portada', 'canvas', 'ytv', 'motion']);
   /* fichas que necesitan el sidecar de ffmpeg (MP3 y vídeo) */
   const needsSidecar = new Set(['mp3', 'canvas', 'ytv', 'motion']);
-  /* Apple Motion pesa y tarda: empieza apagada (default_on: false en presets.json) */
-  const defaultOn = id => id !== 'motion';
+  /* fichas encendidas al empezar: `default_on` de presets.json, que el motor da en app_info
+     (una sola fuente de verdad). Hasta que llega, todas; si no llega la lista, también. */
+  let onIds = null;
+  const setDefaults = list => { onIds = Array.isArray(list) ? new Set(list) : null; };
+  const defaultOn = id => !onIds || onIds.has(preset[id]);
   const defaults = () => new Set(ids.filter(defaultOn));
   const byPreset = Object.fromEntries(Object.entries(preset).map(([k, v]) => [v, k]));
   const ext = { flac: '.flac', wav: '.wav', mp3: '.mp3', mp4: '.mp4', jpg: '.jpg', png: '.png' };
   const SAMPLE = 'Vera Alcón - Luz de Noviembre (master v3).wav';
-  return { ids, preset, byPreset, ext, SAMPLE, media, needsSidecar, defaultOn, defaults };
+  return { ids, preset, byPreset, ext, SAMPLE, media, needsSidecar, defaultOn, defaults, setDefaults };
 })();
 
 /* ───────────── Icons ───────────── */
@@ -625,6 +629,8 @@ async function boot() {
   await backend.setLang(getLang()).catch(() => {});
   applyStaticText();
   S.info = await backend.appInfo().catch(() => S.info);
+  Data.setDefaults(S.info.default_on);
+  S.on = Data.defaults();
   S.outRoot = S.info.default_out_root || '';
   /* tema */
   const tb = $('#themeBtn'), paintTheme = () => tb.innerHTML = d.dataset.theme === 'dark' ? Icons.sun.replace('class="ic"', 'class="ic turn"') : Icons.moon.replace('class="ic"', 'class="ic turn"');

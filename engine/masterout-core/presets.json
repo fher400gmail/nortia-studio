@@ -49,7 +49,7 @@
     "status": "recommendation",
     "source_url": "https://digprjsurvey.amazon.com/csad/help/node/TgG1d8mPjGwf885hRP",
     "group": "streaming",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "url"
   },
   {
@@ -66,7 +66,7 @@
     "status": "recommendation",
     "source_url": "docs/investigacion/specs-plataformas-ronda2.md (sin fuente oficial: por verificar)",
     "group": "streaming",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "note"
   },
   {
@@ -83,7 +83,7 @@
     "status": "recommendation",
     "source_url": "docs/investigacion/specs-plataformas-ronda2.md (sin fuente oficial: por verificar)",
     "group": "streaming",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "note"
   },
   {
@@ -100,7 +100,7 @@
     "status": "recommendation",
     "source_url": "docs/investigacion/specs-plataformas-ronda2.md (sin fuente oficial: por verificar)",
     "group": "streaming",
-    "default_on": false,
+    "default_on": true,
     "min_bits": 16,
     "min_bits_reason_key": "youtube_music_needs_16bit",
     "source_kind": "note"
@@ -119,7 +119,7 @@
     "status": "confirmed",
     "source_url": "https://support.google.com/youtube/answer/1722171",
     "group": "extras",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "url"
   },
   {
@@ -155,7 +155,7 @@
     "status": "confirmed",
     "source_url": "https://support.distrokid.com/hc/en-us/articles/360013647753-",
     "group": "distributor",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "url"
   },
   {
@@ -172,7 +172,7 @@
     "status": "confirmed",
     "source_url": "https://support.tunecore.com/hc/en-us/articles/115006499327",
     "group": "distributor",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "url"
   },
   {
@@ -189,7 +189,7 @@
     "status": "confirmed",
     "source_url": "https://id3.org/id3v2.3.0",
     "group": "extras",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "url"
   },
   {
@@ -207,7 +207,7 @@
     "status": "recommendation",
     "source_url": "https://providersupport.spotify.com/article/audio-and-artwork-specifications",
     "group": "extras",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "url"
   },
   {
@@ -224,7 +224,7 @@
     "status": "confirmed",
     "source_url": "https://support.spotify.com/us/artists/article/canvas-guidelines/",
     "group": "extras",
-    "default_on": false,
+    "default_on": true,
     "source_kind": "url"
   },
   {

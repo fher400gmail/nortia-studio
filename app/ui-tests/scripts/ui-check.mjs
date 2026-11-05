@@ -105,6 +105,17 @@ async function run(lang) {
   await page.waitForSelector('.dzone b');
   assert.equal((await page.textContent('.dzone b')).trim(), tx.drop);
 
+  // default_on:false del motor: la ficha arranca apagada y «Lo necesario» la apaga de nuevo
+  await page.goto(q('&off=tidal,apple_motion&state=normal'));
+  await page.waitForSelector('html[data-ready]');
+  assert.equal(await page.locator('.chip[data-id=tidal]').getAttribute('aria-checked'), 'false', `${lang}: tidal empieza apagada`);
+  assert.equal(await page.locator('.chip[data-id=amazon]').getAttribute('aria-checked'), 'true');
+  assert.equal(await page.locator('.chip[data-id=motion]').getAttribute('aria-checked'), 'false', `${lang}: apple motion apagada por defecto`);
+  await page.click('.chip[data-id=tidal]');
+  assert.equal(await page.locator('.chip[data-id=tidal]').getAttribute('aria-checked'), 'true');
+  await page.click('[data-act=preset]');
+  assert.equal(await page.locator('.chip[data-id=tidal]').getAttribute('aria-checked'), 'false', `${lang}: el preset apaga las fichas default_on:false`);
+
   // sin ffmpeg: ficha deshabilitada con aviso
   await page.goto(q('&sidecar=0&state=normal'));
   await page.waitForSelector('html[data-ready]');

@@ -34,6 +34,9 @@ pub struct AppInfo {
     pub os: String,
     /// ffmpeg/ffprobe (vídeo y MP3) disponibles junto al ejecutable, en el entorno o en PATH.
     pub sidecar_available: bool,
+    /// Destinos que arrancan encendidos (`default_on` de presets.json): la interfaz no duplica la lista.
+    #[serde(default)]
+    pub default_on: Vec<String>,
     /// Carpeta de salida por defecto (lo decide Tauri; el puente no la conoce).
     pub default_out_root: Option<String>,
 }
@@ -43,6 +46,11 @@ pub fn app_info(version: &str, exe_dir: &Path, default_out_root: Option<String>)
         version: version.to_string(),
         os: os_name().to_string(),
         sidecar_available: masterout_core::media::discover(exe_dir).is_some(),
+        default_on: masterout_core::presets::all()
+            .into_iter()
+            .filter(|p| p.default_on)
+            .map(|p| p.id)
+            .collect(),
         default_out_root,
     }
 }

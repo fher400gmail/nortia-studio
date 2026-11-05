@@ -252,3 +252,11 @@ test('tauri_backend_passes_media_inputs_and_thumbnail_command', async () => {
     ['pick_file', { kind: 'media' }]
   ]);
 });
+
+test('mock_app_info_default_on_follows_presets_and_can_be_overridden', async () => {
+  const d = (await createMock().appInfo()).default_on;
+  assert.equal(d.length, ALL.length - 1);
+  assert.ok(!d.includes('apple_motion') && d.includes('spotify') && d.includes('cover'));
+  const d2 = (await createMock({ defaultOff: ['tidal', 'apple_motion'] }).appInfo()).default_on;
+  assert.ok(!d2.includes('tidal') && d2.includes('amazon'));
+});

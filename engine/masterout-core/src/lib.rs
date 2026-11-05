@@ -3,6 +3,7 @@
 
 pub mod audio;
 pub mod dither;
+pub mod flac;
 pub mod i18n;
 pub mod loudness;
 pub mod naming;

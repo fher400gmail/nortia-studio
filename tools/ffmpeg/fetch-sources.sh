@@ -26,8 +26,16 @@ else
   rm -f "$DEST/ffmpeg-devel.asc"
   echo "firma GPG verificada; SHA256 calculado: $GOT"
 fi
-curl_r -o "$DEST/lame-$LAME_VERSION.tar.gz" "$LAME_URL"
-[ "$(sha256_of "$DEST/lame-$LAME_VERSION.tar.gz")" = "$LAME_SHA256" ] \
-  || { echo "SHA256 de LAME no coincide" >&2; exit 1; }
+LAME_TAR="$DEST/lame-$LAME_VERSION.tar.gz"
+ok=0
+for url in "$LAME_URL" \
+  "https://sourceforge.net/projects/lame/files/lame/$LAME_VERSION/lame-$LAME_VERSION.tar.gz/download" \
+  "https://ftp.osuosl.org/pub/blfs/conglomeration/lame/lame-$LAME_VERSION.tar.gz" \
+  "https://fossies.org/linux/misc/lame-$LAME_VERSION.tar.gz"; do
+  echo "LAME: $url"
+  if curl -fsSL --retry 2 --retry-delay 3 -o "$LAME_TAR" "$url" && [ "$(sha256_of "$LAME_TAR")" = "$LAME_SHA256" ]; then ok=1; break; fi
+  echo "  descarte (error o SHA256 distinto)" >&2
+done
+[ "$ok" = 1 ] || { echo "no se pudo obtener LAME con SHA256 correcto" >&2; exit 1; }
 echo "SHA256 de LAME verificado"
 echo "$VER" > "$DEST/FFMPEG_VERSION"

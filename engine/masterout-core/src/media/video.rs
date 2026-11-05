@@ -4,15 +4,24 @@
 //! vectores golden) y se ejecutan con [`run_ffmpeg`] a través del sidecar.
 //!
 //! Restricciones del sidecar (`tools/ffmpeg/common.sh`, `--disable-everything`): solo
-//! están los filtros `scale,crop,zoompan,gblur,boxblur,overlay,format,fps,setsar,trim,
-//! atrim,aresample,aformat,anull,null,color,loop,pad`. Por eso NO se usan `split` ni
-//! `setpts`: la duración se limita con `-t`, el bucle con `-stream_loop`/`-loop`, y el
-//! fondo desenfocado de YouTube lee la portada dos veces como dos entradas.
+//! están los filtros `scale,crop,zoompan,gblur,overlay,format,fps,setsar,trim,atrim,
+//! aresample,aformat,anull,null,color,loop,pad` (`boxblur` es solo GPL: no está).
+//! Hoy no hay `split` ni `setpts`: la duración se limita con `-t`, el bucle con
+//! `-stream_loop`/`-loop`, y el fondo desenfocado de YouTube lee la portada dos veces como
+//! dos entradas (se mantiene así aunque `setpts`/`split`/`fade` se añadan al sidecar).
 //!
-//! Codificador H.264 por plataforma (ver `encoder_args`):
-//! * macOS: `h264_videotoolbox -allow_sw 1 -profile:v high`
-//! * Windows: `h264_mf -profile:v 100` (la constante `high` no existe en h264_mf; 100 = High)
-//! * Linux (solo pruebas/CI con ffmpeg del sistema): `libx264 -profile:v high`
+//! Color: todo el vídeo sale en Rec.709 de rango limitado, con conversión real
+//! (`scale=out_color_matrix=bt709:out_range=tv`) y etiquetas `bt709`.
+//!
+//! Codificador por plataforma (ver `encoder_args`):
+//! * H.264 macOS: `h264_videotoolbox -allow_sw 1 -profile:v high`
+//! * H.264 Windows: `h264_mf -profile:v 100` (la constante `high` no existe en h264_mf; 100 = High)
+//! * HEVC (Apple motion 3840×3840): macOS `hevc_videotoolbox -allow_sw 1 -profile:v main -tag:v hvc1`;
+//!   Windows `hevc_mf -profile:v 1 -tag:v hvc1` (1 = Main, numérico por la misma razón)
+//! * Linux (solo pruebas/CI con ffmpeg del sistema, nunca se distribuye): `libx264 -profile:v high`
+//!   también para "HEVC" (no hay codificador HEVC sin GPL)
+//!
+//! `run_ffmpeg` escribe las salidas `.mp4`/`.mov` a `<salida>.part` y renombra al terminar bien.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -137,7 +146,7 @@ fn looks_like_image(p: &Path) -> bool {
             .and_then(|e| e.to_str())
             .map(str::to_ascii_lowercase)
             .as_deref(),
-        Some("jpg" | "jpeg" | "png" | "webp")
+        Some("jpg" | "jpeg" | "png" | "webp" | "bmp" | "tiff" | "tif" | "gif" | "heic" | "heif")
     )
 }
 
@@ -151,10 +160,16 @@ fn is_still(src: &VideoSource, info: Option<&MediaInfo>) -> bool {
     }
 }
 
-/// Codificador H.264 del sistema, con sus flags por plataforma (incluye `-profile:v`).
-fn encoder_args(platform: Platform) -> Vec<String> {
-    let v: &[&str] = match platform {
-        Platform::MacOS => &[
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Codec {
+    H264,
+    Hevc,
+}
+
+/// Codificador del sistema, con sus flags por plataforma (incluye `-profile:v`).
+fn encoder_args(platform: Platform, codec: Codec) -> Vec<String> {
+    let v: &[&str] = match (platform, codec) {
+        (Platform::MacOS, Codec::H264) => &[
             "-c:v",
             "h264_videotoolbox",
             "-allow_sw",
@@ -162,10 +177,39 @@ fn encoder_args(platform: Platform) -> Vec<String> {
             "-profile:v",
             "high",
         ],
-        Platform::Windows => &["-c:v", "h264_mf", "-profile:v", "100"],
-        Platform::Linux => &["-c:v", "libx264", "-profile:v", "high"],
+        (Platform::MacOS, Codec::Hevc) => &[
+            "-c:v",
+            "hevc_videotoolbox",
+            "-allow_sw",
+            "1",
+            "-profile:v",
+            "main",
+            "-tag:v",
+            "hvc1",
+        ],
+        (Platform::Windows, Codec::H264) => &["-c:v", "h264_mf", "-profile:v", "100"],
+        (Platform::Windows, Codec::Hevc) => {
+            &["-c:v", "hevc_mf", "-profile:v", "1", "-tag:v", "hvc1"]
+        }
+        (Platform::Linux, _) => &["-c:v", "libx264", "-profile:v", "high"],
     };
     v.iter().map(|x| s(x)).collect()
+}
+
+/// Conversión real a Rec.709 de rango limitado, YUV 4:2:0.
+const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p";
+
+fn color_tags() -> Vec<String> {
+    [
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-colorspace",
+        "bt709",
+    ]
+    .map(s)
+    .to_vec()
 }
 
 /// Escala a cubrir `w×h` y recorta centrado (nunca deforma).
@@ -179,7 +223,7 @@ fn zoom_chain(pw: u32, ph: u32, w: u32, h: u32, n: u32, fps: u32) -> String {
     let zoom = format!("{:.2}", ZOOM_END - 1.0);
     let fit = cover_fit(pw, ph);
     format!(
-        "{fit},zoompan=z='1+{zoom}*on/{last}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={n}:s={w}x{h}:fps={fps}"
+        "{fit},zoompan=z='1+{zoom}*on/{last}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={n}:s={w}x{h}:fps={fps},{BT709}"
     )
 }
 
@@ -222,25 +266,17 @@ pub fn build_canvas_args(
         a.push(src.path().to_string_lossy().into_owned());
         // recorte 9:16 centrado (dimensiones pares) y escala final
         vf = format!(
-            "crop='trunc(min(iw,ih*{w}/{h})/2)*2':'trunc(min(ih,iw*{h}/{w})/2)*2',scale={w}:{h},setsar=1"
+            "crop='trunc(min(iw,ih*{w}/{h})/2)*2':'trunc(min(ih,iw*{h}/{w})/2)*2',scale={w}:{h},setsar=1,{BT709}"
         );
     }
     a.extend([s("-vf"), vf, s("-an"), s("-r"), spec.fps.to_string()]);
     if let Some(t) = t {
         a.extend([s("-t"), fmt_secs(t)]);
     }
-    a.extend(encoder_args(platform));
-    a.extend(
-        [
-            "-b:v",
-            "5M",
-            "-pix_fmt",
-            "yuv420p",
-            "-movflags",
-            "+faststart",
-        ]
-        .map(s),
-    );
+    a.extend(encoder_args(platform, Codec::H264));
+    a.extend(["-b:v", "5M", "-pix_fmt", "yuv420p"].map(s));
+    a.extend(color_tags());
+    a.extend(["-movflags", "+faststart"].map(s));
     a.push(out.to_string_lossy().into_owned());
     a
 }
@@ -277,7 +313,7 @@ pub fn build_youtube_args(
         a.extend([
             s("-filter_complex"),
             format!(
-                "[0:v]{},gblur=sigma=40[bg];[1:v]{}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]",
+                "[0:v]{},{BT709},gblur=sigma=40[bg];[1:v]{},{BT709}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]",
                 cover_fit(w, h),
                 cover_fit(1000, 1000)
             ),
@@ -291,7 +327,7 @@ pub fn build_youtube_args(
         a.extend([s("-stream_loop"), s("-1"), s("-i"), img, s("-i"), wav]);
         a.extend([
             s("-vf"),
-            cover_fit(w, h),
+            format!("{},{BT709}", cover_fit(w, h)),
             s("-map"),
             s("0:v:0"),
             s("-map"),
@@ -306,13 +342,10 @@ pub fn build_youtube_args(
         s("-bf"),
         s("2"),
     ]);
-    a.extend(encoder_args(platform));
-    a.extend([
-        s("-pix_fmt"),
-        s("yuv420p"),
-        s("-b:v"),
-        format!("{}k", spec.video_kbps),
-    ]);
+    a.extend(encoder_args(platform, Codec::H264));
+    a.extend([s("-pix_fmt"), s("yuv420p")]);
+    a.extend(color_tags());
+    a.extend([s("-b:v"), format!("{}k", spec.video_kbps)]);
     a.extend([
         s("-c:a"),
         s("aac"),
@@ -321,7 +354,17 @@ pub fn build_youtube_args(
         s("-ar"),
         spec.audio_rate.to_string(),
     ]);
-    a.extend(["-movflags", "+faststart", "-shortest"].map(s));
+    // sin edit lists (YouTube): los B-frames se compensan con offsets CTS negativos
+    a.extend(
+        [
+            "-use_editlist",
+            "0",
+            "-movflags",
+            "+faststart+negative_cts_offsets",
+            "-shortest",
+        ]
+        .map(s),
+    );
     a.push(out.to_string_lossy().into_owned());
     a
 }
@@ -340,7 +383,9 @@ pub fn build_apple_motion_args(
     let (w, h) = spec.size();
     let vf = if is_still(src, None) {
         a.extend([s("-i"), src.path().to_string_lossy().into_owned()]);
-        zoom_chain(w, h, w, h, frames(spec.seconds, spec.fps), spec.fps)
+        // prescale 2× en el vertical (zoompan redondea a píxel); el cuadrado 3840² va a 1×
+        let k = if spec.square { 1 } else { 2 };
+        zoom_chain(w * k, h * k, w, h, frames(spec.seconds, spec.fps), spec.fps)
     } else {
         a.extend([
             s("-stream_loop"),
@@ -348,7 +393,7 @@ pub fn build_apple_motion_args(
             s("-i"),
             src.path().to_string_lossy().into_owned(),
         ]);
-        cover_fit(w, h)
+        format!("{},{BT709}", cover_fit(w, h))
     };
     a.extend([
         s("-vf"),
@@ -359,26 +404,21 @@ pub fn build_apple_motion_args(
         s("-t"),
         fmt_secs(spec.seconds),
     ]);
-    a.extend(encoder_args(platform));
+    // 3840×3840 supera el nivel máximo de H.264: HEVC; 2048×2732 sigue en H.264
+    let codec = if spec.square {
+        Codec::Hevc
+    } else {
+        Codec::H264
+    };
+    a.extend(encoder_args(platform, codec));
     a.extend([
         s("-b:v"),
         format!("{}M", spec.mbps),
         s("-pix_fmt"),
         s("yuv420p"),
     ]);
-    a.extend(
-        [
-            "-color_primaries",
-            "bt709",
-            "-color_trc",
-            "bt709",
-            "-colorspace",
-            "bt709",
-            "-movflags",
-            "+faststart",
-        ]
-        .map(s),
-    );
+    a.extend(color_tags());
+    a.extend(["-movflags", "+faststart"].map(s));
     a.push(out.to_string_lossy().into_owned());
     a
 }
@@ -398,12 +438,10 @@ fn is_encoder_unavailable(stderr: &str) -> bool {
     [
         "unknown encoder",
         "encoder not found",
-        "error while opening encoder",
-        "videotoolbox",
-        "h264_mf",
-        "mfplat",
-        "mediafoundation",
-        "mft",
+        "no such encoder",
+        "not supported by this device",
+        "not supported by this platform",
+        "not supported on this platform",
     ]
     .iter()
     .any(|k| l.contains(k))
@@ -415,7 +453,9 @@ fn tail(stderr: &str) -> String {
     t.chars().take(800).collect()
 }
 
-/// Clasifica un fallo de ffmpeg por su stderr.
+/// Clasifica un fallo de ffmpeg por su stderr. Solo "el codificador no existe / no está
+/// soportado en este equipo" es `err.encoder_unavailable`; el resto, `err.ffmpeg_failed`
+/// (con el detalle del stderr, p. ej. "Error while opening encoder").
 pub fn classify_failure(stderr: &str) -> AudioError {
     if is_encoder_unavailable(stderr) {
         AudioError::UnsupportedFormat(format!("err.encoder_unavailable: {}", tail(stderr)))
@@ -429,38 +469,88 @@ fn kill(child: &mut Child) {
     let _ = child.wait();
 }
 
-/// Ejecuta ffmpeg con `args`. Si `cancel()` pasa a `true` (se consulta cada 100 ms) mata el
-/// proceso y devuelve `AudioError::Cancelled`. Un fallo es por trabajo: `err.encoder_unavailable`
-/// o `err.ffmpeg_failed`; sidecar inexistente o no ejecutable: `err.sidecar_missing`.
+/// Máximo de stderr que se conserva (los últimos bytes).
+const STDERR_KEEP: usize = 16 * 1024;
+
+/// Drena el stderr conservando solo los últimos `STDERR_KEEP` bytes.
+fn drain_tail(mut pipe: impl Read) -> String {
+    let mut keep: Vec<u8> = Vec::new();
+    let mut buf = [0u8; 4096];
+    while let Ok(n) = pipe.read(&mut buf) {
+        if n == 0 {
+            break;
+        }
+        keep.extend_from_slice(&buf[..n]);
+        if keep.len() > 2 * STDERR_KEEP {
+            keep.drain(..keep.len() - STDERR_KEEP);
+        }
+    }
+    if keep.len() > STDERR_KEEP {
+        keep.drain(..keep.len() - STDERR_KEEP);
+    }
+    String::from_utf8_lossy(&keep).into_owned()
+}
+
+/// Si el último argumento es una salida de vídeo (`.mp4`/`.mov`/`.m4v`), devuelve su ruta.
+fn video_output(args: &[String]) -> Option<PathBuf> {
+    let p = Path::new(args.last()?);
+    let ext = p.extension()?.to_str()?.to_ascii_lowercase();
+    matches!(ext.as_str(), "mp4" | "mov" | "m4v").then(|| p.to_path_buf())
+}
+
+fn part_path(out: &Path) -> PathBuf {
+    let mut s = out.as_os_str().to_owned();
+    s.push(".part");
+    PathBuf::from(s)
+}
+
+/// Ejecuta ffmpeg con `args`. Si el último argumento es una salida `.mp4`/`.mov`, se codifica a
+/// `<salida>.part` (con `-f mp4`) y se renombra al terminar bien; en error o cancelación el
+/// `.part` se borra, así que nunca queda un archivo a medias.
+/// Si `cancel()` pasa a `true` (se consulta cada 100 ms) mata el proceso y devuelve
+/// `AudioError::Cancelled`. Un fallo es por trabajo: `err.encoder_unavailable` o
+/// `err.ffmpeg_failed`; sidecar inexistente (NotFound): `err.sidecar_missing`; otros fallos
+/// al lanzarlo: `err.ffmpeg_failed`.
 pub fn run_ffmpeg(
     sidecar: &SidecarPaths,
     args: &[String],
     cancel: &dyn Fn() -> bool,
 ) -> Result<(), AudioError> {
+    let target = video_output(args);
+    let mut real: Vec<String> = args.to_vec();
+    let part = target.as_deref().map(part_path);
+    if let Some(part) = &part {
+        let n = real.len();
+        real[n - 1] = part.to_string_lossy().into_owned();
+        real.insert(n - 1, "mp4".into());
+        real.insert(n - 1, "-f".into());
+    }
+    let cleanup = || {
+        if let Some(p) = &part {
+            let _ = std::fs::remove_file(p);
+        }
+    };
     let mut cmd = Command::new(&sidecar.ffmpeg);
-    cmd.args(args)
+    cmd.args(&real)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
     no_window(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| {
-        AudioError::UnsupportedFormat(format!(
-            "err.sidecar_missing: {}: {e}",
-            sidecar.ffmpeg.display()
-        ))
+        let key = if e.kind() == std::io::ErrorKind::NotFound {
+            "err.sidecar_missing"
+        } else {
+            "err.ffmpeg_failed"
+        };
+        AudioError::UnsupportedFormat(format!("{key}: {}: {e}", sidecar.ffmpeg.display()))
     })?;
-    let mut pipe = child.stderr.take();
-    let reader = thread::spawn(move || {
-        let mut buf = Vec::new();
-        if let Some(p) = pipe.as_mut() {
-            let _ = p.read_to_end(&mut buf);
-        }
-        String::from_utf8_lossy(&buf).into_owned()
-    });
+    let pipe = child.stderr.take();
+    let reader = thread::spawn(move || pipe.map(drain_tail).unwrap_or_default());
     let status = loop {
         if cancel() {
             kill(&mut child);
             let _ = reader.join();
+            cleanup();
             return Err(AudioError::Cancelled);
         }
         match child.try_wait() {
@@ -469,16 +559,23 @@ pub fn run_ffmpeg(
             Err(e) => {
                 kill(&mut child);
                 let _ = reader.join();
+                cleanup();
                 return Err(AudioError::Io(e));
             }
         }
     };
     let stderr = reader.join().unwrap_or_default();
-    if status.success() {
-        Ok(())
-    } else {
-        Err(classify_failure(&stderr))
+    if !status.success() {
+        cleanup();
+        return Err(classify_failure(&stderr));
     }
+    if let (Some(part), Some(out)) = (&part, &target) {
+        if let Err(e) = std::fs::rename(part, out) {
+            cleanup();
+            return Err(AudioError::Io(e));
+        }
+    }
+    Ok(())
 }
 
 pub use super::probe::probe;

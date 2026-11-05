@@ -20,6 +20,8 @@ pub struct MediaInfo {
     pub fps: f64,
     pub video_codec: Option<String>,
     pub video_profile: Option<String>,
+    /// `color_space` de ffprobe (p. ej. `bt709`).
+    pub color_space: Option<String>,
     pub audio_codec: Option<String>,
     pub audio_sample_rate: Option<u32>,
     pub audio_bitrate: Option<u32>,
@@ -104,6 +106,9 @@ pub fn parse_probe_json(json: &str) -> Result<MediaInfo, AudioError> {
             .and_then(|s| s["codec_name"].as_str())
             .map(String::from),
         video_profile: video.and_then(|s| s["profile"].as_str()).map(String::from),
+        color_space: video
+            .and_then(|s| s["color_space"].as_str())
+            .map(String::from),
         audio_codec: audio
             .and_then(|s| s["codec_name"].as_str())
             .map(String::from),
@@ -173,10 +178,12 @@ pub fn probe(sidecar: &SidecarPaths, path: &Path) -> Result<MediaInfo, AudioErro
     .stderr(Stdio::piped());
     super::video::no_window(&mut cmd);
     let out = cmd.output().map_err(|e| {
-        AudioError::UnsupportedFormat(format!(
-            "err.sidecar_missing: {}: {e}",
-            sidecar.ffprobe.display()
-        ))
+        let key = if e.kind() == std::io::ErrorKind::NotFound {
+            "err.sidecar_missing"
+        } else {
+            "err.ffmpeg_failed"
+        };
+        AudioError::UnsupportedFormat(format!("{key}: {}: {e}", sidecar.ffprobe.display()))
     })?;
     if !out.status.success() {
         let msg = String::from_utf8_lossy(&out.stderr);
@@ -194,7 +201,7 @@ mod tests {
     use super::*;
 
     const MP4: &str = r#"{"streams":[
-      {"codec_type":"video","codec_name":"h264","profile":"High","width":1920,"height":1080,"r_frame_rate":"30/1"},
+      {"codec_type":"video","codec_name":"h264","profile":"High","width":1920,"height":1080,"r_frame_rate":"30/1","color_space":"bt709"},
       {"codec_type":"audio","codec_name":"aac","sample_rate":"48000","bit_rate":"232000"}],
       "format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2","duration":"8.020000"}}"#;
 
@@ -204,6 +211,7 @@ mod tests {
         assert_eq!((i.width, i.height), (1920, 1080));
         assert!((i.fps - 30.0).abs() < 1e-9 && (i.duration - 8.02).abs() < 1e-9);
         assert_eq!(i.video_profile.as_deref(), Some("High"));
+        assert_eq!(i.color_space.as_deref(), Some("bt709"));
         assert_eq!(i.audio_sample_rate, Some(48000));
         assert!(i.has_audio && i.has_video && !i.is_still);
         assert_eq!(i.nb_streams, 2);

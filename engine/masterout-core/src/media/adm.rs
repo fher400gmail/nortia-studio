@@ -1,5 +1,5 @@
 //! Validación Apple Digital Masters (solo macOS): máster -> CAF con Sound Check -> AAC 256 kbps
-//! -> `afclip` cuenta las muestras con clipping del AAC decodificado.
+//! -> se decodifica a WAV float -> `afclip` cuenta las muestras con clipping del AAC decodificado.
 //!
 //! Flujo verificado (docs/skills-baseline/verificacion-2026-11-05.md, bloque C, pto 7):
 //!
@@ -7,8 +7,8 @@
 //! afconvert master.wav intermediate.caf -d 0 -f caff --soundcheck-generate
 //!   (al bajar de tasa: -d LEF32@<tasa> ... --src-complexity bats -r 127)
 //! afconvert intermediate.caf final.m4a -d aac -f m4af -u pgcm 2 --soundcheck-read -b 256000 -q 127 -s 2
-//! afconvert final.m4a decode.wav -d LEI24 -f WAVE
-//! afclip final.m4a
+//! afconvert final.m4a decode.wav -d LEF32 -f WAVE
+//! afclip decode.wav
 //! ```
 //!
 //! El AAC de ADM se codifica como mucho a 48 kHz: familia 44,1 kHz -> 44100; el resto -> 48000.
@@ -101,9 +101,14 @@ pub fn build_adm_commands(master_wav: &Path, workdir: &Path, master_rate: u32) -
         "-s",
         "2",
     ]));
-    let mut step3 = vec!["afconvert".to_string(), m4a.clone(), dec];
-    step3.extend(s(&["-d", "LEI24", "-f", "WAVE"]));
-    vec![step1, step2, step3, vec!["afclip".to_string(), m4a]]
+    let mut step3 = vec!["afconvert".to_string(), m4a, dec];
+    step3.extend(s(&["-d", "LEF32", "-f", "WAVE"]));
+    vec![
+        step1,
+        step2,
+        step3,
+        vec!["afclip".to_string(), p(&workdir.join("decode.wav"))],
+    ]
 }
 
 /// Número de muestras con clipping según la salida real de `afclip` (macOS); `None` si no se
@@ -241,9 +246,16 @@ pub fn validate_with_tools(
     workdir: &Path,
     cancel: &dyn Fn() -> bool,
 ) -> AdmReport {
-    let rate = wav::read(master_wav)
-        .map(|b| b.sample_rate)
-        .unwrap_or(48_000);
+    // Solo la cabecera (no se decodifica el máster entero); sin tasa no se adivina.
+    let rate = match wav::probe(master_wav) {
+        Ok(i) => i.sample_rate,
+        Err(e) => {
+            return AdmReport::unavailable(
+                "reason.adm_failed",
+                format!("cannot read the master header: {e}"),
+            )
+        }
+    };
     if std::fs::create_dir_all(workdir).is_err() {
         return AdmReport::unavailable("reason.adm_failed", String::new());
     }
@@ -266,8 +278,7 @@ pub fn validate_with_tools(
             Run::Cancelled => return AdmReport::unavailable("reason.adm_cancelled", log),
             Run::Done(ok, text) => {
                 log.push_str(&text);
-                // la descodificación a WAV es informativa: su fallo no impide contar clips
-                if !ok && i != 2 {
+                if !ok {
                     return AdmReport::unavailable("reason.adm_failed", log);
                 }
                 if i == 3 {

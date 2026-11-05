@@ -56,12 +56,13 @@ fn golden_commands_44k_and_48k_have_no_rate_conversion() {
                 "/w/final.m4a",
                 "/w/decode.wav",
                 "-d",
-                "LEI24",
+                "LEF32",
                 "-f",
                 "WAVE"
             ])
         );
-        assert_eq!(c[3], strs(&["afclip", "/w/final.m4a"]));
+        // afclip mide el WAV decodificado (float: el exceso entre muestras no se recorta)
+        assert_eq!(c[3], strs(&["afclip", "/w/decode.wav"]));
     }
 }
 
@@ -215,6 +216,62 @@ mod fake_tools {
         let r = run("echo ' -- no samples clipped --'", "exit 0");
         assert_eq!(r.status, AdmStatus::Ok);
         assert!(r.aac_path.is_some());
+    }
+
+    #[test]
+    fn afclip_runs_on_the_decoded_wav_and_decode_failure_is_fatal() {
+        let ok = run(
+            "case \"$1\" in *decode.wav) [ -f \"$1\" ] && echo ' -- no samples clipped --';; esac",
+            "touch \"$2\"",
+        );
+        assert_eq!(ok.status, AdmStatus::Ok, "{}", ok.log);
+        let r = run(
+            "echo ' -- no samples clipped --'",
+            "case \"$*\" in *\"-d LEF32 \"*) exit 1;; esac; touch \"$2\"",
+        );
+        assert_eq!(
+            r.status,
+            AdmStatus::Unavailable {
+                reason_key: "reason.adm_failed".into()
+            }
+        );
+    }
+
+    #[test]
+    fn rate_comes_from_the_header_and_unreadable_wav_is_a_failure() {
+        let d = tempfile::tempdir().unwrap();
+        let conv = script(d.path(), "afconvert", "touch \"$2\"");
+        let clip = script(d.path(), "afclip", "echo ' -- no samples clipped --'");
+        let wav96 = d.path().join("m96.wav");
+        let ch = vec![0i32; 9600];
+        masterout_core::wav::write(
+            &wav96,
+            &[ch.clone(), ch],
+            96_000,
+            &masterout_core::wav::WavWriteOptions {
+                bits: 24,
+                metadata: None,
+            },
+        )
+        .unwrap();
+        let r = validate_with_tools(&conv, &clip, &wav96, &d.path().join("w"), &|| false);
+        assert_eq!(r.status, AdmStatus::Ok, "{}", r.log);
+        assert!(
+            r.log.contains("LEF32@48000") && r.log.contains("bats"),
+            "{}",
+            r.log
+        );
+        // cabecera ilegible: no se adivina 48 kHz
+        let bad = d.path().join("bad.wav");
+        std::fs::write(&bad, b"no es un wav").unwrap();
+        let r = validate_with_tools(&conv, &clip, &bad, &d.path().join("w2"), &|| false);
+        assert_eq!(
+            r.status,
+            AdmStatus::Unavailable {
+                reason_key: "reason.adm_failed".into()
+            }
+        );
+        assert!(!r.log.is_empty());
     }
 
     #[test]

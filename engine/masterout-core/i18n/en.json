@@ -33,5 +33,12 @@
   "sheet.copyright": "Copyright",
   "sheet.duration": "Duration",
   "sheet.master": "Master",
-  "sheet.seconds": "s"
+  "sheet.seconds": "s",
+  "mp3.comment": "nortia. studio - master check",
+  "export.err.lame_missing": "lame not found",
+  "export.err.lame_failed": "lame exited with {status}: {detail}",
+  "export.err.container": "unsupported container: {ext}",
+  "export.err.threadpool": "could not start the worker threads: {detail}",
+  "export.err.id3": "could not write ID3 tags: {detail}",
+  "export.err.documents": "could not write the delivery documents: {detail}"
 }

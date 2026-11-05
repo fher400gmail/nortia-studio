@@ -33,5 +33,12 @@
   "sheet.copyright": "Copyright",
   "sheet.duration": "Duración",
   "sheet.master": "Máster",
-  "sheet.seconds": "s"
+  "sheet.seconds": "s",
+  "mp3.comment": "nortia. studio - master check",
+  "export.err.lame_missing": "no se encontró lame",
+  "export.err.lame_failed": "lame terminó con {status}: {detail}",
+  "export.err.container": "contenedor no soportado: {ext}",
+  "export.err.threadpool": "no se pudieron iniciar los hilos de trabajo: {detail}",
+  "export.err.id3": "no se pudieron escribir las etiquetas ID3: {detail}",
+  "export.err.documents": "no se pudieron escribir los documentos de la entrega: {detail}"
 }

@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 # `app` enlaza Tauri (comandos, ventana). Sin ella el crate solo contiene la lógica pura
-# (lame, locale, humo) y se puede probar donde no hay GTK/WebKit:
+# (sidecar, locale, humo) y se puede probar donde no hay GTK/WebKit:
 #   cargo test --no-default-features
 default = ["app"]
 app = [

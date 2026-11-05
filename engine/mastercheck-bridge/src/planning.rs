@@ -1,11 +1,13 @@
 //! Plan de entrega para la interfaz: qué se va a producir y qué destinos no están disponibles.
 
 use crate::dto::{JobDto, MasterDto, PlanDto, ReleaseMetaDto};
+use masterout_core::export::default_sidecar;
 use masterout_core::i18n::{t, Lang};
 use masterout_core::loudness::{LoudnessReport, Verdict};
 use masterout_core::naming;
-use masterout_core::plan::{self, MasterInfo, ReleaseMeta, Resolved};
+use masterout_core::plan::{self, MasterInfo, MediaInputs, ReleaseMeta, Resolved};
 use masterout_core::presets;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Documentos de cada entrega (README, informe, ficha CSV y TXT).
@@ -31,6 +33,19 @@ pub fn to_release_meta(meta: &ReleaseMetaDto) -> ReleaseMeta {
         label: non_empty(&meta.label),
         copyright: non_empty(&meta.copyright),
         cover: non_empty(&meta.cover_path).map(PathBuf::from),
+    }
+}
+
+/// Material propio del motor desde el DTO: la portada de los metadatos y las rutas por destino
+/// (las vacías se ignoran).
+pub fn to_media_inputs(meta: &ReleaseMetaDto, inputs: &HashMap<String, String>) -> MediaInputs {
+    MediaInputs {
+        cover: non_empty(&meta.cover_path).map(PathBuf::from),
+        per_preset: inputs
+            .iter()
+            .filter(|(_, p)| !p.trim().is_empty())
+            .map(|(id, p)| (id.clone(), PathBuf::from(p.trim())))
+            .collect(),
     }
 }
 
@@ -62,11 +77,32 @@ fn verdict_parts(v: &Verdict, lang: Lang) -> (&'static str, String) {
     }
 }
 
+/// Plan de la entrega. Comprueba si el sidecar de ffmpeg está disponible en este equipo.
 pub fn plan(
     master: &MasterDto,
     meta: &ReleaseMetaDto,
     active_ids: &[String],
+    media_inputs: &HashMap<String, String>,
     lang: Lang,
+) -> PlanDto {
+    plan_with(
+        master,
+        meta,
+        active_ids,
+        media_inputs,
+        lang,
+        default_sidecar().is_some(),
+    )
+}
+
+/// Como [`plan`], con la disponibilidad del sidecar indicada (para probar sin ffmpeg).
+pub fn plan_with(
+    master: &MasterDto,
+    meta: &ReleaseMetaDto,
+    active_ids: &[String],
+    media_inputs: &HashMap<String, String>,
+    lang: Lang,
+    sidecar: bool,
 ) -> PlanDto {
     let info = master_info(master);
     let mut rmeta = to_release_meta(meta);
@@ -83,13 +119,21 @@ pub fn plan(
     let ids: Vec<&str> = active_ids.iter().map(String::as_str).collect();
     let all = presets::all();
 
-    let jobs: Vec<JobDto> = plan::resolve_in(&info, &rmeta, &ids, lang)
+    let media = to_media_inputs(meta, media_inputs);
+    let jobs: Vec<JobDto> = plan::resolve_in(&info, &rmeta, &ids, &media, lang, sidecar)
         .into_iter()
         .map(|r| match r {
             Resolved::Job(j) => {
                 let (verdict, verdict_text) = verdict_parts(&j.verdict, lang);
                 JobDto {
-                    estimated_bytes: plan::estimate_bytes(&j, info.frames, info.channels),
+                    estimated_bytes: plan::estimate_bytes(
+                        &j,
+                        info.frames,
+                        info.channels,
+                        info.sample_rate,
+                    ),
+                    warnings: j.warnings.iter().map(|w| t(lang, w)).collect(),
+                    extra_files: j.extra_files.clone(),
                     preset_id: j.preset_id,
                     subfolder: j.subfolder,
                     file_name: j.file_name,
@@ -124,12 +168,15 @@ pub fn plan(
                     estimated_bytes: 0,
                     enabled: false,
                     disabled_reason: Some(t(lang, &reason_key)),
+                    warnings: Vec::new(),
+                    extra_files: Vec::new(),
                 }
             }
         })
         .collect();
 
     let enabled = jobs.iter().filter(|j| j.enabled).count() as u32;
+    let extra_files = jobs.iter().map(|j| j.extra_files.len() as u32).sum::<u32>();
     PlanDto {
         delivery_folder: naming::delivery_folder(
             &rmeta.artist,
@@ -137,7 +184,7 @@ pub fn plan(
             rmeta.version.as_deref(),
         ),
         total_bytes: jobs.iter().map(|j| j.estimated_bytes).sum(),
-        total_files: enabled + DOCUMENTS,
+        total_files: enabled + extra_files + DOCUMENTS,
         jobs,
     }
 }

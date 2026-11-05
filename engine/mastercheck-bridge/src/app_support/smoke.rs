@@ -1,7 +1,6 @@
 //! Gancho de humo sin ventana: `MASTERCHECK_SMOKE="<wav>;<carpeta_salida>"`.
 //! Analiza, planifica y exporta por el puente; imprime el `DeliveryDto` en JSON.
 
-use super::lame::resolve_lame_path;
 use crate::analysis::analyze;
 use crate::dto::{DeliveryDto, ExportRequestDto, ReleaseMetaDto};
 use crate::errors::BridgeError;
@@ -25,13 +24,13 @@ pub fn parse_spec(spec: &str) -> Result<(PathBuf, PathBuf), String> {
     Ok((PathBuf::from(wav), PathBuf::from(out)))
 }
 
-/// Destinos que ejercita el humo. MP3 solo si hay `lame` junto al ejecutable o en `PATH`.
+/// Destinos que ejercita el humo. MP3 solo si hay sidecar (ffmpeg) junto al ejecutable o en `PATH`.
 fn smoke_ids(exe_dir: &Path) -> Vec<String> {
     let mut ids: Vec<String> = ["spotify", "apple_adm", "deezer", "distributor_std"]
         .iter()
         .map(|s| s.to_string())
         .collect();
-    if resolve_lame_path(exe_dir).is_some() {
+    if masterout_core::media::discover(exe_dir).is_some() {
         ids.push("mp3_promo".into());
     }
     ids
@@ -58,7 +57,7 @@ pub fn run_smoke(spec: &str, lang: Lang, exe_dir: &Path) -> Result<DeliveryDto, 
         ..Default::default()
     };
     let ids = smoke_ids(exe_dir);
-    let planned = plan(&master, &meta, &ids, lang);
+    let planned = plan(&master, &meta, &ids, &Default::default(), lang);
     let active: Vec<String> = planned
         .jobs
         .iter()
@@ -70,6 +69,7 @@ pub fn run_smoke(spec: &str, lang: Lang, exe_dir: &Path) -> Result<DeliveryDto, 
         out_root: out.to_string_lossy().into_owned(),
         meta,
         active_ids: active,
+        media_inputs: Default::default(),
     };
     let delivery = export(&req, lang, &|_| {}, Arc::new(AtomicBool::new(false)))?;
     if !delivery.failed.is_empty() {

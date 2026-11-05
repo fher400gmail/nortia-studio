@@ -30,10 +30,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Instalar lame y ffmpeg
+      - name: Instalar ffmpeg (pruebas de MP3, imagen y vídeo)
         timeout-minutes: 8
         continue-on-error: true
-        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y lame ffmpeg
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y ffmpeg
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features
@@ -52,10 +52,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Instalar lame y ffmpeg
+      - name: Instalar ffmpeg (pruebas de MP3, imagen y vídeo)
         timeout-minutes: 8
         continue-on-error: true
-        run: brew install lame ffmpeg
+        run: brew install ffmpeg
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features
@@ -73,11 +73,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Instalar lame y ffmpeg
+      - name: Instalar ffmpeg (pruebas de MP3, imagen y vídeo)
         timeout-minutes: 8
         continue-on-error: true
         shell: bash
-        run: choco install lame ffmpeg -y
+        run: choco install ffmpeg -y
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features

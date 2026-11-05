@@ -1,73 +1,8 @@
-use mastercheck_bridge::app_support::lame::{path_with_dir_first, resolve_lame_in};
 use mastercheck_bridge::app_support::smoke::{parse_spec, run_and_report, run_smoke};
 use mastercheck_bridge::app_support::{app_info, busy_error, is_image_path, map_locale, os_name};
 use mastercheck_bridge::dto::{DeliveryDto, MasterDto, PlanDto};
 use masterout_core::i18n::Lang;
-use std::ffi::OsString;
 use std::path::Path;
-
-fn fake_lame(dir: &Path) -> std::path::PathBuf {
-    std::fs::create_dir_all(dir).unwrap();
-    let p = dir.join(if cfg!(windows) { "lame.exe" } else { "lame" });
-    std::fs::write(&p, b"#!/bin/sh\n").unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    p
-}
-
-#[test]
-fn resolve_lame_path_prefers_bundle_dir() {
-    let tmp = tempfile::tempdir().unwrap();
-    let exe_dir = tmp.path().join("Mi App ñ");
-    let bundled = fake_lame(&exe_dir);
-    let other = fake_lame(&tmp.path().join("otra"));
-    let path_var: OsString = std::env::join_paths([tmp.path().join("otra")]).unwrap();
-    assert_eq!(resolve_lame_in(&exe_dir, Some(&path_var)), Some(bundled));
-    assert!(other.is_file());
-}
-
-#[test]
-fn resolve_lame_path_finds_macos_resources_dir() {
-    let tmp = tempfile::tempdir().unwrap();
-    let exe_dir = tmp.path().join("master check.app/Contents/MacOS");
-    std::fs::create_dir_all(&exe_dir).unwrap();
-    let res = fake_lame(&tmp.path().join("master check.app/Contents/Resources"));
-    assert_eq!(resolve_lame_in(&exe_dir, None), Some(res));
-}
-
-#[test]
-fn resolve_lame_path_falls_back_to_path_env() {
-    let tmp = tempfile::tempdir().unwrap();
-    let exe_dir = tmp.path().join("vacio");
-    std::fs::create_dir_all(&exe_dir).unwrap();
-    let in_path = fake_lame(&tmp.path().join("bin"));
-    let path_var = std::env::join_paths([tmp.path().join("nada"), tmp.path().join("bin")]).unwrap();
-    assert_eq!(resolve_lame_in(&exe_dir, Some(&path_var)), Some(in_path));
-    assert_eq!(resolve_lame_in(&exe_dir, None), None);
-}
-
-#[cfg(unix)]
-#[test]
-fn resolve_lame_path_ignores_non_executable() {
-    let tmp = tempfile::tempdir().unwrap();
-    let p = fake_lame(tmp.path());
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o644)).unwrap();
-    assert_eq!(resolve_lame_in(tmp.path(), None), None);
-}
-
-#[test]
-fn path_with_dir_first_puts_dir_first() {
-    let joined = path_with_dir_first(
-        Path::new("/a/b"),
-        Some(std::env::join_paths(["/x", "/y"]).unwrap()),
-    );
-    let parts: Vec<_> = std::env::split_paths(&joined).collect();
-    assert_eq!(parts, [Path::new("/a/b"), Path::new("/x"), Path::new("/y")]);
-}
 
 #[test]
 fn system_lang_maps_locale() {
@@ -79,13 +14,14 @@ fn system_lang_maps_locale() {
 }
 
 #[test]
-fn app_info_reports_os_and_lame() {
+fn app_info_reports_os_and_sidecar() {
     let tmp = tempfile::tempdir().unwrap();
     let info = app_info("0.1.0", tmp.path(), Some("/x".into()));
     assert_eq!(info.os, os_name());
     assert_eq!(info.version, "0.1.0");
     let json = serde_json::to_value(&info).unwrap();
-    assert!(json.get("lame_available").is_some());
+    assert!(json.get("sidecar_available").is_some());
+    assert!(json.get("lame_available").is_none());
 }
 
 #[test]

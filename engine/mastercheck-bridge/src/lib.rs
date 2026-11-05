@@ -9,6 +9,7 @@ pub mod errors;
 pub mod exporting;
 pub mod lang;
 pub mod planning;
+pub mod thumbnail;
 
 /// Idioma del motor, para quien use el puente sin depender de `masterout-core`.
 pub use masterout_core::i18n::Lang as EngineLang;

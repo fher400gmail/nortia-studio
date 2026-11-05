@@ -1,7 +1,6 @@
 //! Lógica de la app de escritorio que no depende de Tauri, para probarla en cualquier
 //! sitio (el contenedor de desarrollo no puede compilar Tauri). `app/src-tauri` la usa tal cual.
 
-pub mod lame;
 pub mod smoke;
 
 use crate::errors::BridgeError;
@@ -33,7 +32,8 @@ pub fn os_name() -> &'static str {
 pub struct AppInfo {
     pub version: String,
     pub os: String,
-    pub lame_available: bool,
+    /// ffmpeg/ffprobe (vídeo y MP3) disponibles junto al ejecutable, en el entorno o en PATH.
+    pub sidecar_available: bool,
     /// Carpeta de salida por defecto (lo decide Tauri; el puente no la conoce).
     pub default_out_root: Option<String>,
 }
@@ -42,7 +42,7 @@ pub fn app_info(version: &str, exe_dir: &Path, default_out_root: Option<String>)
     AppInfo {
         version: version.to_string(),
         os: os_name().to_string(),
-        lame_available: lame::resolve_lame_path(exe_dir).is_some(),
+        sidecar_available: masterout_core::media::discover(exe_dir).is_some(),
         default_out_root,
     }
 }
@@ -52,7 +52,10 @@ pub fn busy_error(lang: EngineLang) -> BridgeError {
     BridgeError::from_key("err.busy", lang, None)
 }
 
-/// Solo imágenes (`.png`, `.jpg`, `.jpeg`) pueden autorizarse por `allow_asset`.
+/// Imágenes y vídeos admitidos en las fichas (`allow_asset` y las miniaturas).
+pub use crate::thumbnail::is_media_path;
+
+/// Solo imágenes (`.png`, `.jpg`, `.jpeg`).
 pub fn is_image_path(path: &str) -> bool {
     Path::new(path)
         .extension()

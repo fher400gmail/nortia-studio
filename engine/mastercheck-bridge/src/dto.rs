@@ -1,6 +1,7 @@
 //! Tipos de intercambio con la interfaz. Los nombres de campo son los de Rust (snake_case).
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MasterDto {
@@ -58,6 +59,13 @@ pub struct JobDto {
     pub enabled: bool,
     /// Localizado.
     pub disabled_reason: Option<String>,
+    /// Avisos del destino (p. ej. de la portada), localizados.
+    #[serde(default)]
+    pub warnings: Vec<String>,
+    /// Nombres de los archivos adicionales del destino (PNG de la portada, segundo tamaño de
+    /// Apple Motion), en la misma subcarpeta.
+    #[serde(default)]
+    pub extra_files: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -76,6 +84,9 @@ pub struct ExportRequestDto {
     pub out_root: String,
     pub meta: ReleaseMetaDto,
     pub active_ids: Vec<String>,
+    /// Material propio por destino: `preset_id` -> ruta de una imagen o un vídeo.
+    #[serde(default)]
+    pub media_inputs: HashMap<String, String>,
 }
 
 /// Evento de progreso. Según `kind`, solo se rellenan algunos campos:

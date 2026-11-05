@@ -1,13 +1,14 @@
 //! Comandos Tauri: capa finísima sobre `mastercheck-bridge`.
 
-use mastercheck_bridge::app_support::{self, busy_error, is_image_path, AppInfo};
+use mastercheck_bridge::app_support::{self, busy_error, is_media_path, AppInfo};
 use mastercheck_bridge::dto::{
     DeliveryDto, ExportRequestDto, MasterDto, PlanDto, ReleaseMetaDto, WaveformDto,
 };
 use mastercheck_bridge::errors::BridgeError;
-use mastercheck_bridge::{analysis, exporting, planning};
+use mastercheck_bridge::{analysis, exporting, planning, thumbnail};
 use masterout_core::i18n::Lang;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -65,8 +66,15 @@ pub fn plan(
     master: MasterDto,
     meta: ReleaseMetaDto,
     active_ids: Vec<String>,
+    media_inputs: Option<HashMap<String, String>>,
 ) -> PlanDto {
-    planning::plan(&master, &meta, &active_ids, current_lang(&lang))
+    planning::plan(
+        &master,
+        &meta,
+        &active_ids,
+        &media_inputs.unwrap_or_default(),
+        current_lang(&lang),
+    )
 }
 
 #[tauri::command]
@@ -128,15 +136,16 @@ pub async fn pick_folder(app: AppHandle) -> Option<String> {
 }
 
 /// Selector de archivo (el `<input type=file>` del webview no da la ruta real).
-/// `kind`: `"audio"` (WAV) o `"image"`.
+/// `kind`: `"audio"` (WAV), `"image"` (portada) o `"media"` (imagen o vídeo de una ficha).
 #[tauri::command]
 pub async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
     let dialog = app.dialog().file();
-    let image = kind == "image";
-    let dialog = if image {
-        dialog.add_filter("image", &["jpg", "jpeg", "png"])
-    } else {
-        dialog.add_filter("audio", &["wav", "wave"])
+    let dialog = match kind.as_str() {
+        "image" => dialog.add_filter("image", &["jpg", "jpeg", "png"]),
+        "media" => dialog
+            .add_filter("image", &["jpg", "jpeg", "png", "webp"])
+            .add_filter("video", &["mp4", "mov", "m4v", "mkv", "webm"]),
+        _ => dialog.add_filter("audio", &["wav", "wave"]),
     };
     let path = dialog.blocking_pick_file().and_then(to_string_path)?;
     // Lo elegido en el selector se puede mostrar o reproducir; el resto del disco, no.
@@ -144,14 +153,15 @@ pub async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
     Some(path)
 }
 
-/// Autoriza ver una imagen arrastrada (portada). Solo `.png`, `.jpg` y `.jpeg`.
+/// Autoriza ver una imagen o un vídeo arrastrado (portada o ficha). Solo imágenes y vídeos
+/// admitidos (`.png`, `.jpg`, `.jpeg`, `.webp`, `.mp4`, `.mov`, `.m4v`, `.mkv`, `.webm`).
 #[tauri::command]
 pub fn allow_asset(
     app: AppHandle,
     lang: State<'_, LangState>,
     path: String,
 ) -> Result<(), BridgeError> {
-    if !is_image_path(&path) {
+    if !is_media_path(&path) {
         return Err(BridgeError::from_key(
             "err.generic",
             current_lang(&lang),
@@ -161,6 +171,19 @@ pub fn allow_asset(
     app.asset_protocol_scope()
         .allow_file(&path)
         .map_err(|e| BridgeError::from_key("err.io", current_lang(&lang), Some(e.to_string())))
+}
+
+/// Miniatura (data URL de 160 px) de una imagen o del primer fotograma de un vídeo. Puede
+/// lanzar ffmpeg, así que va en un hilo aparte.
+#[tauri::command]
+pub async fn media_thumbnail(
+    lang: State<'_, LangState>,
+    path: String,
+) -> Result<String, BridgeError> {
+    let lang = current_lang(&lang);
+    tauri::async_runtime::spawn_blocking(move || thumbnail::media_thumbnail(&path, lang))
+        .await
+        .map_err(|e| internal(lang, e.to_string()))?
 }
 
 /// Revela la carpeta (o archivo) en el explorador del sistema.
@@ -212,7 +235,6 @@ pub fn frontend_ready(window: WebviewWindow) {
 }
 
 pub fn run_app() {
-    crate::prepare_lame_path(&crate::exe_dir());
     let locale = tauri_plugin_os::locale().unwrap_or_default();
     let lang = mastercheck_bridge::lang::Lang::from_locale(&locale);
     tauri::Builder::default()
@@ -240,6 +262,7 @@ pub fn run_app() {
             pick_folder,
             pick_file,
             allow_asset,
+            media_thumbnail,
             open_path,
             system_lang,
             set_lang,

@@ -3,9 +3,10 @@
 use crate::analysis::suggest;
 use crate::dto::{DeliveryDto, ExportRequestDto, ProgressDto};
 use crate::errors::{localize, BridgeError};
-use crate::planning::to_release_meta;
-use masterout_core::export::{self, Delivery, ExportRequest, Progress};
+use crate::planning::{to_media_inputs, to_release_meta};
+use masterout_core::export::{self, default_sidecar, Delivery, ExportRequest, Progress};
 use masterout_core::i18n::{t, Lang};
+use masterout_core::media::SidecarPaths;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -92,6 +93,17 @@ pub fn export(
     on_progress: &(dyn Fn(ProgressDto) + Sync),
     cancel: Arc<AtomicBool>,
 ) -> Result<DeliveryDto, BridgeError> {
+    export_with(req, lang, on_progress, cancel, default_sidecar())
+}
+
+/// Como [`export`], con el sidecar de ffmpeg indicado (`None`: sin vídeo ni MP3).
+pub fn export_with(
+    req: &ExportRequestDto,
+    lang: Lang,
+    on_progress: &(dyn Fn(ProgressDto) + Sync),
+    cancel: Arc<AtomicBool>,
+    sidecar: Option<SidecarPaths>,
+) -> Result<DeliveryDto, BridgeError> {
     let master_path = PathBuf::from(&req.master_path);
     let mut meta = to_release_meta(&req.meta);
     // Título vacío: el sugerido por el nombre de archivo ("Artista - Título" se separa, sin
@@ -112,7 +124,9 @@ pub fn export(
         PathBuf::from(&req.out_root),
         lang,
     )
-    .with_cancel(cancel);
+    .with_cancel(cancel)
+    .with_sidecar(sidecar)
+    .with_media(to_media_inputs(&req.meta, &req.media_inputs));
     export::run(&request, &|p| on_progress(progress_dto(p, lang)))
         .map(|d| delivery_dto(&d, lang))
         .map_err(|e| localize(&e, lang))

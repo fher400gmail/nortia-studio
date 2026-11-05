@@ -40,6 +40,7 @@ fn plan_dto_marks_disabled_apple_for_16bit_with_reason() {
         &master(16),
         &meta(),
         &ids(&["spotify", "apple_adm"]),
+        &Default::default(),
         Lang::Es,
     );
     let apple = p.jobs.iter().find(|j| j.preset_id == "apple_adm").unwrap();
@@ -63,6 +64,7 @@ fn plan_dto_totals_count_documents() {
         &master(24),
         &meta(),
         &ids(&["spotify", "apple_adm", "deezer"]),
+        &Default::default(),
         Lang::Es,
     );
     assert_eq!(p.jobs.len(), 3);
@@ -76,11 +78,23 @@ fn plan_dto_totals_count_documents() {
 
 #[test]
 fn plan_dto_english_names_use_english_contract() {
-    let p = plan(&master(24), &meta(), &ids(&["distributor_std"]), Lang::En);
+    let p = plan(
+        &master(24),
+        &meta(),
+        &ids(&["distributor_std"]),
+        &Default::default(),
+        Lang::En,
+    );
     let j = &p.jobs[0];
     assert_eq!(j.subfolder, "07 Distributor");
     assert!(j.file_name.contains("[Distributor]"), "{}", j.file_name);
-    let es = plan(&master(24), &meta(), &ids(&["distributor_std"]), Lang::Es);
+    let es = plan(
+        &master(24),
+        &meta(),
+        &ids(&["distributor_std"]),
+        &Default::default(),
+        Lang::Es,
+    );
     assert_eq!(es.jobs[0].subfolder, "07 Distribuidora");
     assert!(es.jobs[0].file_name.contains("[Distribuidora]"));
 }
@@ -89,7 +103,13 @@ fn plan_dto_english_names_use_english_contract() {
 fn plan_dto_verdict_is_localized_and_fail_marked() {
     let mut m = master(24);
     m.true_peak_dbtp = 0.5;
-    let p = plan(&m, &meta(), &ids(&["spotify"]), Lang::En);
+    let p = plan(
+        &m,
+        &meta(),
+        &ids(&["spotify"]),
+        &Default::default(),
+        Lang::En,
+    );
     assert_eq!(p.jobs[0].verdict, "fail");
     assert!(p.jobs[0].verdict_text.contains("peak"));
 }
@@ -98,6 +118,12 @@ fn plan_dto_verdict_is_localized_and_fail_marked() {
 fn plan_dto_untitled_uses_suggested_title_without_duplicating_artist() {
     let mut mt = meta();
     mt.title = "  ".into();
-    let p = plan(&master(24), &mt, &ids(&["deezer"]), Lang::Es);
+    let p = plan(
+        &master(24),
+        &mt,
+        &ids(&["deezer"]),
+        &Default::default(),
+        Lang::Es,
+    );
     assert_eq!(p.delivery_folder, "Vera Alcón - Luz de Noviembre");
 }

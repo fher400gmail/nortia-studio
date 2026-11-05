@@ -124,3 +124,7 @@ Regla: **cada ficha de imagen o vídeo (Portada, Canvas, YouTube vídeo, Apple m
 ## Adenda 05/11/2026 15:50 — nombre de la app: **Master Check** (Fer)
 
 La app se llama **Master Check** (sustituye al provisional "Master Out" en toda la spec, el diseño y los textos; el crate interno `masterout-core` se renombrará a `mastercheck-core` al cerrar el hito 1). Pendiente: comprobar dominio y conflictos de marca de "Master Check" antes de publicar.
+
+## Adenda 05/11/2026 15:51 — nombre definitivo: **Master Ready** (Fer)
+
+Sustituye a "Master Check" (15:50) y a "Master Out". Crate interno pasará a `masterready-core` al cerrar el hito 1. Pendiente: dominio y conflictos de marca de "Master Ready".

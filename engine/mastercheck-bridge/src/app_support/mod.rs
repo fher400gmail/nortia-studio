@@ -27,6 +27,10 @@ pub fn os_name() -> &'static str {
     }
 }
 
+/// Release del sidecar ffmpeg que empaqueta esta versión (el mismo que descarga el CI;
+/// `app/scripts/sidecar-tag.txt`). Lo muestra «Acerca de».
+pub const SIDECAR_RELEASE: &str = "ffmpeg-sidecar-v7.1.5-3a21763";
+
 /// Respuesta del comando `app_info`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AppInfo {
@@ -34,6 +38,9 @@ pub struct AppInfo {
     pub os: String,
     /// ffmpeg/ffprobe (vídeo y MP3) disponibles junto al ejecutable, en el entorno o en PATH.
     pub sidecar_available: bool,
+    /// Release del componente de vídeo y MP3 (vacío si no está disponible).
+    #[serde(default)]
+    pub sidecar_release: String,
     /// Destinos que arrancan encendidos (`default_on` de presets.json): la interfaz no duplica la lista.
     #[serde(default)]
     pub default_on: Vec<String>,
@@ -42,10 +49,16 @@ pub struct AppInfo {
 }
 
 pub fn app_info(version: &str, exe_dir: &Path, default_out_root: Option<String>) -> AppInfo {
+    let sidecar_available = masterout_core::media::discover(exe_dir).is_some();
     AppInfo {
         version: version.to_string(),
         os: os_name().to_string(),
-        sidecar_available: masterout_core::media::discover(exe_dir).is_some(),
+        sidecar_available,
+        sidecar_release: if sidecar_available {
+            SIDECAR_RELEASE.to_string()
+        } else {
+            String::new()
+        },
         default_on: masterout_core::presets::all()
             .into_iter()
             .filter(|p| p.default_on)

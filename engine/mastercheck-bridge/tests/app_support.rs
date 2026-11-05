@@ -135,3 +135,177 @@ fn allow_asset_accepts_only_images() {
         assert!(!is_image_path(bad), "{bad}");
     }
 }
+
+// ───────────── humo ampliado (hito 3): portada, vídeo, MP3 y sondeo de capacidades ─────────────
+
+use mastercheck_bridge::app_support::smoke::{
+    run_smoke_with, smoke_ids, SmokeOptions, SmokeReport,
+};
+
+#[test]
+fn smoke_ids_depend_on_sidecar_and_cover() {
+    let base = ["spotify", "apple_adm", "deezer", "distributor_std"];
+    assert_eq!(smoke_ids(false, false), base);
+    // sin sidecar la portada se conforma igualmente (Rust puro); nada de vídeo ni MP3
+    let mut with_cover = base.to_vec();
+    with_cover.push("cover");
+    assert_eq!(smoke_ids(false, true), with_cover);
+    // con sidecar sin portada: solo MP3 (el vídeo parte de la portada)
+    let mut mp3 = base.to_vec();
+    mp3.push("mp3_promo");
+    assert_eq!(smoke_ids(true, false), mp3);
+    // con ambos: todo lo del hito 3, incluido Apple Motion
+    let all = smoke_ids(true, true);
+    for id in [
+        "mp3_promo",
+        "cover",
+        "canvas",
+        "youtube_video",
+        "apple_motion",
+    ] {
+        assert!(all.iter().any(|x| x == id), "falta {id}: {all:?}");
+    }
+}
+
+#[test]
+fn smoke_options_read_the_cover_from_the_environment() {
+    let env = |k: &str| match k {
+        "MASTERCHECK_SMOKE_COVER" => Some("/tmp/portada ñ.png".into()),
+        _ => None,
+    };
+    let o = SmokeOptions::from_env_with(&env);
+    assert_eq!(o.cover.as_deref(), Some(Path::new("/tmp/portada ñ.png")));
+    assert!(o.only.is_none());
+    // vacío o ausente: sin portada
+    assert!(SmokeOptions::from_env_with(&|_| Some("".into()))
+        .cover
+        .is_none());
+    assert!(SmokeOptions::from_env_with(&|_| None).cover.is_none());
+}
+
+fn has_ffmpeg() -> bool {
+    masterout_core::media::discover(Path::new("/nonexistent-dir")).is_some()
+}
+
+fn write_cover(path: &Path) {
+    ::image::RgbImage::from_fn(1600, 1600, |x, y| {
+        ::image::Rgb([(x / 7) as u8, (y / 7) as u8, ((x + y) / 13) as u8])
+    })
+    .save(path)
+    .unwrap();
+}
+
+#[test]
+fn smoke_with_cover_produces_media_and_reports_capabilities_timing() {
+    let (Some(wav), true) = (fixture(), has_ffmpeg()) else {
+        eprintln!("MASTEROUT_FIXTURES o ffmpeg no disponibles: se omite");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let cover = tmp.path().join("portada.png");
+    write_cover(&cover);
+    let out = tmp.path().join("salida");
+    let spec = format!("{};{}", wav.display(), out.display());
+    let slow = std::env::var_os("MASTERCHECK_SLOW").is_some();
+    let opts = SmokeOptions {
+        cover: Some(cover),
+        // El vídeo de YouTube (canción entera) y el cuadrado de Apple Motion tardan minutos con
+        // x264 por software: los cubre el humo de CI; aquí solo con MASTERCHECK_SLOW.
+        only: Some(
+            ["spotify", "mp3_promo", "cover", "canvas"]
+                .into_iter()
+                .chain(slow.then_some("youtube_video"))
+                .map(String::from)
+                .collect(),
+        ),
+    };
+    let report: SmokeReport = run_smoke_with(&spec, Lang::Es, tmp.path(), &opts).unwrap();
+    let names: Vec<String> = report
+        .delivery
+        .files
+        .iter()
+        .map(|(p, _)| p.clone())
+        .collect();
+    let tags: &[&str] = if slow {
+        &["[Portada]", "[Canvas]", "[YouTube]", "[MP3 320]"]
+    } else {
+        &["[Portada]", "[Canvas]", "[MP3 320]"]
+    };
+    for tag in tags {
+        assert!(
+            names.iter().any(|n| n.contains(tag)),
+            "falta {tag}: {names:?}"
+        );
+    }
+    let caps = report.capabilities.expect("hay sidecar: hay sondeo");
+    assert!(caps.h264 && caps.millis < 60_000, "{caps:?}");
+    assert!(report.disabled.is_empty(), "{:?}", report.disabled);
+
+    // smoke-result.json: la entrega más el bloque `smoke` con los tiempos
+    let json = report.to_json();
+    assert_eq!(
+        json["smoke"]["capabilities"]["millis"].as_u64(),
+        Some(caps.millis)
+    );
+    assert_eq!(json["smoke"]["capabilities"]["h264"], true);
+    assert!(json["smoke"]["sidecar"]["ffmpeg"].is_string());
+    // sigue siendo un DeliveryDto válido para quien lo lea como tal
+    let d: DeliveryDto = serde_json::from_value(json).unwrap();
+    assert!(d.failed.is_empty());
+}
+
+#[test]
+fn smoke_without_sidecar_reports_no_capabilities() {
+    let Some(wav) = fixture() else { return };
+    // sin ffmpeg ni cover el humo clásico sigue valiendo; el bloque dice que no hubo sondeo
+    let tmp = tempfile::tempdir().unwrap();
+    let spec = format!("{};{}", wav.display(), tmp.path().join("o").display());
+    let r = run_smoke_with(
+        &spec,
+        Lang::En,
+        tmp.path(),
+        &SmokeOptions {
+            cover: None,
+            only: Some(vec!["spotify".into()]),
+        },
+    );
+    let r = r.unwrap();
+    let j = r.to_json();
+    if has_ffmpeg() {
+        assert!(j["smoke"]["capabilities"]["millis"].is_u64());
+    } else {
+        assert!(j["smoke"]["capabilities"].is_null());
+    }
+}
+
+#[test]
+fn app_info_announces_the_sidecar_release_only_when_it_is_there() {
+    use mastercheck_bridge::app_support::SIDECAR_RELEASE;
+    // misma fuente que usa el CI para descargarlo (app/scripts/sidecar-tag.txt)
+    let tag = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../app/scripts/sidecar-tag.txt"),
+    )
+    .unwrap();
+    assert_eq!(SIDECAR_RELEASE, tag.trim());
+    let tmp = tempfile::tempdir().unwrap();
+    let info = app_info("0.1.0", tmp.path(), None);
+    let expect = if info.sidecar_available {
+        SIDECAR_RELEASE
+    } else {
+        ""
+    };
+    assert_eq!(info.sidecar_release, expect);
+    // junto al ejecutable (lo que hace externalBin): se anuncia con seguridad
+    let name = if cfg!(windows) {
+        ["ffmpeg.exe", "ffprobe.exe"]
+    } else {
+        ["ffmpeg", "ffprobe"]
+    };
+    for n in name {
+        std::fs::write(tmp.path().join(n), b"x").unwrap();
+    }
+    assert_eq!(
+        app_info("0.1.0", tmp.path(), None).sidecar_release,
+        SIDECAR_RELEASE
+    );
+}

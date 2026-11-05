@@ -8,7 +8,7 @@ Documento de cumplimiento de licencias. Se actualiza con cada cambio de dependen
 |---|---|---|---|
 | FFmpeg 7.x (libavcodec, libavformat, libavfilter, libswscale, libswresample; ejecutables `ffmpeg` y `ffprobe`) | Vídeo (Canvas, YouTube, Apple Motion), AAC y MP3 | LGPL 2.1 o posterior. Compilado con `--disable-gpl --disable-nonfree`, sin x264/x265/fdk-aac/openh264 | Ejecutable aparte (sidecar), invocado como proceso; nunca enlazado con la app. Construido en CI desde fuente |
 | LAME 3.100 (libmp3lame) | Codificación MP3 dentro del sidecar | LGPL 2 o posterior | Enlazado estáticamente dentro del ejecutable ffmpeg |
-| VideoToolbox (macOS) / Media Foundation (Windows) | Codificación H.264 del sistema operativo, a través de `h264_videotoolbox` / `h264_mf` | Componentes del SO (licencia del sistema) | No se distribuyen; los aporta el sistema operativo |
+| VideoToolbox (macOS) / Media Foundation (Windows) | Codificación H.264 y HEVC del sistema operativo, a través de `h264_videotoolbox`/`hevc_videotoolbox` y `h264_mf`/`hevc_mf` | Componentes del SO (licencia del sistema) | No se distribuyen; los aporta el sistema operativo |
 | zlib | PNG dentro de ffmpeg | zlib | Librería del sistema (macOS) / enlazada estáticamente (Windows) |
 | flac-codec | Lectura/escritura FLAC | MIT / Apache-2.0 | Compilado en el motor |
 | ebur128 | Sonoridad EBU R128 | MIT | Compilado en el motor |

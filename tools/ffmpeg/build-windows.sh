@@ -24,7 +24,7 @@ mkdir -p "$WORK/ff"
 tar xJf "$OUT/ffmpeg-$VER.tar.xz" -C "$WORK/ff" --strip-components=1
 args=(--prefix="$WORK/ff/install" --arch=x86_64 --target-os=mingw32
   "${FFMPEG_BASE_FLAGS[@]}"
-  --enable-encoder="$FFMPEG_ENCODERS_BASE,h264_mf" --enable-mediafoundation
+  --enable-encoder="$FFMPEG_ENCODERS_BASE,h264_mf,hevc_mf" --enable-mediafoundation
   --pkg-config-flags=--static
   --extra-cflags="-I$PREFIX/include"
   --extra-ldflags="-L$PREFIX/lib -static")

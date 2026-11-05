@@ -26,7 +26,7 @@ ALLOW_PARSERS="aac,h264,hevc,vp9,mjpeg,png,webp,flac,mpegaudio"
 ALLOW_BSFS="aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata,vp9_superframe,vp9_superframe_split"
 ALLOW_MUXERS="mp4,mov,ipod,mp3,image2"
 # boxblur es GPL-only en ffmpeg 7.1 (se desactivaría en silencio): no se incluye.
-ALLOW_FILTERS="scale,crop,zoompan,gblur,overlay,format,fps,setsar,trim,atrim,aresample,aformat,anull,null,color,loop,pad"
+ALLOW_FILTERS="scale,crop,zoompan,gblur,overlay,format,fps,setsar,trim,atrim,aresample,aformat,anull,null,color,loop,pad,setpts,split,fade"
 ALLOW_ENCODERS_BASE="aac,libmp3lame,png,mjpeg"
 
 FFMPEG_BASE_FLAGS=(

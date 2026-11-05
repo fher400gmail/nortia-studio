@@ -8,7 +8,9 @@ use masterout_core::audio::AudioError;
 use masterout_core::export::default_sidecar;
 use masterout_core::i18n::Lang;
 use masterout_core::media::image::{MAX_PIXELS, MAX_SIDE};
+use masterout_core::media::probe::probe;
 use masterout_core::media::video::run_ffmpeg_with_deadline;
+use masterout_core::media::SidecarPaths;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -95,10 +97,23 @@ fn image_thumbnail(path: &Path) -> Result<String, AudioError> {
 }
 
 /// Primer fotograma (o la imagen) con ffmpeg, a un PNG de 160 px como máximo.
-fn ffmpeg_thumbnail(path: &Path) -> Result<String, AudioError> {
+fn ffmpeg_thumbnail(path: &Path, sidecar: Option<SidecarPaths>) -> Result<String, AudioError> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let sidecar = default_sidecar()
-        .ok_or_else(|| AudioError::UnsupportedFormat("err.sidecar_missing".into()))?;
+    let sidecar =
+        sidecar.ok_or_else(|| AudioError::UnsupportedFormat("err.sidecar_missing".into()))?;
+    // Una imagen que no abre el crate `image` (webp) la decodifica ffmpeg sin más tope que el
+    // plazo: se leen sus dimensiones con ffprobe antes y se aplica el tope de la portada.
+    if ext(path).is_some_and(|e| IMAGE_EXTS.contains(&e.as_str())) {
+        let info = probe(&sidecar, path)?;
+        if info.width.max(info.height) > MAX_SIDE
+            || u64::from(info.width) * u64::from(info.height) > MAX_PIXELS
+        {
+            return Err(AudioError::UnsupportedFormat(format!(
+                "err.cover_too_large: {}x{}",
+                info.width, info.height
+            )));
+        }
+    }
     let out: PathBuf = std::env::temp_dir().join(format!(
         "masterout-thumb-{}-{}.png",
         std::process::id(),
@@ -132,6 +147,15 @@ fn ffmpeg_thumbnail(path: &Path) -> Result<String, AudioError> {
 
 /// Miniatura (data URL de 160 px como máximo) de una imagen o un vídeo.
 pub fn media_thumbnail(path: &str, lang: Lang) -> Result<String, BridgeError> {
+    media_thumbnail_with(path, lang, default_sidecar())
+}
+
+/// Como [`media_thumbnail`], con el sidecar de ffmpeg indicado (`None`: sin vídeo ni webp).
+pub fn media_thumbnail_with(
+    path: &str,
+    lang: Lang,
+    sidecar: Option<SidecarPaths>,
+) -> Result<String, BridgeError> {
     if !is_media_path(path) {
         return Err(BridgeError::from_key(
             "err.media_unreadable",
@@ -144,7 +168,7 @@ pub fn media_thumbnail(path: &str, lang: Lang) -> Result<String, BridgeError> {
     let r = if direct {
         image_thumbnail(p)
     } else {
-        ffmpeg_thumbnail(p)
+        ffmpeg_thumbnail(p, sidecar)
     };
     r.map_err(|e| localize(&e, lang))
 }

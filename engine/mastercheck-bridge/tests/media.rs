@@ -349,3 +349,80 @@ fn plan_dto_reports_missing_hevc_in_the_apple_motion_warnings() {
             .enabled
     );
 }
+
+/// webp (lo decodifica ffmpeg, no el crate `image`): sus dimensiones se leen con ffprobe ANTES de
+/// decodificar y por encima del tope de la portada se rechaza con `err.cover_too_large`.
+#[cfg(unix)]
+mod webp_cap {
+    use super::*;
+    use mastercheck_bridge::thumbnail::media_thumbnail_with;
+    use masterout_core::media::SidecarPaths;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn script(dir: &Path, name: &str, body: &str) -> std::path::PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+
+    /// ffprobe falso con las dimensiones dadas; ffmpeg falso que deja una marca si se llega a usar.
+    fn sidecar(dir: &Path, w: u32, h: u32) -> (SidecarPaths, std::path::PathBuf) {
+        let marker = dir.join("ffmpeg-llamado");
+        let probe = script(
+            dir,
+            "ffprobe",
+            &format!(
+                "echo '{{\"streams\":[{{\"codec_type\":\"video\",\"codec_name\":\"webp\",\"width\":{w},\"height\":{h}}}],\"format\":{{\"format_name\":\"webp_pipe\"}}}}'"
+            ),
+        );
+        let ffmpeg = script(
+            dir,
+            "ffmpeg",
+            &format!("touch '{}'; exit 1", marker.display()),
+        );
+        (
+            SidecarPaths {
+                ffmpeg,
+                ffprobe: probe,
+            },
+            marker,
+        )
+    }
+
+    #[test]
+    fn a_huge_webp_is_rejected_before_ffmpeg_decodes_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let webp = tmp.path().join("enorme.webp");
+        std::fs::write(&webp, b"RIFFxxxxWEBP").unwrap();
+        for (w, h) in [(20_000, 100), (12_000, 12_000)] {
+            let (sc, marker) = sidecar(tmp.path(), w, h);
+            let e = media_thumbnail_with(&webp.to_string_lossy(), Lang::Es, Some(sc)).unwrap_err();
+            assert_eq!(e.key, "err.cover_too_large", "{w}x{h}");
+            assert!(e.message.contains("demasiado grande"), "{}", e.message);
+            assert!(!marker.exists(), "ffmpeg no debe decodificar {w}x{h}");
+        }
+    }
+
+    #[test]
+    fn a_normal_webp_goes_on_to_ffmpeg() {
+        let tmp = tempfile::tempdir().unwrap();
+        let webp = tmp.path().join("normal.webp");
+        std::fs::write(&webp, b"RIFFxxxxWEBP").unwrap();
+        let (sc, marker) = sidecar(tmp.path(), 3000, 3000);
+        // el ffmpeg falso falla: lo que importa es que se llegó a él
+        let e = media_thumbnail_with(&webp.to_string_lossy(), Lang::En, Some(sc)).unwrap_err();
+        assert_eq!(e.key, "err.media_unreadable");
+        assert!(marker.exists());
+    }
+
+    #[test]
+    fn a_video_is_not_subject_to_the_image_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mp4 = tmp.path().join("v.mp4");
+        std::fs::write(&mp4, b"x").unwrap();
+        let (sc, marker) = sidecar(tmp.path(), 20_000, 20_000);
+        let _ = media_thumbnail_with(&mp4.to_string_lossy(), Lang::En, Some(sc));
+        assert!(marker.exists());
+    }
+}

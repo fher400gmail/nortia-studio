@@ -1,0 +1,24 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "master check",
+        "width": 880,
+        "height": 860,
+        "minWidth": 760,
+        "minHeight": 720,
+        "resizable": true,
+        "center": true,
+        "visible": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": false
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["dmg", "app"]
+  }
+}

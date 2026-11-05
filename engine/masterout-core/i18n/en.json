@@ -93,5 +93,9 @@
   "err.cover_too_small": "The cover is too small. It needs at least 1400 px on its longer side.",
   "err.cover_unreadable": "The cover could not be read.",
   "err.cover_write": "The cover could not be written.",
-  "err.cover_too_large": "The cover is too large. Maximum 16384 px per side and 120 megapixels."
+  "err.cover_too_large": "The cover is too large. Maximum 16384 px per side and 120 megapixels.",
+  "err.encoder_unavailable": "This computer cannot create the video: the system H.264 encoder is missing. The rest of the delivery was exported.",
+  "err.ffmpeg_failed": "The video could not be created. The rest of the delivery was exported.",
+  "err.sidecar_missing": "The master check video component (ffmpeg) is missing. Reinstall the app.",
+  "err.media_unreadable": "The image or video file could not be read."
 }

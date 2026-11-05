@@ -27,7 +27,7 @@ const Icons = (() => {
   const gly = {
     spotify: g('<path d="M5 9c4.8-1.5 9.6-1.1 14 1.4"/><path d="M6.2 12.8c4-1.1 7.6-.8 10.8 1"/><path d="M7.4 16.2c3-.8 5.6-.5 8 .9"/>', 'stroke-width="2.1"'),
     apple: g('<path d="M10 17.2V6.6l8-1.9v10.6"/><circle cx="7.9" cy="17.4" r="2.2" fill="currentColor"/><circle cx="15.9" cy="15.5" r="2.2" fill="currentColor"/>'),
-    amazon: g('<text x="12" y="13" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" font-family="Inter,sans-serif">a</text><path class="ac" d="M5 15.6c4.4 3 9.6 3 14 0" stroke="#FF9900" stroke-width="1.8"/><path class="ac" d="M16.6 15.1l2.6.4-.7 2.5" stroke="#FF9900" stroke-width="1.8"/>'),
+    amazon: g('<text x="12" y="13" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" font-family="Hanken Grotesk,sans-serif">a</text><path class="ac" d="M5 15.6c4.4 3 9.6 3 14 0" stroke="currentColor" stroke-width="1.8"/><path class="ac" d="M16.6 15.1l2.6.4-.7 2.5" stroke="currentColor" stroke-width="1.8"/>'),
     tidal: g('<path d="M12 4.5l3 3-3 3-3-3z M6 10.5l3 3-3 3-3-3z M18 10.5l3 3-3 3-3-3z M12 13.5l3 3-3 3-3-3z" fill="currentColor" stroke="none"/>'),
     deezer: g('<path d="M4 18v-3M8 18v-6M12 18v-9M16 18v-6M20 18V6" stroke-width="3" stroke-linecap="butt"/>'),
     ytm: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3.6" fill="currentColor"/><path d="M10.2 9.3v5.4l4.6-2.7z" fill="var(--tc)"/></svg>',
@@ -51,9 +51,10 @@ const Icons = (() => {
     moon: s('<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>'),
     sun: s('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>'),
     checkDraw: '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5.5 12.5l4.2 4.2L18.5 8"/></svg>',
-    mark: (h, id = '') => `<svg width="${h * 20 / 64}" height="${h}" viewBox="22 2 20 60" aria-hidden="true"><path d="M32 2L42 31H22Z" fill="#BF7F12"/><path d="M22 33H42L32 62Z" fill="var(--brand)"/></svg>`,
-    doneMark: `<svg class="markdone" viewBox="22 2 20 60" aria-hidden="true"><path class="t" d="M32 2L42 31H22Z" fill="#BF7F12"/><path class="b" d="M22 33H42L32 62Z" fill="var(--brand)"/></svg>`,
-    cover: s => `<svg class="art" width="${s}" height="${s}" viewBox="0 0 100 100" role="img" aria-label="Portada"><rect width="100" height="100" fill="#1B3A4D"/><rect y="60" width="100" height="40" fill="#12293A"/><circle cx="62" cy="42" r="19" fill="#EBDDC3"/><rect y="58" width="100" height="2.4" fill="#EBDDC3" opacity=".6"/><rect x="12" y="68" width="52" height="2.2" fill="#EBDDC3" opacity=".35"/><rect x="24" y="75" width="38" height="2.2" fill="#EBDDC3" opacity=".25"/><rect x="34" y="82" width="22" height="2.2" fill="#EBDDC3" opacity=".18"/></svg>`
+    /* símbolo barra de nortia. studio (punto estirado 2:1), en dos mitades para la entrada por polos */
+    mark: (h, id = '') => `<svg width="${h / 2}" height="${h}" viewBox="0 0 28 56" aria-hidden="true"><path d="M0 14a14 14 0 0 1 28 0v14H0z" fill="var(--brand)"/><path d="M0 28h28v14a14 14 0 0 1-28 0z" fill="var(--brand)"/></svg>`,
+    doneMark: `<svg class="markdone" viewBox="0 0 28 56" aria-hidden="true"><path class="t" d="M0 14a14 14 0 0 1 28 0v14H0z" fill="var(--brand)"/><path class="b" d="M0 28h28v14a14 14 0 0 1-28 0z" fill="var(--brand)"/></svg>`,
+    cover: s => `<svg class="art" width="${s}" height="${s}" viewBox="0 0 100 100" role="img" aria-label="Portada"><rect width="100" height="100" fill="#1A1A1A"/><rect y="60" width="100" height="40" fill="#111111"/><circle cx="62" cy="42" r="19" fill="#FF5A00"/><rect y="58" width="100" height="2.4" fill="#FF5A00" opacity=".6"/><rect x="12" y="68" width="52" height="2.2" fill="#FF5A00" opacity=".35"/><rect x="24" y="75" width="38" height="2.2" fill="#FF5A00" opacity=".25"/><rect x="34" y="82" width="22" height="2.2" fill="#FF5A00" opacity=".18"/></svg>`
   };
 })();
 
@@ -176,7 +177,7 @@ const S = Store.st;
 
 /* ───────────── Views ───────────── */
 const Views = (() => {
-  const dest = id => { const on = S.on.has(id); return `<button class="chip glass ${on ? 'on' : ''}" role="switch" aria-checked="${on}" data-act="toggle" data-id="${id}" style="--br:${Data.brand[id] || 'var(--brand)'}"><span class="mono">${Icons.gly[id]}</span><span class="cn">${Data.name[id]}</span><i class="ck">${Icons.checkDraw}</i></button>`; };
+  const dest = id => { const on = S.on.has(id); return `<button class="chip glass ${on ? 'on' : ''}" role="switch" aria-checked="${on}" data-act="toggle" data-id="${id}"><span class="mono">${Icons.gly[id]}</span><span class="cn">${Data.name[id]}</span><i class="ck">${Icons.checkDraw}</i></button>`; };
   const timeTxt = () => S.pp > 0 ? (s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + ' / ' + Data.meta.dur)(Math.round(S.pp * Data.meta.durS)) : Data.meta.dur;
   const lpill = () => `<span class="loudw"><button class="lpill glass" data-act="pop" data-p="detail" aria-expanded="false" aria-controls="pop-detail"><i></i>${Data.meta.lufs} LUFS · pasa de 0 dB</button>
     <span class="pop" id="pop-detail" role="dialog" aria-label="Detalle del volumen" style="top:calc(100% + 8px);right:0"><p>Las plataformas le bajarán el volumen. Tu archivo no se toca.</p>
@@ -185,7 +186,7 @@ const Views = (() => {
     ? `<div class="hbar"><button class="play" data-act="play" data-playing="${!!S.pt}" aria-label="${S.pt ? 'Pausar' : 'Escuchar'}">${S.pt ? Icons.pause : Icons.play}</button><span class="tm" data-time>${timeTxt()}</span><span class="sp"></span>${lpill()}<button class="ib" data-act="song" title="Cambiar canción" aria-label="Cambiar canción">${Icons.reset}</button></div>`
     : `<div class="hbar"><span class="ttl"><b>${esc(S.title)}</b>${esc(S.artist)}</span><span class="sp"></span>${S.mode === 'creating' ? '<span class="pct" data-pc>0 %</span>' : `<span class="pct" aria-label="Completado">${Icons.check}</span>`}</div>`;
   const hero = () => S.loaded
-    ? `<div class="hero glass dz ${S.mode === 'done' ? 'fin' : ''}" id="hero">${heroBar()}<div class="wvw" id="wave"></div></div>`
+    ? `<div class="hero glass dz ${S.mode === 'done' ? 'fin' : S.mode === 'creating' ? 'making' : ''}" id="hero">${heroBar()}<div class="wvw" id="wave"></div></div>`
     : `<div class="hero glass dz empty ${S.over ? 'over' : ''}" id="hero"><button class="dzone" data-act="song"><span class="mk">${Icons.mark(64)}</span><b>Suelta tu canción</b>${S.err ? `<small class="er" role="alert">${esc(S.err)}</small>` : ''}</button></div>`;
   const cover = () => (S.cover && S.cover !== 'sample')
     ? `<div class="cov has" data-act="cover" role="button" tabindex="0" title="Cambiar portada" aria-label="Cambiar portada"><img src="${S.cover}" alt="Portada" style="width:100%;height:100%;object-fit:cover"></div>`

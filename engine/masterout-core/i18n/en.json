@@ -35,8 +35,6 @@
   "sheet.master": "Master",
   "sheet.seconds": "s",
   "mp3.comment": "nortia. studio - master check",
-  "export.err.lame_missing": "lame not found",
-  "export.err.lame_failed": "lame exited with {status}: {detail}",
   "export.err.container": "unsupported container: {ext}",
   "export.err.threadpool": "could not start the worker threads: {detail}",
   "export.err.id3": "could not write ID3 tags: {detail}",
@@ -82,7 +80,6 @@
   "err.too_many_channels": "master check supports mono or stereo masters.",
   "err.cancelled": "Export cancelled.",
   "err.rf64_unsupported": "RF64 files are not supported. Export the master as a standard WAV.",
-  "err.lame_missing": "lame was not found; it is required to create the MP3.",
   "err.container": "File format not supported in this version.",
   "err.threadpool": "The worker threads could not be started.",
   "err.flac": "The FLAC file could not be created.",
@@ -95,7 +92,10 @@
   "err.cover_write": "The cover could not be written.",
   "err.cover_too_large": "The cover is too large. Maximum 16384 px per side and 120 megapixels.",
   "err.encoder_unavailable": "This computer cannot create the video: the system H.264 encoder is missing. The rest of the delivery was exported.",
-  "err.ffmpeg_failed": "The video could not be created. The rest of the delivery was exported.",
+  "err.ffmpeg_failed": "This file could not be created. The rest of the delivery was exported.",
   "err.sidecar_missing": "The master check video component (ffmpeg) is missing. Reinstall the app.",
-  "err.media_unreadable": "The image or video file could not be read."
+  "err.media_unreadable": "The image or video file could not be read.",
+  "preset.apple_motion": "Apple Motion",
+  "reason.no_cover": "The cover is missing: drop an image on the cover chip.",
+  "reason.no_sidecar": "The video and MP3 component (ffmpeg) is missing from master check. Reinstall the app."
 }

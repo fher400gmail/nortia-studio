@@ -1,12 +1,13 @@
-//! Codificación MP3 320 kbps CBR con el ejecutable externo `lame` (no se enlaza ninguna
-//! biblioteca GPL) y etiquetas ID3v2.3 completas con el crate `id3`.
+//! Codificación MP3 320 kbps CBR con `libmp3lame` dentro del sidecar ffmpeg (proceso aparte,
+//! nunca enlazado) y etiquetas ID3v2.3 completas con el crate `id3`.
 
+use super::video::run_ffmpeg;
+use super::SidecarPaths;
 use crate::audio::AudioError;
-use crate::i18n::{t, tf, Lang};
+use crate::i18n::{tf, Lang};
 use id3::frame::{Comment, Content, Picture, PictureType};
 use id3::{Frame, Tag, TagLike, Version};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 /// Etiquetas ID3v2.3 de un MP3.
 #[derive(Debug, Clone, Default)]
@@ -28,31 +29,6 @@ fn unsupported(msg: impl Into<String>) -> AudioError {
 
 fn id3_err(lang: Lang, e: id3::Error) -> AudioError {
     unsupported(tf(lang, "export.err.id3", &[("detail", &e.to_string())]))
-}
-
-fn exe_name() -> &'static str {
-    if cfg!(windows) {
-        "lame.exe"
-    } else {
-        "lame"
-    }
-}
-
-/// Busca `lame` junto al ejecutable actual y después en `PATH`.
-pub fn find_lame() -> Option<PathBuf> {
-    let mut dirs: Vec<PathBuf> = Vec::new();
-    if let Some(dir) = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf))
-    {
-        dirs.push(dir);
-    }
-    if let Some(path) = std::env::var_os("PATH") {
-        dirs.extend(std::env::split_paths(&path));
-    }
-    dirs.into_iter()
-        .map(|d| d.join(exe_name()))
-        .find(|p| p.is_file())
 }
 
 fn mime_for(path: &Path) -> &'static str {
@@ -115,57 +91,47 @@ fn write_id3(
         .map_err(|e| id3_err(lang, e))
 }
 
-/// Codifica un WAV 16 bit / 44,1 kHz a MP3 320 kbps CBR (joint stereo, `-q 0`).
-///
-/// Busca `lame` (PATH o junto al ejecutable); si no existe devuelve
-/// `UnsupportedFormat("lame not found")`.
-pub fn encode(
-    wav_16_44_path: &Path,
-    out: &Path,
-    tags: &Id3Tags,
-    cover: Option<&Path>,
-) -> Result<(), AudioError> {
-    let lang = Lang::from_system();
-    let lame = find_lame().ok_or_else(|| unsupported(t(lang, "export.err.lame_missing")))?;
-    encode_with(lang, &lame, wav_16_44_path, out, tags, cover)
+/// Argumentos de ffmpeg para el MP3 320 kbps CBR (libmp3lame, máxima calidad de codificación,
+/// ID3v2.3 con cabecera Xing). `-f mp3` porque la salida puede llevar la extensión `.part`.
+pub fn build_mp3_args(wav_16_44: &Path, out: &Path) -> Vec<String> {
+    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"]
+        .map(String::from)
+        .to_vec();
+    a.push(wav_16_44.to_string_lossy().into_owned());
+    a.extend(
+        [
+            "-vn",
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            "320k",
+            "-compression_level",
+            "0",
+            "-id3v2_version",
+            "3",
+            "-write_xing",
+            "1",
+            "-f",
+            "mp3",
+        ]
+        .map(String::from),
+    );
+    a.push(out.to_string_lossy().into_owned());
+    a
 }
 
-/// Como [`encode`], con la ruta de `lame` indicada y el idioma de los mensajes de error.
-pub fn encode_with(
+/// Codifica un WAV 16 bit / 44,1 kHz a MP3 320 kbps CBR con el sidecar ffmpeg y reescribe
+/// la etiqueta como ID3v2.3 completa (con la portada conformada como APIC, si la hay).
+/// `cancel` se consulta mientras ffmpeg trabaja.
+pub fn encode(
+    sidecar: &SidecarPaths,
     lang: Lang,
-    lame: &Path,
     wav_16_44_path: &Path,
     out: &Path,
     tags: &Id3Tags,
     cover: Option<&Path>,
+    cancel: &dyn Fn() -> bool,
 ) -> Result<(), AudioError> {
-    let mut cmd = Command::new(lame);
-    cmd.args(["--silent", "-b", "320", "--cbr", "-m", "j", "-q", "0"]);
-    cmd.args(["--add-id3v2", "--id3v2-only"]);
-    let year = tags.year.map(|y| y.to_string());
-    for (flag, val) in [
-        ("--tt", Some(tags.title.as_str())),
-        ("--ta", Some(tags.artist.as_str())),
-        ("--tl", tags.album.as_deref()),
-        ("--ty", year.as_deref()),
-        ("--tc", tags.comment.as_deref()),
-    ] {
-        if let Some(v) = val.filter(|s| !s.is_empty()) {
-            cmd.arg(flag).arg(v);
-        }
-    }
-    cmd.arg(wav_16_44_path).arg(out);
-    let output = cmd.output()?;
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        return Err(unsupported(tf(
-            lang,
-            "export.err.lame_failed",
-            &[
-                ("status", &output.status.to_string()),
-                ("detail", err.trim()),
-            ],
-        )));
-    }
+    run_ffmpeg(sidecar, &build_mp3_args(wav_16_44_path, out), cancel)?;
     write_id3(lang, out, tags, cover)
 }

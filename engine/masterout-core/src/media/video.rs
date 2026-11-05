@@ -160,6 +160,12 @@ fn is_still(src: &VideoSource, info: Option<&MediaInfo>) -> bool {
     }
 }
 
+/// ¿La fuente es una imagen fija (por su extensión)? Es lo que deciden los `build_*_args`
+/// cuando no reciben la sonda.
+pub fn is_still_source(src: &VideoSource) -> bool {
+    is_still(src, None)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Codec {
     H264,
@@ -283,10 +289,32 @@ pub fn build_canvas_args(
 
 // ---------- YouTube ----------
 
+/// Fondo desenfocado de YouTube: la imagen a cubrir 1920×1080 con `gblur`, un solo fotograma
+/// PNG. Se renderiza una vez y el vídeo lo lee como entrada (el desenfoque por fotograma
+/// costaba minutos). Solo para fuentes de imagen fija.
+pub fn build_youtube_bg_args(src: &VideoSource, spec: &YoutubeSpec, out_png: &Path) -> Vec<String> {
+    let mut a = prefix();
+    a.extend([s("-i"), src.path().to_string_lossy().into_owned()]);
+    a.extend([
+        s("-vf"),
+        format!("{},gblur=sigma=40", cover_fit(spec.width, spec.height)),
+        s("-frames:v"),
+        s("1"),
+        s("-update"),
+        s("1"),
+    ]);
+    a.push(out_png.to_string_lossy().into_owned());
+    a
+}
+
 /// Vídeo de YouTube: imagen fija con fondo desenfocado + portada 1000×1000 centrada y el máster a 48 kHz.
 /// Dura lo que el audio (`-shortest`). `-g fps/2`, 2 B-frames, AAC-LC.
+///
+/// `bg`: fondo desenfocado ya renderizado ([`build_youtube_bg_args`]); sin él, el desenfoque
+/// se calcula en el mismo grafo (lento). Con vídeo propio el fondo no se usa.
 pub fn build_youtube_args(
     src: &VideoSource,
+    bg: Option<&Path>,
     master_wav_48k: &Path,
     spec: &YoutubeSpec,
     out: &Path,
@@ -298,23 +326,28 @@ pub fn build_youtube_args(
     let wav = master_wav_48k.to_string_lossy().into_owned();
     let fps = spec.fps.to_string();
     if is_still(src, None) {
-        // la portada entra dos veces: fondo y primer plano (sin `split`, que el sidecar no trae)
-        for _ in 0..2 {
+        // primer plano y fondo son dos entradas (sin `split`, que el sidecar no trae)
+        let bg_in = bg.map_or_else(|| img.clone(), |p| p.to_string_lossy().into_owned());
+        for input in [bg_in, img.clone()] {
             a.extend([
                 s("-framerate"),
                 fps.clone(),
                 s("-loop"),
                 s("1"),
                 s("-i"),
-                img.clone(),
+                input,
             ]);
         }
         a.extend([s("-i"), wav]);
+        let bg_chain = if bg.is_some() {
+            BT709.to_string()
+        } else {
+            format!("{},{BT709},gblur=sigma=40", cover_fit(w, h))
+        };
         a.extend([
             s("-filter_complex"),
             format!(
-                "[0:v]{},{BT709},gblur=sigma=40[bg];[1:v]{},{BT709}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]",
-                cover_fit(w, h),
+                "[0:v]{bg_chain}[bg];[1:v]{},{BT709}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]",
                 cover_fit(1000, 1000)
             ),
             s("-map"),

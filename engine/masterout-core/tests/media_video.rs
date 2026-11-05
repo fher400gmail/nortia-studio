@@ -220,6 +220,7 @@ fn youtube_golden(p: Platform) -> Vec<String> {
 fn yt(p: Platform) -> Vec<String> {
     build_youtube_args(
         &cover(),
+        None,
         Path::new("m.wav"),
         &YoutubeSpec::default(),
         Path::new("o.mp4"),
@@ -247,6 +248,43 @@ fn youtube_args_golden_win() {
 #[test]
 fn youtube_args_golden_linux() {
     assert_eq!(yt(Platform::Linux), youtube_golden(Platform::Linux));
+}
+
+#[test]
+fn youtube_with_prerendered_background_golden() {
+    let bg_args = build_youtube_bg_args(&cover(), &YoutubeSpec::default(), Path::new("bg.png"));
+    assert_eq!(
+        bg_args,
+        cat(&[
+            v(&PRE),
+            v(&[
+                "-i",
+                "cover.png",
+                "-vf",
+                "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,gblur=sigma=40",
+                "-frames:v",
+                "1",
+                "-update",
+                "1",
+                "bg.png",
+            ]),
+        ])
+    );
+    let got = build_youtube_args(
+        &cover(),
+        Some(Path::new("bg.png")),
+        Path::new("m.wav"),
+        &YoutubeSpec::default(),
+        Path::new("o.mp4"),
+        Platform::Linux,
+    );
+    let j = got.join(" ");
+    // el fondo entra ya desenfocado: el grafo del vídeo no calcula gblur por fotograma
+    assert!(!j.contains("gblur"), "{j}");
+    assert!(j.contains("-loop 1 -i bg.png -framerate 30 -loop 1 -i cover.png -i m.wav"));
+    assert!(j.contains(&format!(
+        "[0:v]{BT709}[bg];[1:v]scale=1000:1000:force_original_aspect_ratio=increase,crop=1000:1000,setsar=1,{BT709}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]"
+    )));
 }
 
 #[test]
@@ -306,6 +344,7 @@ fn user_image_uses_the_still_path_and_user_video_does_not_zoom() {
     assert!(a.join(" ").contains("-stream_loop -1 -i a.mov"));
     let y = build_youtube_args(
         &vid,
+        None,
         Path::new("m.wav"),
         &YoutubeSpec::default(),
         Path::new("o.mp4"),
@@ -564,6 +603,7 @@ fn youtube_output_matches_spec() {
     make_png(&sc, &png, "1600x1600");
     let args = build_youtube_args(
         &VideoSource::FromCover(png),
+        None,
         &wav,
         &YoutubeSpec::default(),
         &out,
@@ -589,6 +629,39 @@ fn youtube_output_matches_spec() {
         !boxes.iter().any(|b| b == "elst"),
         "hay edit list: {boxes:?}"
     );
+}
+
+#[test]
+fn youtube_with_prerendered_background_runs() {
+    let Some(sc) = sidecar() else { return };
+    let d = tempfile::tempdir().unwrap();
+    let (wav, png, bg, out) = (
+        d.path().join("m.wav"),
+        d.path().join("cover.png"),
+        d.path().join("bg.png"),
+        d.path().join("yt.mp4"),
+    );
+    write_wav(&wav, 3);
+    make_png(&sc, &png, "1600x1600");
+    let src = VideoSource::FromCover(png);
+    let bg_args = build_youtube_bg_args(&src, &YoutubeSpec::default(), &bg);
+    run_ffmpeg(&sc, &bg_args, &|| false).unwrap();
+    let b = probe(&sc, &bg).unwrap();
+    assert_eq!((b.width, b.height), (1920, 1080));
+    let args = build_youtube_args(
+        &src,
+        Some(&bg),
+        &wav,
+        &YoutubeSpec::default(),
+        &out,
+        Platform::current(),
+    );
+    run_ffmpeg(&sc, &args, &|| false).unwrap();
+    let o = probe(&sc, &out).unwrap();
+    assert_eq!((o.width, o.height), (1920, 1080));
+    assert!((o.duration - 3.0).abs() < 0.2, "duración {}", o.duration);
+    assert_eq!(o.audio_sample_rate, Some(48000));
+    assert_eq!(o.moov_first, Some(true));
 }
 
 /// Tipos de todas las cajas MP4 (recorre los contenedores moov/trak/edts/mdia/minf/stbl).
@@ -731,6 +804,7 @@ fn encoder_failure_is_per_job() {
     make_png(&sc, &png, "1600x1600");
     let mut args = build_youtube_args(
         &VideoSource::FromCover(png),
+        None,
         &wav,
         &YoutubeSpec::default(),
         &out,

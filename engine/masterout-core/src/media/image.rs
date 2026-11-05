@@ -66,6 +66,58 @@ fn to_srgb(img: &mut RgbImage, icc: &[u8]) -> bool {
     tr.transform(&src_px, img.as_mut()).is_ok()
 }
 
+/// ¿Se puede convertir este perfil ICC a sRGB?
+fn profile_usable(icc: &[u8]) -> bool {
+    let Ok(src) = ColorProfile::new_from_slice(icc) else {
+        return false;
+    };
+    src.create_transform_8bit(
+        Layout::Rgb,
+        &ColorProfile::new_srgb(),
+        Layout::Rgb,
+        TransformOptions::default(),
+    )
+    .is_ok()
+}
+
+fn check_dims(hw: u32, hh: u32) -> Result<(), AudioError> {
+    if hw.max(hh) > MAX_SIDE || u64::from(hw) * u64::from(hh) > MAX_PIXELS {
+        return Err(err("err.cover_too_large", format!("{hw}x{hh}")));
+    }
+    if hw.max(hh) < MIN_SIDE {
+        return Err(err("err.cover_too_small", format!("{hw}x{hh}")));
+    }
+    Ok(())
+}
+
+/// Mira solo la cabecera de la portada (sin decodificarla) y devuelve los avisos que
+/// `conform_cover` dará (`warn.cover_*`), o el mismo error que daría (`err.cover_too_small`,
+/// `err.cover_too_large`, `err.cover_unreadable`). Sirve para el plan, antes de exportar.
+pub fn inspect_cover(input: &Path, opts: &CoverOptions) -> Result<Vec<String>, AudioError> {
+    let reader = ImageReader::open(input)?
+        .with_guessed_format()
+        .map_err(AudioError::Io)?;
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|e| err("err.cover_unreadable", e))?;
+    let (hw, hh) = decoder.dimensions();
+    check_dims(hw, hh)?;
+    let mut warnings = Vec::new();
+    if hw != hh {
+        warnings.push("warn.cover_cropped".to_string());
+    }
+    // El recorte es al lado menor, con o sin giro EXIF.
+    if hw.min(hh) < opts.size {
+        warnings.push("warn.cover_upscaled".to_string());
+    }
+    if let Ok(Some(icc)) = decoder.icc_profile() {
+        if !profile_usable(&icc) {
+            warnings.push("warn.cover_profile_assumed_srgb".to_string());
+        }
+    }
+    Ok(warnings)
+}
+
 pub fn conform_cover(
     input: &Path,
     out_jpg: &Path,
@@ -82,12 +134,7 @@ pub fn conform_cover(
 
     // Guardas antes de decodificar (la cabecera basta).
     let (hw, hh) = decoder.dimensions();
-    if hw.max(hh) > MAX_SIDE || u64::from(hw) * u64::from(hh) > MAX_PIXELS {
-        return Err(err("err.cover_too_large", format!("{hw}x{hh}")));
-    }
-    if hw.max(hh) < MIN_SIDE {
-        return Err(err("err.cover_too_small", format!("{hw}x{hh}")));
-    }
+    check_dims(hw, hh)?;
 
     let icc = decoder.icc_profile().ok().flatten();
     let orientation = decoder

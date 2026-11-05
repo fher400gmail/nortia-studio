@@ -2,7 +2,7 @@
 
 use crate::i18n::{t, tf, Lang};
 use crate::loudness::Verdict;
-use crate::plan::{Job, MasterInfo, ReleaseMeta, Resolved};
+use crate::plan::{Job, MasterInfo, MediaKind, ReleaseMeta, Resolved};
 use crate::presets::Container;
 
 pub struct DeliverySummary<'a> {
@@ -42,6 +42,26 @@ fn container_label(j: &Job) -> String {
     j.container.extension().to_uppercase()
 }
 
+/// Ficha técnica de un destino para el README (audio, MP3, imagen y vídeo).
+fn job_spec(lang: Lang, j: &Job) -> String {
+    match j.media {
+        Some(MediaKind::Cover) => "JPG + PNG · 3000×3000 · sRGB".to_string(),
+        Some(MediaKind::Canvas) => "MP4 · 1080×1920 · H.264".to_string(),
+        Some(MediaKind::YoutubeVideo) => format!(
+            "MP4 · 1080p · H.264 + AAC 384 kbps · {} kHz",
+            khz(lang, j.sample_rate)
+        ),
+        Some(MediaKind::AppleMotion) => "MP4 · 3840×3840 (HEVC) + 2048×2732 (H.264)".to_string(),
+        None if j.container == Container::Mp3 => "MP3 320 kbps".to_string(),
+        None => format!(
+            "{} bit · {} kHz · {}",
+            j.bits,
+            khz(lang, j.sample_rate),
+            container_label(j)
+        ),
+    }
+}
+
 fn verdict_text(lang: Lang, v: &Verdict) -> String {
     match v {
         Verdict::Ok => t(lang, "verdict.ok"),
@@ -73,21 +93,18 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
     for r in s.jobs {
         match r {
             Resolved::Job(j) => {
-                let spec = if j.container == Container::Mp3 {
-                    "MP3 320 kbps".to_string()
-                } else {
-                    format!(
-                        "{} bit · {} kHz · {}",
-                        j.bits,
-                        khz(lang, j.sample_rate),
-                        container_label(j)
-                    )
-                };
+                let spec = job_spec(lang, j);
                 out.push_str(&format!("{}/  →  {}  ({})", j.subfolder, j.file_name, spec));
                 if j.is_upsampling {
                     out.push_str(&format!("  ⚠ {}", t(lang, "readme.upsampling")));
                 }
                 out.push('\n');
+                for extra in &j.extra_files {
+                    out.push_str(&format!("{}/  →  {}\n", j.subfolder, extra));
+                }
+                for w in &j.warnings {
+                    out.push_str(&format!("    ⚠ {}\n", t(lang, w)));
+                }
             }
             Resolved::Disabled {
                 preset_id,
@@ -147,6 +164,12 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
     out.push('\n');
     for r in s.jobs {
         match r {
+            // La imagen y el vídeo sin audio no tienen veredicto de loudness.
+            Resolved::Job(j)
+                if matches!(
+                    j.media,
+                    Some(MediaKind::Cover | MediaKind::Canvas | MediaKind::AppleMotion)
+                ) => {}
             Resolved::Job(j) => out.push_str(&format!(
                 "{}: [{}] {}\n",
                 preset_name(lang, &j.preset_id),

@@ -1,6 +1,7 @@
 //! Medios (imagen, vídeo, sonda) y localización del sidecar ffmpeg/ffprobe.
 
 pub mod image;
+pub mod mp3;
 pub mod probe;
 pub mod video;
 

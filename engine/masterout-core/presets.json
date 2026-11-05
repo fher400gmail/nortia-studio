@@ -226,5 +226,22 @@
     "group": "extras",
     "default_on": false,
     "source_kind": "url"
+  },
+  {
+    "id": "apple_motion",
+    "name": "Apple Motion",
+    "subfolder_key": "apple",
+    "tag": "Apple Motion",
+    "container": "mp4",
+    "bits": null,
+    "rate": null,
+    "target_lufs": null,
+    "max_tp_dbtp": null,
+    "embed_metadata": false,
+    "status": "confirmed",
+    "source_url": "https://help.apple.com/itc/albummotionguide/en.lproj/static.html",
+    "group": "extras",
+    "default_on": false,
+    "source_kind": "url"
   }
 ]

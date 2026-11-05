@@ -7,9 +7,14 @@ use crate::dither::{self, Dither};
 use crate::flac::{self, FlacTags};
 use crate::i18n::{t, Lang};
 use crate::loudness;
-use crate::mp3::{self, Id3Tags};
+use crate::media::image::{self as cover_image, CoverOptions, CoverOutput};
+use crate::media::mp3::{self, Id3Tags};
+use crate::media::video::{
+    self, run_ffmpeg, AppleMotionSpec, CanvasSpec, VideoSource, YoutubeSpec,
+};
+use crate::media::{self, Platform, SidecarPaths};
 use crate::naming;
-use crate::plan::{self, Job, MasterInfo, ReleaseMeta, Resolved};
+use crate::plan::{self, Job, MasterInfo, MediaInputs, MediaKind, ReleaseMeta, Resolved};
 use crate::presets::Container;
 use crate::reports::{self, DeliverySummary};
 use crate::resample;
@@ -33,6 +38,12 @@ pub struct ExportRequest {
     /// Si se activa, la exportación se detiene entre pasos: los archivos ya completos se
     /// conservan, no quedan temporales y se emite `Progress::Cancelled`.
     pub cancel: Option<Arc<AtomicBool>>,
+    /// Portada y material propio por ficha (imagen o vídeo).
+    pub media: MediaInputs,
+    /// ffmpeg/ffprobe; `None` deshabilita las fichas de vídeo y el MP3 (el audio sale igual).
+    pub sidecar: Option<SidecarPaths>,
+    /// Codificadores de vídeo a usar (solo las pruebas cambian el de la plataforma real).
+    pub platform: Platform,
 }
 
 impl ExportRequest {
@@ -52,7 +63,25 @@ impl ExportRequest {
             lang,
             threads: None,
             cancel: None,
+            media: MediaInputs::default(),
+            sidecar: default_sidecar(),
+            platform: Platform::current(),
         }
+    }
+
+    pub fn with_media(mut self, media: MediaInputs) -> Self {
+        self.media = media;
+        self
+    }
+
+    pub fn with_sidecar(mut self, sidecar: Option<SidecarPaths>) -> Self {
+        self.sidecar = sidecar;
+        self
+    }
+
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.platform = platform;
+        self
     }
 
     pub fn with_threads(mut self, threads: usize) -> Self {
@@ -108,6 +137,15 @@ pub struct Delivery {
     /// La exportación se canceló; `files` son los archivos completos que se conservan.
     pub cancelled: bool,
     pub elapsed_ms: u128,
+}
+
+/// Sidecar junto al ejecutable actual, en `MASTERCHECK_FFMPEG`/`MASTERCHECK_FFPROBE` o en PATH.
+pub fn default_sidecar() -> Option<SidecarPaths> {
+    let dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        .unwrap_or_default();
+    media::discover(&dir)
 }
 
 /// Semilla fija del dither TPDF: mismo audio de entrada, mismo archivo de salida.
@@ -268,6 +306,13 @@ struct Ctx<'a> {
     /// Muestras cuantizadas por combinación (bits, frecuencia, dither), calculadas una sola vez
     /// y compartidas entre destinos; se liberan cuando el último destino que las usa termina.
     cache: Mutex<Cache>,
+    media: &'a MediaInputs,
+    sidecar: Option<&'a SidecarPaths>,
+    platform: Platform,
+    /// Carpeta temporal de esta exportación (WAV intermedios, portada conformada, fondos).
+    temp: &'a Path,
+    /// Portadas ya conformadas, por ruta de origen.
+    covers: Mutex<HashMap<PathBuf, Arc<Result<CoverOutput, AudioError>>>>,
 }
 
 /// Dither de un destino: lo decide el plan (`needs_dither`), nunca la detección automática.
@@ -282,11 +327,12 @@ fn dither_for(needs: bool) -> Dither {
     }
 }
 
+/// ¿Necesita muestras cuantizadas del máster? Audio PCM, MP3 y el audio del vídeo de YouTube.
 fn is_sampled(job: &Job) -> bool {
     matches!(
         job.container,
         Container::Wav | Container::Flac | Container::Mp3
-    )
+    ) || job.media == Some(MediaKind::YoutubeVideo)
 }
 
 /// Combinaciones distintas (bits, frecuencia, dither) que hay que calcular para estos destinos.
@@ -379,18 +425,206 @@ impl Ctx<'_> {
         }
     }
 
-    /// `Ok(None)`: cancelado antes de escribir; no se ha creado ningún archivo.
-    fn render(&self, job: &Job, step: &dyn Fn(f32)) -> Result<Option<(PathBuf, u64)>, AudioError> {
+    /// Portada conformada (3000×3000 sRGB, JPG y PNG) a partir de `src`, una sola vez por origen.
+    fn conformed_cover(&self, src: &Path) -> Result<CoverOutput, AudioError> {
+        let mut covers = self.covers.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = match covers.get(src) {
+            Some(e) => e.clone(),
+            None => {
+                let n = covers.len();
+                let jpg = self.temp.join(format!("cover-{n}.jpg"));
+                let png = self.temp.join(format!("cover-{n}.png"));
+                let r = Arc::new(cover_image::conform_cover(
+                    src,
+                    &jpg,
+                    &png,
+                    &CoverOptions::default(),
+                    self.lang,
+                ));
+                covers.insert(src.to_path_buf(), r.clone());
+                r
+            }
+        };
+        match &*entry {
+            Ok(c) => Ok(c.clone()),
+            Err(e) => Err(rekey(e)),
+        }
+    }
+
+    /// Portada de la entrega (la de `media`, o la de los metadatos).
+    fn release_cover(&self) -> Option<PathBuf> {
+        self.media.cover.clone().or_else(|| self.meta.cover.clone())
+    }
+
+    fn sidecar(&self) -> Result<&SidecarPaths, AudioError> {
+        self.sidecar
+            .ok_or_else(|| unsupported("err.sidecar_missing"))
+    }
+
+    /// Fuente de un vídeo: el material propio del destino o, si no hay, la portada conformada.
+    fn video_source(&self, job: &Job) -> Result<VideoSource, AudioError> {
+        if let Some(p) = &job.own_media {
+            return Ok(VideoSource::UserMedia(p.clone()));
+        }
+        let cover = self
+            .release_cover()
+            .ok_or_else(|| unsupported("err.media_unreadable"))?;
+        Ok(VideoSource::FromCover(self.conformed_cover(&cover)?.png))
+    }
+
+    /// Escribe el audio cuantizado de un destino a un WAV temporal (para ffmpeg).
+    fn temp_wav(
+        &self,
+        job: &Job,
+        samples: &[Vec<i32>],
+        bits: u16,
+        rate: u32,
+    ) -> Result<(PathBuf, TempFile), AudioError> {
+        let path = self.temp_path(&job.preset_id, "wav");
+        let guard = TempFile(path.clone());
+        let opts = WavWriteOptions {
+            bits,
+            metadata: None,
+        };
+        wav::write(&path, samples, rate, &opts)?;
+        Ok((path, guard))
+    }
+
+    fn temp_path(&self, stem: &str, ext: &str) -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        self.temp.join(format!(
+            "{stem}-{}.{ext}",
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
+    /// Imagen/vídeo del destino: devuelve los archivos escritos (el principal primero).
+    fn render_media(
+        &self,
+        kind: MediaKind,
+        job: &Job,
+        dir: &Path,
+        step: &dyn Fn(f32),
+    ) -> Result<Vec<(PathBuf, u64)>, AudioError> {
+        let path = dir.join(&job.file_name);
+        let cancel = || self.cancelled();
+        let size = |p: &Path| -> Result<u64, AudioError> { Ok(std::fs::metadata(p)?.len()) };
+        match kind {
+            MediaKind::Cover => {
+                let src = job
+                    .own_media
+                    .clone()
+                    .or_else(|| self.release_cover())
+                    .ok_or_else(|| unsupported("err.media_unreadable"))?;
+                let c = self.conformed_cover(&src)?;
+                std::fs::create_dir_all(dir)?;
+                let mut out = Vec::new();
+                let png_path = dir.join(&job.extra_files[0]);
+                for (from, to) in [(&c.jpg, &path), (&c.png, &png_path)] {
+                    let r = atomic(to, |tmp| {
+                        std::fs::copy(from, tmp).map(|_| ()).map_err(Into::into)
+                    });
+                    match r {
+                        Ok(b) => out.push((to.clone(), b)),
+                        Err(e) => {
+                            for (p, _) in &out {
+                                let _ = std::fs::remove_file(p);
+                            }
+                            return Err(e);
+                        }
+                    }
+                }
+                Ok(out)
+            }
+            MediaKind::Canvas => {
+                let sc = self.sidecar()?;
+                let src = self.video_source(job)?;
+                let info = match &src {
+                    VideoSource::UserMedia(p) => Some(media::probe::probe(sc, p)?),
+                    VideoSource::FromCover(_) => None,
+                };
+                step(0.1);
+                std::fs::create_dir_all(dir)?;
+                let args = video::build_canvas_args(
+                    &src,
+                    info.as_ref(),
+                    &CanvasSpec::default(),
+                    &path,
+                    self.platform,
+                );
+                run_ffmpeg(sc, &args, &cancel)?;
+                Ok(vec![(path.clone(), size(&path)?)])
+            }
+            MediaKind::AppleMotion => {
+                let sc = self.sidecar()?;
+                let src = self.video_source(job)?;
+                std::fs::create_dir_all(dir)?;
+                let second = dir.join(&job.extra_files[0]);
+                let mut out: Vec<(PathBuf, u64)> = Vec::new();
+                for (square, to) in [(true, &path), (false, &second)] {
+                    step(if square { 0.1 } else { 0.55 });
+                    let spec = AppleMotionSpec {
+                        square,
+                        ..AppleMotionSpec::default()
+                    };
+                    let args = video::build_apple_motion_args(&src, &spec, to, self.platform);
+                    let r = run_ffmpeg(sc, &args, &cancel).and_then(|()| size(to));
+                    match r {
+                        Ok(b) => out.push((to.clone(), b)),
+                        Err(e) => {
+                            // un destino es todo o nada
+                            for (p, _) in &out {
+                                let _ = std::fs::remove_file(p);
+                            }
+                            return Err(e);
+                        }
+                    }
+                }
+                Ok(out)
+            }
+            MediaKind::YoutubeVideo => {
+                let sc = self.sidecar()?;
+                let samples = self.samples(job)?;
+                let src = self.video_source(job)?;
+                step(0.2);
+                // El audio es el WAV de 48 kHz que ya tiene el motor, nunca el original.
+                let (wav48, _wav_guard) =
+                    self.temp_wav(job, &samples, job.bits, job.sample_rate)?;
+                let spec = YoutubeSpec::default();
+                let (bg_path, _bg_guard);
+                let bg = if video::is_still_source(&src) {
+                    bg_path = self.temp_path("yt-bg", "png");
+                    _bg_guard = TempFile(bg_path.clone());
+                    let args = video::build_youtube_bg_args(&src, &spec, &bg_path);
+                    run_ffmpeg(sc, &args, &cancel)?;
+                    Some(bg_path.as_path())
+                } else {
+                    None
+                };
+                step(0.4);
+                std::fs::create_dir_all(dir)?;
+                let args = video::build_youtube_args(&src, bg, &wav48, &spec, &path, self.platform);
+                run_ffmpeg(sc, &args, &cancel)?;
+                Ok(vec![(path.clone(), size(&path)?)])
+            }
+        }
+    }
+
+    /// Archivos escritos por un destino; vacío (`None`): cancelado antes de escribir.
+    fn render(
+        &self,
+        job: &Job,
+        step: &dyn Fn(f32),
+    ) -> Result<Option<Vec<(PathBuf, u64)>>, AudioError> {
         if self.cancelled() {
             return Ok(None);
         }
         let dir = self.folder.join(&job.subfolder);
         let path = dir.join(&job.file_name);
-        let lame = if job.container == Container::Mp3 {
-            Some(mp3::find_lame().ok_or_else(|| unsupported("err.lame_missing"))?)
-        } else {
-            None
-        };
+        if let Some(kind) = job.media {
+            let files = self.render_media(kind, job, &dir, step)?;
+            return Ok(Some(files));
+        }
         if !matches!(
             job.container,
             Container::Wav | Container::Flac | Container::Mp3
@@ -400,6 +634,11 @@ impl Ctx<'_> {
                 job.container.extension()
             )));
         }
+        let sidecar = if job.container == Container::Mp3 {
+            Some(self.sidecar()?)
+        } else {
+            None
+        };
         let samples = self.samples(job)?;
         step(0.6);
         if self.cancelled() {
@@ -428,41 +667,76 @@ impl Ctx<'_> {
                 )
             })?,
             _ => atomic(&path, |tmp| {
-                let Some(lame) = lame.as_deref() else {
-                    return Err(unsupported("err.lame_missing"));
+                let Some(sidecar) = sidecar else {
+                    return Err(unsupported("err.sidecar_missing"));
                 };
+                // La portada conformada va incrustada (APIC); si no se puede conformar, el
+                // MP3 sale sin ella.
+                let cover_jpg = self
+                    .release_cover()
+                    .and_then(|c| self.conformed_cover(&c).ok())
+                    .map(|c| c.jpg);
                 // WAV intermedio fuera de la carpeta de entrega.
-                static COUNTER: AtomicU64 = AtomicU64::new(0);
-                let wav_tmp = std::env::temp_dir().join(format!(
-                    "masterout-{}-{}-{}.wav",
-                    std::process::id(),
-                    COUNTER.fetch_add(1, Ordering::Relaxed),
-                    job.preset_id
-                ));
-                let opts = WavWriteOptions {
-                    bits: 16,
-                    metadata: None,
-                };
-                // El guard borra el WAV intermedio también si hay un panic.
-                let _wav_guard = TempGuard {
-                    path: &wav_tmp,
-                    armed: true,
-                };
+                let (wav_tmp, _wav_guard) = self.temp_wav(job, &samples, 16, 44_100)?;
                 inject_fault(job, tmp);
-                wav::write(&wav_tmp, &samples, 44_100, &opts).and_then(|()| {
-                    step(0.8);
-                    mp3::encode_with(
-                        self.lang,
-                        lame,
-                        &wav_tmp,
-                        tmp,
-                        &self.id3_tags(),
-                        self.meta.cover.as_deref(),
-                    )
-                })
+                step(0.8);
+                mp3::encode(
+                    sidecar,
+                    self.lang,
+                    &wav_tmp,
+                    tmp,
+                    &self.id3_tags(),
+                    cover_jpg.as_deref(),
+                    &|| self.cancelled(),
+                )
             })?,
         };
-        Ok(Some((path, bytes)))
+        Ok(Some(vec![(path, bytes)]))
+    }
+}
+
+/// Borra el archivo temporal al soltarse (también si hay un panic).
+struct TempFile(PathBuf);
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Carpeta temporal de la exportación; se borra entera al terminar.
+struct TempDir(PathBuf);
+
+impl TempDir {
+    fn new() -> Result<TempDir, AudioError> {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let p = std::env::temp_dir().join(format!(
+            "masterout-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&p)?;
+        Ok(TempDir(p))
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// Copia de un error por su clave y detalle (`AudioError` no es `Clone`).
+fn rekey(e: &AudioError) -> AudioError {
+    match e {
+        AudioError::Cancelled => AudioError::Cancelled,
+        other => {
+            let (k, d) = other.key_and_detail();
+            unsupported(match d {
+                Some(d) => format!("{k}: {d}"),
+                None => k,
+            })
+        }
     }
 }
 
@@ -538,7 +812,7 @@ fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool
 
 /// Resultado de un destino dentro de la exportación paralela.
 enum Outcome {
-    Done(PathBuf, u64),
+    Done(Vec<(PathBuf, u64)>),
     /// (clave de error, detalle técnico)
     Failed(String, Option<String>),
     /// Cancelado antes de escribir.
@@ -564,7 +838,14 @@ pub fn run(
     let mut meta = req.meta.clone();
     meta.title = naming::fallback_title(&meta.title, &req.master_path);
     let ids: Vec<&str> = req.active_ids.iter().map(String::as_str).collect();
-    let plan = plan::resolve_in(&info, &meta, &ids, req.lang);
+    let plan = plan::resolve_in(
+        &info,
+        &meta,
+        &ids,
+        &req.media,
+        req.lang,
+        req.sidecar.is_some(),
+    );
     emit(Progress::Planned(plan.clone()));
 
     let threads = req.threads.unwrap_or_else(num_cpus::get_physical).max(1);
@@ -590,6 +871,7 @@ pub fn run(
             .as_ref()
             .is_some_and(|c| c.load(Ordering::Relaxed))
     });
+    let temp = TempDir::new()?;
     let ctx = Ctx {
         meta: &meta,
         folder: &folder,
@@ -597,6 +879,11 @@ pub fn run(
         lang: req.lang,
         cancel: req.cancel.clone(),
         cache: Mutex::new(cache),
+        media: &req.media,
+        sidecar: req.sidecar.as_ref(),
+        platform: req.platform,
+        temp: &temp.0,
+        covers: Mutex::new(HashMap::new()),
     };
 
     let outcomes: Vec<Outcome> = pool.install(|| {
@@ -620,16 +907,17 @@ pub fn run(
                 let r = catch_unwind(AssertUnwindSafe(|| ctx.render(job, &step)));
                 ctx.release(job);
                 match r {
-                    Ok(Ok(Some((path, bytes)))) => {
+                    Ok(Ok(Some(files))) if !files.is_empty() => {
                         step(1.0);
                         emit(Progress::JobDone {
                             preset_id: id,
-                            path: path.clone(),
-                            bytes,
+                            path: files[0].0.clone(),
+                            bytes: files.iter().map(|f| f.1).sum(),
                         });
-                        Outcome::Done(path, bytes)
+                        Outcome::Done(files)
                     }
-                    Ok(Ok(None)) | Ok(Err(AudioError::Cancelled)) => Outcome::Skipped,
+                    Ok(Ok(_)) => Outcome::Skipped,
+                    Ok(Err(AudioError::Cancelled)) => Outcome::Skipped,
                     Ok(Err(e)) => {
                         let (error, detail) = e.key_and_detail();
                         emit(Progress::JobFailed {
@@ -659,7 +947,7 @@ pub fn run(
     let mut failed_details = Vec::new();
     for (job, r) in jobs.iter().zip(outcomes) {
         match r {
-            Outcome::Done(p, b) => files.push((p, b)),
+            Outcome::Done(fs) => files.extend(fs),
             Outcome::Failed(e, d) => {
                 failed.push((job.preset_id.clone(), e));
                 if let Some(d) = d {

@@ -1,44 +1,107 @@
 #!/usr/bin/env bash
 # Pruebas de aceptación del sidecar recién construido.
 # uso: accept.sh <ffmpeg> <ffprobe> <encoder h264: h264_videotoolbox|h264_mf> <out> [workdir]
-# Escribe <out>/buildconf.txt. Sale con error si algo no cuadra.
+# Variables opcionales: ACCEPT_ARCH=x86_64|arm64 (ejecuta bajo `arch -<x>`; buildconf-<arch>.txt)
+# Escribe <out>/buildconf[-<arch>].txt. Sale con error si algo no cuadra.
 set -euo pipefail
+HERE=$(cd "$(dirname "$0")" && pwd)
+source "$HERE/common.sh"
 FF=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 FP=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 ENC=${3:?encoder}; OUT=${4:?out}
 mkdir -p "$OUT"; OUT=$(cd "$OUT" && pwd)
 WORKDIR=${5:-$(mktemp -d)}; mkdir -p "$WORKDIR"; cd "$WORKDIR"
+RUN=(); BCNAME=buildconf.txt
+if [ -n "${ACCEPT_ARCH:-}" ]; then RUN=(arch "-$ACCEPT_ARCH"); BCNAME="buildconf-$ACCEPT_ARCH.txt"; fi
+ff() { ${RUN[@]+"${RUN[@]}"} "$FF" "$@"; }
+fp() { ${RUN[@]+"${RUN[@]}"} "$FP" "$@"; }
 PY=$(command -v python3 || command -v python) || { echo "falta python"; exit 1; }
 fail() { echo "FALLO: $*" >&2; exit 1; }
 
 echo "== versión y licencia =="
-"$FF" -hide_banner -version | head -n 3
-{ echo "### ffmpeg -L"; "$FF" -hide_banner -L; echo; echo "### ffmpeg -buildconf"; "$FF" -hide_banner -buildconf; } > "$OUT/buildconf.txt" 2>&1
-cat "$OUT/buildconf.txt"
-grep -q -- '--disable-gpl' "$OUT/buildconf.txt" || fail "buildconf sin --disable-gpl"
-grep -q -- '--enable-gpl' "$OUT/buildconf.txt" && fail "buildconf con --enable-gpl"
-grep -q -- '--enable-nonfree' "$OUT/buildconf.txt" && fail "buildconf con --enable-nonfree"
-grep -q -- '--enable-version3' "$OUT/buildconf.txt" && fail "buildconf con --enable-version3"
-grep -qi 'Lesser General Public' "$OUT/buildconf.txt" || fail "licencia -L no es LGPL"
-ENCLIST=$("$FF" -hide_banner -encoders 2>/dev/null)
+ff -hide_banner -version | head -n 3
+{ echo "### ffmpeg -L"; ff -hide_banner -L; echo; echo "### ffmpeg -buildconf"; ff -hide_banner -buildconf; } > "$OUT/$BCNAME" 2>&1
+cat "$OUT/$BCNAME"
+grep -q -- '--disable-gpl' "$OUT/$BCNAME" || fail "buildconf sin --disable-gpl"
+grep -q -- '--enable-gpl' "$OUT/$BCNAME" && fail "buildconf con --enable-gpl"
+grep -q -- '--enable-nonfree' "$OUT/$BCNAME" && fail "buildconf con --enable-nonfree"
+grep -q -- '--enable-version3' "$OUT/$BCNAME" && fail "buildconf con --enable-version3"
+grep -qi 'Lesser General Public' "$OUT/$BCNAME" || fail "licencia -L no es LGPL"
+ENCLIST=$(ff -hide_banner -encoders 2>/dev/null)
 grep -q " $ENC " <<<"$ENCLIST" || fail "encoder $ENC no está en el binario"
 grep -q " libmp3lame " <<<"$ENCLIST" || fail "libmp3lame no está en el binario"
 for banned in libx264 libx265 libfdk_aac; do
   if grep -q " $banned " <<<"$ENCLIST"; then fail "encoder prohibido $banned"; fi
 done
 
-"$FF" -hide_banner -h "encoder=$ENC" || true
+ff -hide_banner -h "encoder=$ENC" || true
+
+echo "== inventario de componentes (lista blanca) =="
+export ALLOW_ENC="$ALLOW_ENCODERS_BASE,$ENC"
+ff -hide_banner -filters > inv.filters 2>&1
+ff -hide_banner -encoders > inv.encoders 2>&1
+ff -hide_banner -decoders > inv.decoders 2>&1
+ff -hide_banner -muxers > inv.muxers 2>&1
+ff -hide_banner -demuxers > inv.demuxers 2>&1
+ff -hide_banner -bsfs > inv.bsfs 2>&1
+ff -hide_banner -protocols > inv.protocols 2>&1
+export ALLOW_FILTERS ALLOW_DECODERS ALLOW_MUXERS ALLOW_DEMUXERS ALLOW_BSFS ALLOW_PROTOCOLS
+"$PY" - <<'PYEOF'
+import os, re, sys
+def names(kind):
+    out = set()
+    for line in open("inv." + kind, errors="replace"):
+        line = line.rstrip("\n")
+        if kind == "bsfs":
+            if re.fullmatch(r"[a-z0-9_]+", line.strip()): out.add(line.strip())
+            continue
+        if kind == "protocols":
+            continue
+        m = re.match(r"^\s+([A-Z.|]{1,6})\s+(\S+)", line)
+        if not m or m.group(2) == "=": continue
+        out.add(m.group(2).split(",")[0])
+    return out
+def protocols():
+    sec, got = None, {"Input": set(), "Output": set()}
+    for line in open("inv.protocols", errors="replace"):
+        l = line.strip()
+        if l.endswith(":") and l[:-1] in got: sec = l[:-1]; continue
+        if sec and l: got[sec].add(l)
+    return got["Input"] | got["Output"]
+# Implícitos de libavfilter, siempre compilados (no dependen de --enable-filter).
+IMPLICIT_FILTERS = {"abuffer", "abuffersink", "buffer", "buffersink"}
+checks = [
+  ("filters",  names("filters"),  set(os.environ["ALLOW_FILTERS"].split(",")) | IMPLICIT_FILTERS),
+  ("encoders", names("encoders"), set(os.environ["ALLOW_ENC"].split(","))),
+  ("decoders", names("decoders"), set(os.environ["ALLOW_DECODERS"].split(","))),
+  ("muxers",   names("muxers"),   set(os.environ["ALLOW_MUXERS"].split(","))),
+  ("demuxers", names("demuxers"), set(os.environ["ALLOW_DEMUXERS"].split(",")) | {"lavfi"}),
+  ("bsfs",     names("bsfs"),     set(os.environ["ALLOW_BSFS"].split(","))),
+  ("protocols", protocols(),      set(os.environ["ALLOW_PROTOCOLS"].split(","))),
+]
+bad = False
+for kind, got, want in checks:
+    miss, extra = sorted(want - got), sorted(got - want)
+    print("%-9s esperados=%s" % (kind, ",".join(sorted(want))))
+    print("%-9s presentes =%s" % (kind, ",".join(sorted(got))))
+    if miss or extra:
+        bad = True
+        print("FALLO inventario %s: faltan=%s sobran=%s" % (kind, miss, extra))
+if bad: sys.exit(1)
+print("inventario ok")
+PYEOF
 
 echo "== material sintético =="
 "$PY" - <<'PYEOF'
-import math, struct, wave, zlib
+import random, struct, wave, zlib
 # WAV 8 s, 44,1 kHz, estéreo, 16 bit
 sr, secs = 44100, 8
 w = wave.open("in.wav", "wb"); w.setnchannels(2); w.setsampwidth(2); w.setframerate(sr)
 buf = bytearray()
+# Ruido blanco determinista, canales independientes (obliga al AAC a gastar el bitrate pedido).
+rng = random.Random(1234)
 for i in range(sr * secs):
-    v = int(12000 * math.sin(2*math.pi*440*i/sr) + 6000 * math.sin(2*math.pi*1320*i/sr))
-    buf += struct.pack("<hh", v, -v)
+    buf += struct.pack("<hh", rng.randint(-9000, 9000), rng.randint(-9000, 9000))
 w.writeframes(bytes(buf)); w.close()
 # PNG 1600x1600 degradado
 n = 1600
@@ -61,7 +124,7 @@ case "$ENC" in
   h264_mf) EXTRA=(); PROFILE=100 ;;
   *) EXTRA=(); PROFILE=high ;;
 esac
-run() { echo "+ ffmpeg $*"; "$FF" -hide_banner -y -loglevel warning "$@"; }
+run() { echo "+ ffmpeg $*"; ff -hide_banner -y -loglevel warning "$@"; }
 
 echo "== canvas =="
 run -framerate 30 -loop 1 -i in.png -t 6 -an \
@@ -77,8 +140,8 @@ run -framerate 30 -loop 1 -i in.png -i in.wav -t 8 \
 echo "== mp3 =="
 run -i in.wav -vn -c:a libmp3lame -b:a 320k out.mp3
 
-for f in canvas.mp4 youtube.mp4 out.mp3; do "$FP" -v error -show_format -show_streams -of json "$f" > "$f.json"; done
-"$FP" -v error -show_streams -select_streams v:0 -show_entries stream=profile,has_b_frames,r_frame_rate,avg_frame_rate -of default youtube.mp4 || true
+for f in canvas.mp4 youtube.mp4 out.mp3; do fp -v error -show_format -show_streams -of json "$f" > "$f.json"; done
+fp -v error -show_streams -select_streams v:0 -show_entries stream=profile,has_b_frames,r_frame_rate,avg_frame_rate -of default youtube.mp4 || true
 
 echo "== aserciones =="
 "$PY" - <<'PYEOF'
@@ -125,8 +188,9 @@ chk(abs(fps(v) - 30) < 0.01, "youtube 30 fps (%s)" % v["r_frame_rate"])
 chk(len(s) == 1 and s[0]["codec_name"] == "aac", "youtube audio aac")
 chk(s and int(s[0]["sample_rate"]) == 48000, "youtube audio 48 kHz")
 chk(s and s[0].get("profile") == "LC", "youtube AAC-LC (%s)" % (s[0].get("profile") if s else None))
-if s and s[0].get("bit_rate"):
-    br = int(s[0]["bit_rate"]); chk(br <= 430000, "youtube audio bitrate <= ~384k (medido %d; el aac nativo no es CBR estricto)" % br)
+chk(s and s[0].get("channels") == 2, "youtube audio 2 canales")
+br = int(s[0].get("bit_rate", 0)) if s else 0
+chk(340000 <= br <= 420000, "youtube audio bitrate 340k-420k (medido %d)" % br)
 chk(j["format"]["nb_streams"] == 2, "youtube nb_streams=2")
 d = float(j["format"]["duration"]); chk(abs(d - 8) <= 0.1, "youtube duración 8 s (%.3f)" % d)
 a = atoms("youtube.mp4"); chk("moov" in a and "mdat" in a and a.index("moov") < a.index("mdat"), "youtube moov antes de mdat %s" % a)

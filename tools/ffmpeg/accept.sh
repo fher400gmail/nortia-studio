@@ -59,6 +59,11 @@ def names(kind):
             continue
         if kind == "protocols":
             continue
+        if kind in ("muxers", "demuxers"):
+            toks = line.split()
+            while toks and len(toks[0]) <= 2 and toks[0] != "--": toks = toks[1:]  # flags D/E/d
+            if not toks or line.lstrip().startswith(("D.", ".E", "..", "-", "File", "Formats")): continue
+            out.add(toks[0].split(",")[0]); continue
         m = re.match(r"^\s+([A-Z.|]{1,6})\s+(\S+)", line)
         if not m or m.group(2) == "=": continue
         out.add(m.group(2).split(",")[0])
@@ -80,7 +85,7 @@ checks = [
   ("encoders", names("encoders"), set(os.environ["ALLOW_ENC"].split(","))),
   ("decoders", names("decoders"), set(os.environ["ALLOW_DECODERS"].split(",")) | IMPLICIT_DECODERS),
   ("muxers",   names("muxers"),   set(os.environ["ALLOW_MUXERS"].split(","))),
-  ("demuxers", names("demuxers"), {d.replace("image_", "") for d in os.environ["ALLOW_DEMUXERS"].split(",")}),
+  ("demuxers", names("demuxers"), {d.replace("image_", "") for d in os.environ["ALLOW_DEMUXERS"].split(",")} | {"lavfi"}),
   ("bsfs",     names("bsfs"),     set(os.environ["ALLOW_BSFS"].split(","))),
   ("protocols", protocols(),      set(os.environ["ALLOW_PROTOCOLS"].split(","))),
 ]

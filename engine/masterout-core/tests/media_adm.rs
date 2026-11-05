@@ -98,34 +98,73 @@ fn golden_commands_high_rates_use_bats_and_target_rate_family() {
     assert_eq!(c96[1..], c48[1..]);
 }
 
+const HEAD: &str = "afclip : \"03_Tema.wav\"    2 ch,  48000 Hz, 'lpcm' (0x0000000C) 24-bit little-endian signed integer\n";
+const TABLE: &str = "CLIPPED SAMPLES:\n    SECONDS          SAMPLE    CHAN    VALUE        DECIBELS\n   12.500000       600000.50    1    -1.004000     0.034700\n   20.250000       972000.50    2     1.010000     0.086000\n\n";
+
+fn total(ch: &str, on: u32, inter: u32) -> String {
+    format!("   total clipped samples    {ch:<6} on-sample:        {on}    inter-sample:        {inter}\n")
+}
+
 #[test]
-fn parser_reads_zero_and_n_clips() {
-    assert_eq!(parse_afclip("0 clipped samples\n"), Some(0));
-    assert_eq!(parse_afclip("No clipping detected.\n"), Some(0));
-    assert_eq!(parse_afclip("Clipped samples: 0"), Some(0));
-    assert_eq!(parse_afclip("Found 1,234 clipped samples"), Some(1234));
-    assert_eq!(
-        parse_afclip("afclip /tmp/masterout-123-4/final.m4a\n17 clipped samples\n"),
-        Some(17)
+fn parser_no_clips() {
+    let out = format!("{HEAD} -- no samples clipped --\n");
+    assert_eq!(parse_afclip(&out), Some(0));
+}
+
+#[test]
+fn parser_sums_all_totals_on_and_inter_sample() {
+    let h = format!("{HEAD}{TABLE}");
+    let two = format!("{h}{}{}", total("Left", 0, 6), total("Right", 0, 1));
+    assert_eq!(parse_afclip(&two), Some(7));
+    // el último canal limpio no puede ocultar los clips del primero
+    let left_only = format!("{h}{}{}", total("Left", 0, 6), total("Right", 0, 0));
+    assert_eq!(parse_afclip(&left_only), Some(6));
+    let on = format!("{h}{}{}", total("Left", 4, 1), total("Right", 0, 0));
+    assert_eq!(parse_afclip(&on), Some(5));
+}
+
+#[test]
+fn parser_handles_three_channels_and_mono() {
+    let h = format!("{HEAD}{TABLE}");
+    let three = format!(
+        "{h}{}{}{}",
+        total("Left", 1, 2),
+        total("Right", 0, 0),
+        total("Center", 0, 4)
     );
-    // por canal: se suman; con total manda el total
+    assert_eq!(parse_afclip(&three), Some(7));
     assert_eq!(
-        parse_afclip("channel 0: 3 clipped samples\nchannel 1: 4 clipped samples\n"),
-        Some(7)
-    );
-    assert_eq!(
-        parse_afclip("ch 0: 3 clipped samples\nch 1: 4 clipped samples\ntotal clipped: 7\n"),
-        Some(7)
+        parse_afclip(&format!("{h}{}", total("Mono", 0, 3))),
+        Some(3)
     );
 }
 
 #[test]
-fn parser_rejects_garbage() {
+fn parser_counts_table_rows_without_totals() {
+    assert_eq!(parse_afclip(&format!("{HEAD}{TABLE}")), Some(2));
+}
+
+#[test]
+fn parser_never_guesses() {
     assert_eq!(parse_afclip(""), None);
     assert_eq!(parse_afclip("Segmentation fault"), None);
+    assert_eq!(parse_afclip("0 clipped samples"), None);
+    assert_eq!(parse_afclip("No clipping detected."), None);
     assert_eq!(parse_afclip("usage: afclip file 12 34"), None);
-    // la ruta con dígitos no cuenta
-    assert_eq!(parse_afclip("afclip /tmp/clip-99/final.m4a"), None);
+    // cabecera sin filas ni totales
+    assert_eq!(parse_afclip(&format!("{HEAD}CLIPPED SAMPLES:\n")), None);
+    // totales sin cifras
+    assert_eq!(
+        parse_afclip(&format!("{HEAD}{TABLE}   total clipped samples    Left\n")),
+        None
+    );
+    // "sin clips" contradictorio con una cabecera de tabla: no es un cero
+    assert_eq!(
+        parse_afclip(&format!(
+            "{HEAD}-- no samples clipped --\nCLIPPED SAMPLES:\n"
+        )),
+        None
+    );
 }
 
 #[test]
@@ -166,11 +205,14 @@ mod fake_tools {
 
     #[test]
     fn runs_the_flow_and_reports_clipping() {
-        let r = run("echo '12 clipped samples'", "exit 0");
+        let r = run(
+            "printf 'CLIPPED SAMPLES:\\n   total clipped samples    Left   on-sample:   4    inter-sample:   8\\n'",
+            "exit 0",
+        );
         assert_eq!(r.status, AdmStatus::Clipping);
         assert_eq!(r.clipped_samples, 12);
         assert!(r.log.contains("--soundcheck-generate"));
-        let r = run("echo '0 clipped samples'", "exit 0");
+        let r = run("echo ' -- no samples clipped --'", "exit 0");
         assert_eq!(r.status, AdmStatus::Ok);
         assert!(r.aac_path.is_some());
     }

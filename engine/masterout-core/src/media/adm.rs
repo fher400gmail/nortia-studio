@@ -106,74 +106,66 @@ pub fn build_adm_commands(master_wav: &Path, workdir: &Path, master_rate: u32) -
     vec![step1, step2, step3, vec!["afclip".to_string(), m4a]]
 }
 
-/// Número de muestras con clipping según la salida de `afclip`; `None` si el formato no se
-/// reconoce. Mira solo las líneas que mencionan "clip" (sin el nombre del programa ni rutas):
-/// una línea "total" manda; si no, se suman los enteros de cada línea (p. ej. por canal).
-/// "no clipping", "none" o ausencia de número en una línea de clip cuentan como cero.
+/// Número de muestras con clipping según la salida real de `afclip` (macOS); `None` si no se
+/// reconoce (el flujo lo degrada a `reason.adm_parse` y conserva el log). Formatos:
+///
+/// ```text
+///  -- no samples clipped --
+/// ```
+/// ```text
+/// CLIPPED SAMPLES:
+///     SECONDS          SAMPLE    CHAN    VALUE        DECIBELS
+///    57.385431       2530697.50    1    -1.006987     0.060476
+///
+///    total clipped samples    Left   on-sample:        0    inter-sample:        6
+///    total clipped samples    Right  on-sample:        0    inter-sample:        1
+/// ```
+///
+/// Prioridad: suma de `on-sample` + `inter-sample` de TODAS las líneas de totales (hay una por
+/// canal); si no hay totales, filas numéricas bajo la cabecera; "no samples clipped" solo vale
+/// sin cabecera de tabla. Nada de adivinar con otras frases.
 pub fn parse_afclip(output: &str) -> Option<u64> {
-    let mut total: Option<u64> = None;
-    let mut sum: Option<u64> = None;
-    for line in output.lines() {
-        let tokens: Vec<&str> = line
-            .split_whitespace()
-            .filter(|t| !t.contains('/') && !t.contains('\\') && !t.ends_with(".m4a"))
-            .collect();
-        let text = tokens.join(" ").to_lowercase().replace("afclip", "");
-        if !text.contains("clip") {
-            continue;
-        }
-        let words: Vec<&str> = text.split_whitespace().collect();
-        let num = |w: &str| -> Option<u64> {
-            let d: String = w.chars().filter(|c| c.is_ascii_digit()).collect();
-            let only_num = w.chars().all(|c| c.is_ascii_digit() || c == ',');
-            if only_num {
-                d.parse().ok()
-            } else {
-                None
-            }
-        };
-        // el número pegado a la palabra "clip": antes ("12 clipped") o después ("clipped: 12");
-        // si no, el último de la línea (así "channel 0: 3 clipped" no toma el canal).
-        let at = words.iter().position(|w| w.contains("clip")).unwrap_or(0);
-        let near = [
-            at.checked_sub(1),
-            at.checked_sub(2),
-            Some(at + 1),
-            Some(at + 2),
-        ]
-        .into_iter()
-        .flatten()
-        .filter_map(|i| words.get(i))
-        .find_map(|w| num(w.trim_end_matches(':')));
-        let nums: Vec<u64> = near
-            .or_else(|| {
-                words
-                    .iter()
-                    .rev()
-                    .find_map(|w| num(w.trim_end_matches(':')))
-            })
-            .into_iter()
-            .collect();
-        let n = match nums.first() {
-            Some(n) => *n,
-            None => {
-                // sin número: solo vale si dice claramente que no hay
-                if ["no clip", "not clip", "without clip", "none", "no samples"]
-                    .iter()
-                    .any(|k| text.contains(k))
-                {
-                    0
-                } else {
-                    continue;
+    let mut no_clip = false;
+    let mut totals: Option<u64> = None;
+    let mut header = false;
+    let mut rows = 0u64;
+    for raw in output.lines() {
+        let line = raw.trim().to_lowercase();
+        if line.contains("no samples clipped") {
+            no_clip = true;
+        } else if line.starts_with("total clipped samples") {
+            let mut found = 0;
+            let mut it = line.split_whitespace().peekable();
+            while let Some(w) = it.next() {
+                if w == "on-sample:" || w == "inter-sample:" {
+                    if let Some(n) = it.peek().and_then(|v| v.parse::<u64>().ok()) {
+                        totals = Some(totals.unwrap_or(0).saturating_add(n));
+                        found += 1;
+                    }
                 }
             }
-        };
-        if text.contains("total") {
-            total = Some(n);
+            if found == 0 {
+                return None; // totales en otro formato: no adivinar
+            }
+        } else if line.starts_with("clipped samples:") {
+            header = true;
+        } else if header {
+            let cols: Vec<&str> = line.split_whitespace().collect();
+            if cols.len() == 5 && cols.iter().all(|c| c.parse::<f64>().is_ok()) {
+                rows += 1;
+            }
         }
-        sum = Some(sum.unwrap_or(0).saturating_add(n));
     }
-    total.or(sum)
+    if let Some(n) = totals {
+        return Some(n);
+    }
+    if header && rows > 0 {
+        return Some(rows);
+    }
+    if no_clip && !header {
+        return Some(0);
+    }
+    None
 }
 
 fn find_tool(name: &str, path_var: Option<std::ffi::OsString>) -> Option<PathBuf> {

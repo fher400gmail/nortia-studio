@@ -17,7 +17,7 @@ body{background:var(--bg)}
 .st .sl{font-size:13px;color:var(--tx3);font-weight:500;transition:color .3s}
 .st.done .sl{color:var(--tx2)}.st.cur .sl{color:var(--tx);font-weight:600}
 .st:hover .sl{color:var(--tx)}
-.mk{position:absolute;top:-2px;transform:translateX(-50%);background:var(--bg);padding:0 9px;border-radius:99px;height:40px;display:flex;align-items:center;transition:left .6s cubic-bezier(.3,.8,.3,1);z-index:2}
+.mk{pointer-events:none;position:absolute;top:-2px;transform:translateX(-50%);background:var(--bg);padding:0 9px;border-radius:99px;height:40px;display:flex;align-items:center;transition:left .6s cubic-bezier(.3,.8,.3,1);z-index:2}
 .main{flex:1;min-height:0;padding:14px 100px 20px;position:relative}
 .hd h1{font-size:28px;font-weight:600;letter-spacing:-.025em;line-height:1.15}
 .hd p{font-size:15px;color:var(--tx2);margin-top:6px;max-width:640px;line-height:1.45}
@@ -47,9 +47,9 @@ body{background:var(--bg)}
 .chipf{display:inline-flex;gap:9px;align-items:center;font-size:13px;color:var(--tx2);margin-top:2px}
 .chipf b{color:var(--tx);font-weight:600}
 /* paso 2 */
-.formg{display:grid;grid-template-columns:1fr 1fr;gap:18px 18px;max-width:640px}
+.formg{align-content:start;display:grid;grid-template-columns:1fr 1fr;gap:18px 18px;max-width:640px}
 .formg .full{grid-column:1/-1}.hint{font-size:11.5px;color:var(--tx3)}
-.covbox{padding:20px;display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.covbox{align-self:start;padding:20px;display:flex;flex-direction:column;gap:14px;align-items:flex-start}
 .chk{display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--tx2)}.chk span{display:flex;gap:8px;align-items:center}.chk svg{width:14px;height:14px;color:var(--ok)}
 /* paso 3 */
 .tabs{display:flex;gap:6px;margin-bottom:12px}
@@ -106,7 +106,7 @@ const fld=(l,v,c='',ok,h)=>`<div class="fld ${c}"><label>${l}</label><div class=
 const treePanel=(t)=>`<div class="card tp"><div class="th"><b>${t}</b><span id="tcount"></span></div><div class="tree" id="tree"></div><div class="tf" id="tfoot"></div></div>`;
 const panes=[
 /* 1 */`<div class="two wide"><div><div class="card wbox"><div style="display:flex;justify-content:space-between;align-items:center"><div class="chipf">${IC.file}<b>${M.file}</b> · ${M.fmt} · ${M.bits} bit · ${M.khz} kHz</div><div style="display:flex;gap:8px"><button class="btn sm">${IC.play}Escuchar</button><button class="btn sm">Cambiar máster</button></div></div>
- <div class="wvw" style="margin-top:14px"><div class="wdraw">${waveSVG(716,200,118,{prog:.31,clips:true})}</div><div class="playhead" style="left:31%;top:-6px;bottom:-6px"></div></div>
+ <div class="wvw" style="margin-top:14px"><div class="wdraw">${waveSVG(804,250,134,{prog:.31,clips:true})}</div><div class="playhead" style="left:31%;top:-6px;bottom:-6px"></div></div>
  <div class="ruler"><span>0:00</span><span>1:00</span><span>2:00</span><span>3:00</span><span>${M.dur}</span></div>
  <div class="mrow">${lufsMeter()}${tpMeter()}</div></div></div>
  <div style="display:flex;flex-direction:column;gap:16px"><div class="alert">${IC.er}<div><b>3 picos sobre 0 dBTP</b><span>Se marcan en rojo en la onda. Algunos destinos avisarán.</span></div></div>
@@ -136,7 +136,7 @@ function mountTrees(){const pane=document.querySelector('.pane.cur');const el=pa
   if(el){el.id='tree';MO.subs=MO.subs.filter(f=>!f.isTree);MO.mountTree(el);MO.subs[MO.subs.length-1].isTree=true}}
 function tabsHTML(){return GROUPS.map(g=>{const ds=D.filter(d=>d.g===g),n=ds.filter(d=>MO.on.has(d.id)).length;return `<button class="tab ${g===tab?'cur':''}" data-g="${g}">${g}<em>${n}/${ds.length}</em></button>`}).join('')}
 function listHTML(){return D.filter(d=>d.g===tab).map(d=>{const on=MO.on.has(d.id);return `<div class="row ${on?'on':'off'}" data-id="${d.id}"><button class="sw" role="switch" aria-checked="${on}" aria-label="${d.n}"></button>
- <span class="mono ${on?'on':''}">${d.m}</span><div class="nm"><b>${d.n}</b><span class="sp2">${d.spec}</span>${on?`<span class="why ${d.sev}">${d.why}</span>`:''}</div>
+ <span class="mono ${on?'on':''}">${d.m}</span><div class="nm"><b>${d.n}</b><span class="sp2">${d.spec}</span>${on?`<span class="why ${d.sev}">${d.why.replace(/^Cumple · /,'').replace(/^./,c=>c.toUpperCase())}</span>`:''}</div>
  <div class="rt"><span class="sevoff ${d.sev}">${IC[d.sev]}${SEVL[d.sev]}</span></div></div>`}).join('')}
 function dyn(){
   const s=MO.stats();
@@ -159,7 +159,7 @@ function s4(){const el=document.getElementById('s4left'),e=MO.exp,s=MO.stats();l
   <div class="alert wn" style="margin-top:16px">${IC.wn}<div><b>${s.er} destinos no cumplen: ${act.filter(d=>d.sev==='er').map(d=>d.n).join(' y ')}</b><span>Puedes exportar igualmente. El máster no se modifica; para corregir el pico, vuelve a tu DAW.</span></div></div>`}
  else if(e.mode==='run'){const o=MO.overall();
   h=`<div class="card xph"><div style="display:flex;justify-content:space-between;align-items:flex-end"><span class="pct" data-totalpc>${Math.round(o)} %</span><span style="color:var(--tx2);font-size:14px" data-eta>${MO.eta()}</span></div><div class="bar"><i data-total style="width:${o}%"></i></div>
-   <div>${act.map(d=>{const fs=MO.files().filter(x=>x.d&&x.d.id===d.id);const p=fs.reduce((a,x)=>a+(MO.exp.pct[x.k]||0)*x.mb,0)/fs.reduce((a,x)=>a+x.mb,0);return `<div class="dp ${p>=100?'fin':''}"><span class="mono on">${d.m}</span><span>${d.n}</span><span class="bar"><i style="width:${p}%"></i></span><span class="pp">${p>=100?'Listo':Math.round(p)+' %'}</span></div>`}).join('')}</div></div>`}
+   <div>${act.map(d=>{const fs=MO.files().filter(x=>x.d&&x.d.id===d.id);const p=fs.reduce((a,x)=>a+(MO.exp.pct[x.k]||0)*x.mb,0)/fs.reduce((a,x)=>a+x.mb,0);return `<div class="dp ${p>=99.9?'fin':''}"><span class="mono on">${d.m}</span><span>${d.n}</span><span class="bar"><i style="width:${p}%"></i></span><span class="pp">${p>=99.9?'Listo':Math.round(p)+' %'}</span></div>`}).join('')}</div></div>`}
  else{h=`<div class="card xph" id="doneBox" style="padding:34px 28px;gap:22px"><div class="fin-h">${MO.doneMark(64)}<div><h2>Todo exportado</h2><p>${s.n+s.docs} archivos · ${sizeStr(s.mb)} · ${nf(MO.exp.secs||7.4)} s</p></div></div>
    <div style="display:flex;gap:10px"><button class="btn pri" style="height:44px;padding:0 20px">${IC.reveal}Mostrar en Finder</button><button class="btn" style="height:44px;padding:0 18px" id="again">Nueva entrega</button></div>
    <p style="color:var(--tx2);font-size:13px">El README explica qué archivo va a cada plataforma y por qué.</p></div>`}

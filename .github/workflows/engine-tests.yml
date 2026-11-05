@@ -10,6 +10,9 @@ on:
       - "engine/**"
       - ".github/workflows/engine-tests.yml"
 
+permissions:
+  contents: read
+
 concurrency:
   group: engine-${{ github.ref }}
   cancel-in-progress: true
@@ -23,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -43,9 +46,13 @@ jobs:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
     # 05/11/2026: macos-latest (arm64) sin capacidad, jobs sin adquirir; se usa macos-15 hasta que se recupere.
     runs-on: macos-15
+    # La pasada de motor en macOS depende de que haya runner (macos-15 a veces no se adquiere y el
+    # job se cancela sin ejecutar nada): el tope evita colas eternas; la app sí pasa sus pruebas
+    # reales de ADM en el job macOS de app-build.yml.
     timeout-minutes: 30
+    continue-on-error: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -66,7 +73,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

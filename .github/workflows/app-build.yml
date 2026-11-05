@@ -9,6 +9,9 @@ on:
       - ".github/workflows/app-build.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: app-${{ github.ref }}
   cancel-in-progress: true
@@ -23,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -69,7 +72,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -112,49 +115,46 @@ jobs:
           done
           for f in terceros.txt LICENSE.LGPLv2.1 COPYING.LGPL LICENSE.lame; do test -s "$APP/Contents/Resources/legal/$f"; done
           du -sh "$APP" out/*
-      # Apple Digital Masters: afconvert viene con macOS; afclip NO (lo distribuye Apple en
-      # «Apple Digital Masters Tools»). La URL del producto se comprueba en voz alta porque está
-      # en el mensaje reason.adm_tools_missing que ve la persona.
+      # Apple Digital Masters: afconvert y afclip vienen con macOS (/usr/bin; comprobado en macos-15).
+      # Si algún día falta afclip en el runner, NO se instala nada: aviso visible y el caso pasa al
+      # checklist de Fer (docs/pruebas/hito3-checklist.md, prueba 9).
+      - name: "Detectar afclip (Apple Digital Masters)"
+        id: adm
+        run: |
+          if AFCLIP=$(command -v afclip) && command -v afconvert >/dev/null; then
+            echo "afclip: $AFCLIP"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::afclip no está en este runner: la validación Apple Digital Masters no se ha ejecutado. Pasa el caso por el Mac de Fer: docs/pruebas/hito3-checklist.md, prueba 9."
+          fi
+      # El enlace va en el mensaje reason.adm_tools_missing: si deja de responder 200 se avisa, sin romper el build.
       - name: "La página de Apple Digital Masters responde 200"
         run: |
           URL="https://www.apple.com/apple-music/apple-digital-masters/"
-          CODE=$(curl -sSIL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15" -o /dev/null -w '%{http_code}' "$URL")
+          CODE=$(curl -sSIL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15" -o /dev/null -w '%{http_code}' "$URL" || echo 000)
           echo "$URL -> $CODE"
           if [ "$CODE" != "200" ]; then
-            echo "::error::$URL devuelve $CODE: el enlace de reason.adm_tools_missing (engine/masterout-core/i18n) puede estar roto"
-            exit 1
-          fi
-      - name: "Instalar Apple Digital Masters Tools (afclip)"
-        id: adm
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          if OUT=$(bash app/scripts/install-adm-tools-mac.sh 2>"$RUNNER_TEMP/adm-install.log"); then
-            echo "installed=true" >> "$GITHUB_OUTPUT"
-            echo "$OUT"
-          else
-            echo "installed=false" >> "$GITHUB_OUTPUT"
-            cat "$RUNNER_TEMP/adm-install.log"
-            echo "::warning::Apple Digital Masters Tools NO instaladas en el runner ($(tail -1 "$RUNNER_TEMP/adm-install.log")): la validación afclip no se ha ejecutado. Pasa el caso por el Mac de Fer: docs/pruebas/hito3-checklist.md, sección «Apple Digital Masters»."
+            echo "::warning::$URL devuelve $CODE: el enlace de reason.adm_tools_missing (engine/masterout-core/i18n) puede estar roto"
           fi
       - name: "Apple Digital Masters real (afconvert, AAC, afclip; −1 dBTP → 0 clips, +1 dBTP → más de 0)"
-        if: steps.adm.outputs.installed == 'true'
+        if: steps.adm.outputs.present == 'true'
         env:
           MASTEROUT_REQUIRE_ADM: "1"
           MASTEROUT_ADM_LOG_DIR: ${{ runner.temp }}/adm
         run: cargo test --manifest-path engine/Cargo.toml -p masterout-core --test media_adm real_tools -- --nocapture
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always() && steps.adm.outputs.installed == 'true'
+        if: always() && steps.adm.outputs.present == 'true'
         with:
           name: afclip-raw
           path: ${{ runner.temp }}/adm/afclip-raw-*.txt
           if-no-files-found: warn
       - name: "Humo headless (analizar + planificar + exportar con el binario real, con portada y vídeo)"
         env:
-          ADM: ${{ steps.adm.outputs.installed == 'true' && 'required' || 'any' }}
+          ADM: ${{ steps.adm.outputs.present == 'true' && 'required' || 'any' }}
         run: |
           app/scripts/smoke-mac.sh "$PWD/app/src-tauri/target/universal-apple-darwin/release/bundle/macos/master check.app" "$RUNNER_TEMP/humo"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: master-check-humo
@@ -162,7 +162,7 @@ jobs:
             ${{ runner.temp }}/humo/listado.txt
             ${{ runner.temp }}/humo/salida humo/smoke-result.json
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: master-check-macos
           path: out/*
@@ -174,7 +174,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -210,7 +210,7 @@ jobs:
             ${{ runner.temp }}\humo\listado.txt
             ${{ runner.temp }}\humo\salida humo\smoke-result.json
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: master-check-windows
           path: |

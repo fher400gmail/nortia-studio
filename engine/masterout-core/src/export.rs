@@ -3,9 +3,9 @@
 //! carpeta y se renombra al terminar bien, de modo que nunca quedan archivos a medias.
 
 use crate::audio::{AudioBuffer, AudioError};
-use crate::dither;
+use crate::dither::{self, Dither};
 use crate::flac::{self, FlacTags};
-use crate::i18n::Lang;
+use crate::i18n::{t, tf, Lang};
 use crate::loudness;
 use crate::mp3::{self, Id3Tags};
 use crate::naming;
@@ -17,6 +17,7 @@ use crate::wav::{self, WavMetadata, WavWriteOptions};
 use rayon::prelude::*;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -63,6 +64,9 @@ pub struct Delivery {
     pub elapsed_ms: u128,
 }
 
+/// Semilla fija del dither TPDF: mismo audio de entrada, mismo archivo de salida.
+const DITHER_SEED: u64 = 0x4D41_5354_4552_4F55;
+
 fn unsupported(msg: impl Into<String>) -> AudioError {
     AudioError::UnsupportedFormat(msg.into())
 }
@@ -82,7 +86,9 @@ pub fn analyze(master_path: &Path) -> Result<(AudioBuffer, MasterInfo), AudioErr
     Ok((buf, info))
 }
 
-/// Fecha y hora UTC `(año, mes, día, hora, minuto, segundo)` del instante actual.
+/// Fecha y hora UTC (sin base de datos de zonas horarias; los documentos y el `bext` van en UTC).
+///
+///  `(año, mes, día, hora, minuto, segundo)` del instante actual.
 fn now_utc() -> (u16, u8, u8, u8, u8, u8) {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -155,26 +161,48 @@ struct Ctx<'a> {
     meta: &'a ReleaseMeta,
     folder: &'a Path,
     stamp: (u16, u8, u8, u8, u8, u8),
+    lang: Lang,
     /// Versión 16 bit / 44,1 kHz, calculada una sola vez y compartida por Deezer,
     /// distribuidora estándar y MP3.
     cd: OnceLock<Result<Vec<Vec<i32>>, String>>,
 }
 
 impl Ctx<'_> {
+    /// Dither de un destino: lo decide el plan (`needs_dither`), nunca la detección automática.
+    ///
+    /// Nota v1: con un máster float32 el plan marca `needs_dither` al bajar a 24 bit
+    /// (comparando con 32), y aquí se respeta tal cual.
+    fn dither_for(needs: bool) -> Dither {
+        if needs {
+            Dither::Tpdf { seed: DITHER_SEED }
+        } else {
+            Dither::None
+        }
+    }
+
     fn cd_samples(&self) -> Result<&[Vec<i32>], AudioError> {
         self.cd
             .get_or_init(|| {
-                resample::resample(self.buf, 44_100)
-                    .map(|r| {
-                        dither::quantize(
-                            &r.channels,
-                            16,
-                            self.buf.source_bits,
-                            self.buf.source_float,
-                        )
-                        .0
-                    })
-                    .map_err(|e| e.to_string())
+                let resampled;
+                let channels = if self.buf.sample_rate == 44_100 {
+                    &self.buf.channels
+                } else {
+                    match resample::resample(self.buf, 44_100) {
+                        Ok(r) => {
+                            resampled = r;
+                            &resampled.channels
+                        }
+                        Err(e) => return Err(e.to_string()),
+                    }
+                };
+                // Misma regla que el plan para un destino de 16 bit.
+                let master_bits = if self.buf.source_float {
+                    32
+                } else {
+                    self.buf.source_bits
+                };
+                let dither = Self::dither_for(16 < master_bits);
+                Ok(dither::quantize_with(channels, 16, dither))
             })
             .as_ref()
             .map(Vec::as_slice)
@@ -192,13 +220,11 @@ impl Ctx<'_> {
         } else {
             &self.buf.channels
         };
-        let (q, _) = dither::quantize(
+        Ok(Cow::Owned(dither::quantize_with(
             channels,
             job.bits,
-            self.buf.source_bits,
-            self.buf.source_float,
-        );
-        Ok(Cow::Owned(q))
+            Self::dither_for(job.needs_dither),
+        )))
     }
 
     fn wav_metadata(&self) -> WavMetadata {
@@ -230,7 +256,7 @@ impl Ctx<'_> {
             artist: self.meta.artist.clone(),
             album: self.meta.album.clone(),
             year: self.meta.year,
-            comment: Some("nortia. studio - master check".into()),
+            comment: Some(t(self.lang, "mp3.comment")),
             isrc: self.meta.isrc.clone(),
             composer: self.meta.composer.clone(),
             label: self.meta.label.clone(),
@@ -242,7 +268,10 @@ impl Ctx<'_> {
         let dir = self.folder.join(&job.subfolder);
         let path = dir.join(&job.file_name);
         let lame = if job.container == Container::Mp3 {
-            Some(mp3::find_lame().ok_or_else(|| unsupported("lame not found"))?)
+            Some(
+                mp3::find_lame()
+                    .ok_or_else(|| unsupported(t(self.lang, "export.err.lame_missing")))?,
+            )
         } else {
             None
         };
@@ -254,7 +283,13 @@ impl Ctx<'_> {
                     self.samples(job)?
                 }
             }
-            other => return Err(unsupported(format!("contenedor {}", other.extension()))),
+            other => {
+                return Err(unsupported(tf(
+                    self.lang,
+                    "export.err.container",
+                    &[("ext", other.extension())],
+                )))
+            }
         };
         step(0.6);
         std::fs::create_dir_all(&dir)?;
@@ -271,17 +306,25 @@ impl Ctx<'_> {
                 flac::write(tmp, &samples, job.sample_rate, job.bits, tags.as_ref())
             })?,
             _ => atomic(&path, |tmp| {
-                let mut wav_tmp = tmp.as_os_str().to_owned();
-                wav_tmp.push(".wav");
-                let wav_tmp = PathBuf::from(wav_tmp);
+                let Some(lame) = lame.as_deref() else {
+                    return Err(unsupported(t(self.lang, "export.err.lame_missing")));
+                };
+                // WAV intermedio fuera de la carpeta de entrega.
+                static COUNTER: AtomicU64 = AtomicU64::new(0);
+                let wav_tmp = std::env::temp_dir().join(format!(
+                    "masterout-{}-{}-{}.wav",
+                    std::process::id(),
+                    COUNTER.fetch_add(1, Ordering::Relaxed),
+                    job.preset_id
+                ));
                 let opts = WavWriteOptions {
                     bits: 16,
                     metadata: None,
                 };
                 let r = wav::write(&wav_tmp, &samples, 44_100, &opts).and_then(|()| {
                     step(0.8);
-                    let lame = lame.as_deref().expect("lame comprobado");
                     mp3::encode_with(
+                        self.lang,
                         lame,
                         &wav_tmp,
                         tmp,
@@ -316,6 +359,17 @@ pub fn run(
     let plan = plan::resolve(&info, &meta, &ids);
     on_progress(Progress::Planned(plan.clone()));
 
+    let threads = req.threads.unwrap_or_else(num_cpus::get_physical).max(1);
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build()
+        .map_err(|e| {
+            unsupported(tf(
+                req.lang,
+                "export.err.threadpool",
+                &[("detail", &e.to_string())],
+            ))
+        })?;
     let folder = create_delivery_folder(
         &req.out_root,
         &naming::delivery_folder(&meta.artist, &meta.title, meta.version.as_deref()),
@@ -326,6 +380,7 @@ pub fn run(
         meta: &meta,
         folder: &folder,
         stamp,
+        lang: req.lang,
         cd: OnceLock::new(),
     };
 
@@ -336,11 +391,6 @@ pub fn run(
             Resolved::Disabled { .. } => None,
         })
         .collect();
-    let threads = req.threads.unwrap_or_else(num_cpus::get_physical).max(1);
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .build()
-        .map_err(|e| unsupported(format!("rayon: {e}")))?;
     let results: Vec<Result<(PathBuf, u64), String>> = pool.install(|| {
         jobs.par_iter()
             .map(|job| {
@@ -398,7 +448,7 @@ pub fn run(
         created_at: iso(stamp),
         app_version: env!("CARGO_PKG_VERSION"),
     };
-    for (name, text) in [
+    let docs = [
         ("README.txt", reports::readme(req.lang, &summary)),
         (
             "informe-loudness.txt",
@@ -412,10 +462,21 @@ pub fn run(
             "ficha-lanzamiento.txt",
             reports::release_sheet_txt(req.lang, &summary),
         ),
-    ] {
+    ];
+    // Un fallo en los documentos no aborta: se informa en `failed` y `Finished` siempre se emite.
+    for (name, text) in docs {
         let path = folder.join(name);
-        let bytes = write_text(&path, &text)?;
-        files.push((path, bytes));
+        match write_text(&path, &text) {
+            Ok(bytes) => files.push((path, bytes)),
+            Err(e) => failed.push((
+                "documents".to_string(),
+                tf(
+                    req.lang,
+                    "export.err.documents",
+                    &[("detail", &format!("{name}: {e}"))],
+                ),
+            )),
+        }
     }
 
     let delivery = Delivery {

@@ -110,7 +110,7 @@ fn exports_full_tree_for_synthetic_master() {
         f.join("01 Spotify")
             .join(name("Spotify", 24, 96_000, "flac")),
         f.join("02 Apple Music")
-            .join(name("Apple Music", 24, 96_000, "wav")),
+            .join(name("Apple Digital Masters", 24, 96_000, "wav")),
         f.join("05 Deezer").join(name("Deezer", 16, 44_100, "wav")),
         f.join("07 Distribuidora")
             .join(name("Distribuidora", 16, 44_100, "wav")),
@@ -165,7 +165,7 @@ fn written_wavs_have_expected_headers() {
     let d = export::run(&request(&master, &out, &ids), &|_| {}).unwrap();
     assert!(d.failed.is_empty(), "{:?}", d.failed);
     let cases = [
-        ("02 Apple Music", "Apple Music", 24, 96_000, true),
+        ("02 Apple Music", "Apple Digital Masters", 24, 96_000, true),
         ("05 Deezer", "Deezer", 16, 44_100, true),
         ("07 Distribuidora", "Distribuidora", 16, 44_100, true),
         ("07 Distribuidora", "TuneCore", 24, 192_000, false),
@@ -333,4 +333,107 @@ fn mp3_has_id3v23_frames() {
         Some("ESABC2600001")
     );
     assert!(tag.get("TCOM").is_some() && tag.get("TPUB").is_some() && tag.get("TCOP").is_some());
+}
+
+#[test]
+fn document_failure_is_reported_and_finished_still_fires() {
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let out = tmp.path().join("out");
+    let events = Mutex::new(Vec::new());
+    let d = export::run(&request(&master, &out, &["deezer"]), &|p| {
+        // Tras el primer destino, un directorio "README.txt" impide escribir el documento.
+        if let Progress::JobDone { path, .. } = &p {
+            let folder = path.parent().unwrap().parent().unwrap();
+            std::fs::create_dir(folder.join("README.txt")).unwrap();
+        }
+        events.lock().unwrap().push(p);
+    })
+    .unwrap();
+    assert!(d.failed.iter().any(|(id, _)| id == "documents"));
+    assert!(matches!(
+        events.into_inner().unwrap().last(),
+        Some(Progress::Finished(_))
+    ));
+    assert!(d.folder.join("informe-loudness.txt").is_file());
+    assert!(d
+        .files
+        .iter()
+        .any(|(p, _)| p.to_string_lossy().contains("[Deezer]")));
+}
+
+/// Máster float32 96 kHz de 2 s con valores que no caen en enteros de 24 bit.
+fn float_master(dir: &Path) -> PathBuf {
+    let n = 96_000 * 2;
+    let ch: Vec<f32> = (0..n)
+        .map(|i| 0.2 * (i as f32 * 0.0123).sin() + 0.0000001234 * (i % 7) as f32)
+        .collect();
+    let path = dir.join("float.wav");
+    common::write_wav_f32(&path, 96_000, &[ch.clone(), ch], Default::default());
+    path
+}
+
+#[test]
+fn dither_follows_plan_for_float_master() {
+    let tmp = tempfile::tempdir().unwrap();
+    let master = float_master(tmp.path());
+    let out = tmp.path().join("out");
+    let events = Mutex::new(Vec::new());
+    let d = export::run(&request(&master, &out, &["apple_adm"]), &|p| {
+        events.lock().unwrap().push(p)
+    })
+    .unwrap();
+    assert!(d.failed.is_empty(), "{:?}", d.failed);
+    let needs = events
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .find_map(|e| match e {
+            Progress::Planned(v) => v.into_iter().find_map(|r| match r {
+                masterout_core::plan::Resolved::Job(j) => Some(j.needs_dither),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .unwrap();
+    let src = wav::read(&master).unwrap();
+    let out_buf = wav::read(&d.folder.join("02 Apple Music").join(name(
+        "Apple Digital Masters",
+        24,
+        96_000,
+        "wav",
+    )))
+    .unwrap();
+    let direct: Vec<Vec<f32>> = src
+        .channels
+        .iter()
+        .map(|c| {
+            c.iter()
+                .map(|&x| {
+                    ((f64::from(x) * 8_388_608.0)
+                        .round()
+                        .clamp(-8_388_608.0, 8_388_607.0)
+                        / 8_388_608.0) as f32
+                })
+                .collect()
+        })
+        .collect();
+    // Con dither el resultado debe diferir de la conversión directa; sin él, ser idéntico.
+    assert_eq!(out_buf.channels == direct, !needs);
+}
+
+#[test]
+fn integer_master_native_destination_has_no_dither() {
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let out = tmp.path().join("out");
+    let d = export::run(&request(&master, &out, &["apple_adm"]), &|_| {}).unwrap();
+    let o = wav::read(&d.folder.join("02 Apple Music").join(name(
+        "Apple Digital Masters",
+        24,
+        96_000,
+        "wav",
+    )))
+    .unwrap();
+    assert_eq!(o.channels, wav::read(&master).unwrap().channels);
 }

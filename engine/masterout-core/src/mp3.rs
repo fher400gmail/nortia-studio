@@ -2,6 +2,7 @@
 //! biblioteca GPL) y etiquetas ID3v2.3 completas con el crate `id3`.
 
 use crate::audio::AudioError;
+use crate::i18n::{t, tf, Lang};
 use id3::frame::{Comment, Content, Picture, PictureType};
 use id3::{Frame, Tag, TagLike, Version};
 use std::path::{Path, PathBuf};
@@ -25,8 +26,8 @@ fn unsupported(msg: impl Into<String>) -> AudioError {
     AudioError::UnsupportedFormat(msg.into())
 }
 
-fn id3_err(e: id3::Error) -> AudioError {
-    unsupported(format!("id3: {e}"))
+fn id3_err(lang: Lang, e: id3::Error) -> AudioError {
+    unsupported(tf(lang, "export.err.id3", &[("detail", &e.to_string())]))
 }
 
 fn exe_name() -> &'static str {
@@ -70,7 +71,12 @@ fn text_frame(id: &str, text: &str) -> Frame {
 }
 
 /// Reescribe la etiqueta del MP3 como ID3v2.3 con todos los campos.
-fn write_id3(out: &Path, tags: &Id3Tags, cover: Option<&Path>) -> Result<(), AudioError> {
+fn write_id3(
+    lang: Lang,
+    out: &Path,
+    tags: &Id3Tags,
+    cover: Option<&Path>,
+) -> Result<(), AudioError> {
     let mut tag = Tag::new();
     tag.set_title(&tags.title);
     tag.set_artist(&tags.artist);
@@ -105,7 +111,8 @@ fn write_id3(out: &Path, tags: &Id3Tags, cover: Option<&Path>) -> Result<(), Aud
             data: std::fs::read(path)?,
         });
     }
-    tag.write_to_path(out, Version::Id3v23).map_err(id3_err)
+    tag.write_to_path(out, Version::Id3v23)
+        .map_err(|e| id3_err(lang, e))
 }
 
 /// Codifica un WAV 16 bit / 44,1 kHz a MP3 320 kbps CBR (joint stereo, `-q 0`).
@@ -118,12 +125,14 @@ pub fn encode(
     tags: &Id3Tags,
     cover: Option<&Path>,
 ) -> Result<(), AudioError> {
-    let lame = find_lame().ok_or_else(|| unsupported("lame not found"))?;
-    encode_with(&lame, wav_16_44_path, out, tags, cover)
+    let lang = Lang::from_system();
+    let lame = find_lame().ok_or_else(|| unsupported(t(lang, "export.err.lame_missing")))?;
+    encode_with(lang, &lame, wav_16_44_path, out, tags, cover)
 }
 
-/// Como [`encode`], con la ruta de `lame` indicada.
+/// Como [`encode`], con la ruta de `lame` indicada y el idioma de los mensajes de error.
 pub fn encode_with(
+    lang: Lang,
     lame: &Path,
     wav_16_44_path: &Path,
     out: &Path,
@@ -149,11 +158,14 @@ pub fn encode_with(
     let output = cmd.output()?;
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(unsupported(format!(
-            "lame terminó con {}: {}",
-            output.status,
-            err.trim()
+        return Err(unsupported(tf(
+            lang,
+            "export.err.lame_failed",
+            &[
+                ("status", &output.status.to_string()),
+                ("detail", err.trim()),
+            ],
         )));
     }
-    write_id3(out, tags, cover)
+    write_id3(lang, out, tags, cover)
 }

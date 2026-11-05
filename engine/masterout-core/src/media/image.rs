@@ -17,6 +17,9 @@ use crate::i18n::Lang;
 
 /// Lado mayor mínimo (tras orientar) por debajo del cual se rechaza la portada.
 pub const MIN_SIDE: u32 = 1400;
+/// Límites de decodificación (lado mayor y área) para no agotar memoria.
+pub const MAX_SIDE: u32 = 16384;
+pub const MAX_PIXELS: u64 = 120_000_000;
 
 #[derive(Debug, Clone)]
 pub struct CoverOptions {
@@ -48,11 +51,6 @@ fn err(key: &str, detail: impl std::fmt::Display) -> AudioError {
     AudioError::UnsupportedFormat(format!("{key}: {detail}"))
 }
 
-/// ¿Es (casi con seguridad) sRGB? Las descripciones de perfil sRGB lo nombran.
-fn looks_srgb(icc: &[u8]) -> bool {
-    icc.windows(4).take(4096).any(|w| w == b"sRGB")
-}
-
 /// Convierte `img` de `icc` a sRGB. `Ok(false)` si el perfil no se pudo usar.
 fn to_srgb(img: &mut RgbImage, icc: &[u8]) -> bool {
     let Ok(src) = ColorProfile::new_from_slice(icc) else {
@@ -73,7 +71,7 @@ pub fn conform_cover(
     out_jpg: &Path,
     out_png: &Path,
     opts: &CoverOptions,
-    _lang: Lang,
+    _lang: Lang, // los avisos son claves; el texto lo resuelve quien llama
 ) -> Result<CoverOutput, AudioError> {
     let reader = ImageReader::open(input)?
         .with_guessed_format()
@@ -81,6 +79,16 @@ pub fn conform_cover(
     let mut decoder = reader
         .into_decoder()
         .map_err(|e| err("err.cover_unreadable", e))?;
+
+    // Guardas antes de decodificar (la cabecera basta).
+    let (hw, hh) = decoder.dimensions();
+    if hw.max(hh) > MAX_SIDE || u64::from(hw) * u64::from(hh) > MAX_PIXELS {
+        return Err(err("err.cover_too_large", format!("{hw}x{hh}")));
+    }
+    if hw.max(hh) < MIN_SIDE {
+        return Err(err("err.cover_too_small", format!("{hw}x{hh}")));
+    }
+
     let icc = decoder.icc_profile().ok().flatten();
     let orientation = decoder
         .orientation()
@@ -90,27 +98,31 @@ pub fn conform_cover(
     dynimg.apply_orientation(orientation);
 
     let (w, h) = (dynimg.width(), dynimg.height());
-    if w.max(h) < MIN_SIDE {
-        return Err(err("err.cover_too_small", format!("{w}x{h}")));
-    }
     let mut warnings = Vec::new();
 
-    // Alfa compuesto sobre blanco.
-    let rgba = dynimg.to_rgba8();
-    let mut rgb = RgbImage::new(w, h);
-    for (dst, src) in rgb.pixels_mut().zip(rgba.pixels()) {
-        let a = u32::from(src[3]);
-        for c in 0..3 {
-            dst[c] = ((u32::from(src[c]) * a + 255 * (255 - a) + 127) / 255) as u8;
-        }
-    }
-
-    // Recorte centrado al cuadrado.
+    // Recorte centrado al cuadrado (antes de componer/convertir, para copiar menos).
     let side = w.min(h);
     if w != h {
         warnings.push("warn.cover_cropped".to_string());
-        rgb = imageops::crop_imm(&rgb, (w - side) / 2, (h - side) / 2, side, side).to_image();
+        dynimg = dynimg.crop_imm((w - side) / 2, (h - side) / 2, side, side);
     }
+
+    // Alfa compuesto sobre blanco; sin alfa, conversión directa a RGB8.
+    let mut rgb = if dynimg.color().has_alpha() {
+        let rgba = dynimg.to_rgba8();
+        drop(dynimg);
+        let mut out = RgbImage::new(side, side);
+        for (dst, src) in out.pixels_mut().zip(rgba.pixels()) {
+            let a = u32::from(src[3]);
+            for c in 0..3 {
+                dst[c] = ((u32::from(src[c]) * a + 255 * (255 - a) + 127) / 255) as u8;
+            }
+        }
+        out
+    } else {
+        dynimg.into_rgb8()
+    };
+
     if side < opts.size {
         warnings.push("warn.cover_upscaled".to_string());
     }
@@ -118,36 +130,21 @@ pub fn conform_cover(
         rgb = imageops::resize(&rgb, opts.size, opts.size, FilterType::Lanczos3);
     }
 
-    // Color: a sRGB si hay ICC distinto; si no se puede, se asume sRGB y se avisa.
-    if let Some(icc) = icc.filter(|p| !looks_srgb(p)) {
+    // Color: con ICC legible se convierte siempre a sRGB (sRGB→sRGB es ~identidad);
+    // si no se puede usar, se asume sRGB y se avisa.
+    if let Some(icc) = icc {
         if !to_srgb(&mut rgb, &icc) {
             warnings.push("warn.cover_profile_assumed_srgb".to_string());
         }
     }
 
-    // JPG 4:4:4 sin EXIF ni ICC.
-    let mut f = BufWriter::new(File::create(out_jpg)?);
-    JpegEncoder::new_with_quality(&mut f, opts.jpeg_quality.clamp(1, 100))
-        .write_image(
-            rgb.as_raw(),
-            opts.size,
-            opts.size,
-            image::ExtendedColorType::Rgb8,
-        )
-        .map_err(|e| err("err.cover_write", e))?;
-    f.flush()?;
-
-    // PNG 8 bits RGB sin alfa.
-    let mut f = BufWriter::new(File::create(out_png)?);
-    PngEncoder::new(&mut f)
-        .write_image(
-            rgb.as_raw(),
-            opts.size,
-            opts.size,
-            image::ExtendedColorType::Rgb8,
-        )
-        .map_err(|e| err("err.cover_write", e))?;
-    f.flush()?;
+    // JPG 4:4:4 sin EXIF ni ICC; PNG 8 bits RGB sin alfa. Si falla algo no queda nada a medias.
+    let r = write_both(&rgb, out_jpg, out_png, opts);
+    if r.is_err() {
+        let _ = std::fs::remove_file(out_jpg);
+        let _ = std::fs::remove_file(out_png);
+    }
+    r?;
 
     Ok(CoverOutput {
         jpg: out_jpg.to_path_buf(),
@@ -155,4 +152,48 @@ pub fn conform_cover(
         source_px: (w, h),
         warnings,
     })
+}
+
+fn write_both(
+    rgb: &RgbImage,
+    out_jpg: &Path,
+    out_png: &Path,
+    opts: &CoverOptions,
+) -> Result<(), AudioError> {
+    let tmp = |p: &Path| {
+        let mut n = p.as_os_str().to_owned();
+        n.push(".part");
+        PathBuf::from(n)
+    };
+    let (tj, tp) = (tmp(out_jpg), tmp(out_png));
+    let res = (|| -> Result<(), AudioError> {
+        let mut f = BufWriter::new(File::create(&tj)?);
+        JpegEncoder::new_with_quality(&mut f, opts.jpeg_quality.clamp(1, 100))
+            .write_image(
+                rgb.as_raw(),
+                opts.size,
+                opts.size,
+                image::ExtendedColorType::Rgb8,
+            )
+            .map_err(|e| err("err.cover_write", e))?;
+        f.flush()?;
+        let mut f = BufWriter::new(File::create(&tp)?);
+        PngEncoder::new(&mut f)
+            .write_image(
+                rgb.as_raw(),
+                opts.size,
+                opts.size,
+                image::ExtendedColorType::Rgb8,
+            )
+            .map_err(|e| err("err.cover_write", e))?;
+        f.flush()?;
+        std::fs::rename(&tj, out_jpg)?;
+        std::fs::rename(&tp, out_png)?;
+        Ok(())
+    })();
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tj);
+        let _ = std::fs::remove_file(&tp);
+    }
+    res
 }

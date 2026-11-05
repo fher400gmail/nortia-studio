@@ -92,5 +92,6 @@
   "warn.cover_profile_assumed_srgb": "El perfil de color de la portada no se ha podido interpretar: se ha tratado como sRGB.",
   "err.cover_too_small": "La portada es demasiado pequeña. Necesita al menos 1400 px en su lado mayor.",
   "err.cover_unreadable": "No se pudo leer la portada.",
-  "err.cover_write": "No se pudo escribir la portada."
+  "err.cover_write": "No se pudo escribir la portada.",
+  "err.cover_too_large": "La portada es demasiado grande. Máximo 16384 px por lado y 120 megapíxeles."
 }

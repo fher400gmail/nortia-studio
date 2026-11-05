@@ -92,5 +92,6 @@
   "warn.cover_profile_assumed_srgb": "The cover's color profile could not be read: it was treated as sRGB.",
   "err.cover_too_small": "The cover is too small. It needs at least 1400 px on its longer side.",
   "err.cover_unreadable": "The cover could not be read.",
-  "err.cover_write": "The cover could not be written."
+  "err.cover_write": "The cover could not be written.",
+  "err.cover_too_large": "The cover is too large. Maximum 16384 px per side and 120 megapixels."
 }

@@ -5,8 +5,8 @@ use masterout_core::plan::{self, MasterInfo, ReleaseMeta};
 use masterout_core::reports::*;
 use std::path::Path;
 
-fn strs(v: &[&str]) -> Vec<String> {
-    v.iter().map(|x| x.to_string()).collect()
+fn strs(v: &[&str]) -> Vec<std::ffi::OsString> {
+    v.iter().map(std::ffi::OsString::from).collect()
 }
 
 #[test]
@@ -168,6 +168,42 @@ fn parser_never_guesses() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn commands_keep_non_utf8_paths_byte_for_byte() {
+    use std::os::unix::ffi::{OsStrExt, OsStringExt};
+    let raw = std::ffi::OsString::from_vec(b"/m/ma\xffster.wav".to_vec());
+    let c = build_adm_commands(Path::new(&raw), Path::new("/w"), 48_000);
+    assert_eq!(c[0][1].as_bytes(), b"/m/ma\xffster.wav");
+}
+
+#[test]
+fn singular_plural_and_lowercase_reason_in_the_report_line() {
+    let one = rep(AdmStatus::Clipping, 1);
+    assert!(report(Some(&one), Lang::Es)
+        .contains("Apple Digital Masters: 1 muestra con clipping en el AAC"));
+    assert!(
+        report(Some(&one), Lang::En).contains("Apple Digital Masters: 1 clipped sample in the AAC")
+    );
+    let na = rep(
+        AdmStatus::Unavailable {
+            reason_key: "reason.adm_mac_only".into(),
+        },
+        0,
+    );
+    assert!(report(Some(&na), Lang::Es).contains("no disponible: la validación"));
+    assert!(report(Some(&na), Lang::En).contains("not available: validation"));
+}
+
+#[test]
+fn missing_tools_reason_links_to_apple() {
+    for lang in [Lang::Es, Lang::En] {
+        assert!(t(lang, "reason.adm_tools_missing")
+            .contains("https://www.apple.com/apple-music/apple-digital-masters/"));
+        assert!(!t(lang, "err.adm_log").starts_with('⟦'));
+    }
+}
+
 #[test]
 fn unavailable_off_macos() {
     if cfg!(target_os = "macos") {
@@ -275,6 +311,22 @@ mod fake_tools {
     }
 
     #[test]
+    fn tool_arguments_are_absolute_paths() {
+        let d = tempfile::tempdir().unwrap();
+        let wav = d.path().join("m.wav");
+        adm_smoke_case(-1.0, &wav).unwrap();
+        let conv = script(d.path(), "afconvert", "touch \"$2\"");
+        let clip = script(d.path(), "afclip", "echo ' -- no samples clipped --'");
+        let odd = d.path().join(".").join("m.wav");
+        let r = validate_with_tools(&conv, &clip, &odd, &d.path().join("w"), &|| false);
+        assert_eq!(r.status, AdmStatus::Ok, "{}", r.log);
+        assert!(!r.log.contains("/./"), "{}", r.log);
+        for line in r.log.lines().filter(|l| l.starts_with("$ ")) {
+            assert!(line.split(' ').nth(2).unwrap().starts_with('/'), "{line}");
+        }
+    }
+
+    #[test]
     fn failures_map_to_reason_keys() {
         let key = |r: AdmReport| match r.status {
             AdmStatus::Unavailable { reason_key } => reason_key,
@@ -359,7 +411,7 @@ fn report_line_renders_in_es_and_en() {
     let es = report(Some(&na), Lang::Es);
     assert!(es.contains(&format!(
         "Apple Digital Masters: no disponible: {}",
-        t(Lang::Es, "reason.adm_mac_only")
+        t(Lang::Es, "reason.adm_mac_only").replacen('L', "l", 1)
     )));
     assert!(!report(None, Lang::Es).contains("Apple Digital Masters:"));
     // sin ADM el informe es idéntico al de siempre

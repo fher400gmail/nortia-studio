@@ -19,6 +19,7 @@
 
 use crate::audio::AudioError;
 use crate::wav::{self, WavWriteOptions};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -63,20 +64,24 @@ pub fn aac_rate(master_rate: u32) -> u32 {
     }
 }
 
-fn s(v: &[&str]) -> Vec<String> {
-    v.iter().map(|x| x.to_string()).collect()
+fn s(v: &[&str]) -> Vec<OsString> {
+    v.iter().map(OsString::from).collect()
 }
 
-fn p(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
+fn p(path: &Path) -> OsString {
+    path.as_os_str().to_owned()
 }
 
 /// Las cuatro órdenes (programa en la posición 0) de la validación, en orden. Pura.
-pub fn build_adm_commands(master_wav: &Path, workdir: &Path, master_rate: u32) -> Vec<Vec<String>> {
+pub fn build_adm_commands(
+    master_wav: &Path,
+    workdir: &Path,
+    master_rate: u32,
+) -> Vec<Vec<OsString>> {
     let caf = p(&workdir.join("intermediate.caf"));
     let m4a = p(&workdir.join("final.m4a"));
     let dec = p(&workdir.join("decode.wav"));
-    let mut step1 = vec!["afconvert".to_string(), p(master_wav), caf.clone()];
+    let mut step1 = vec![OsString::from("afconvert"), p(master_wav), caf.clone()];
     if master_rate > 48_000 {
         let fmt = format!("LEF32@{}", aac_rate(master_rate));
         step1.extend(s(&["-d", &fmt, "-f", "caff", "--soundcheck-generate"]));
@@ -84,7 +89,7 @@ pub fn build_adm_commands(master_wav: &Path, workdir: &Path, master_rate: u32) -
     } else {
         step1.extend(s(&["-d", "0", "-f", "caff", "--soundcheck-generate"]));
     }
-    let mut step2 = vec!["afconvert".to_string(), caf, m4a.clone()];
+    let mut step2 = vec![OsString::from("afconvert"), caf, m4a.clone()];
     step2.extend(s(&[
         "-d",
         "aac",
@@ -101,13 +106,13 @@ pub fn build_adm_commands(master_wav: &Path, workdir: &Path, master_rate: u32) -
         "-s",
         "2",
     ]));
-    let mut step3 = vec!["afconvert".to_string(), m4a, dec];
+    let mut step3 = vec![OsString::from("afconvert"), m4a, dec];
     step3.extend(s(&["-d", "LEF32", "-f", "WAVE"]));
     vec![
         step1,
         step2,
         step3,
-        vec!["afclip".to_string(), p(&workdir.join("decode.wav"))],
+        vec![OsString::from("afclip"), p(&workdir.join("decode.wav"))],
     ]
 }
 
@@ -202,12 +207,12 @@ enum Run {
     Cancelled,
 }
 
-fn run_one(program: &Path, args: &[String], log_file: &Path, cancel: &dyn Fn() -> bool) -> Run {
+fn run_one(program: &Path, args: &[OsString], log_file: &Path, cancel: &dyn Fn() -> bool) -> Run {
     let Ok(out) = std::fs::File::create(log_file) else {
-        return Run::Done(false, "cannot create log".into());
+        return Run::Done(false, "err.adm_log".into());
     };
     let Ok(err) = out.try_clone() else {
-        return Run::Done(false, "cannot create log".into());
+        return Run::Done(false, "err.adm_log".into());
     };
     let Ok(mut child) = Command::new(program)
         .args(args)
@@ -256,9 +261,17 @@ pub fn validate_with_tools(
             )
         }
     };
-    if std::fs::create_dir_all(workdir).is_err() {
-        return AdmReport::unavailable("reason.adm_failed", String::new());
+    if let Err(e) = std::fs::create_dir_all(workdir) {
+        return AdmReport::unavailable("reason.adm_failed", format!("{}: {e}", workdir.display()));
     }
+    // Rutas absolutas y canónicas: nunca una ruta relativa que empiece por "-" como opción.
+    let (master_wav, workdir) = match (master_wav.canonicalize(), workdir.canonicalize()) {
+        (Ok(m), Ok(w)) => (m, w),
+        (Err(e), _) | (_, Err(e)) => {
+            return AdmReport::unavailable("reason.adm_failed", format!("path: {e}"))
+        }
+    };
+    let (master_wav, workdir) = (master_wav.as_path(), workdir.as_path());
     let cmds = build_adm_commands(master_wav, workdir, rate);
     let mut log = String::new();
     let mut clip_out = String::new();
@@ -268,7 +281,11 @@ pub fn validate_with_tools(
         } else {
             afconvert
         };
-        log.push_str(&format!("$ {}\n", cmd.join(" ")));
+        let shown: Vec<String> = cmd
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        log.push_str(&format!("$ {}\n", shown.join(" ")));
         match run_one(
             program,
             &cmd[1..],

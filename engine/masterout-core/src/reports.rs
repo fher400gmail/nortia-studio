@@ -150,14 +150,23 @@ pub fn verdict_with_adm(preset_id: &str, v: &Verdict, adm: Option<&AdmReport>) -
 /// Línea del informe para el resultado de Apple Digital Masters.
 pub fn adm_line(lang: Lang, a: &AdmReport) -> String {
     match &a.status {
-        AdmStatus::Unavailable { reason_key } => tf(
-            lang,
-            "report.adm_unavailable",
-            &[("reason", &t(lang, reason_key))],
-        ),
+        AdmStatus::Unavailable { reason_key } => {
+            // minúscula inicial: va detrás de los dos puntos
+            let reason = t(lang, reason_key);
+            let mut cs = reason.chars();
+            let reason = match cs.next() {
+                Some(c) => c.to_lowercase().chain(cs).collect(),
+                None => reason,
+            };
+            tf(lang, "report.adm_unavailable", &[("reason", &reason)])
+        }
         _ => tf(
             lang,
-            "report.adm_clipping",
+            if a.clipped_samples == 1 {
+                "report.adm_clipping_one"
+            } else {
+                "report.adm_clipping"
+            },
             &[("n", &a.clipped_samples.to_string())],
         ),
     }

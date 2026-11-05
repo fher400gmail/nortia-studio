@@ -101,12 +101,14 @@
   "reason.no_sidecar": "The video and MP3 component (ffmpeg) is missing from master check. Reinstall the app.",
   "reason.encoder_unavailable": "This computer cannot create video: the system H.264 encoder is missing.",
   "reason.hevc_unavailable": "This computer has no HEVC encoder: Apple Motion is delivered only at 2048×2732 (H.264) and the 3840×3840 file is skipped.",
-  "reason.adm_mac_only": "Apple Digital Masters validation is only available on macOS.",
-  "reason.adm_tools_missing": "Apple's tools (afconvert/afclip) are missing. Install the Apple Digital Masters tools.",
-  "reason.adm_parse": "afclip's output could not be understood.",
+  "reason.adm_mac_only": "Validation for Apple Digital Masters is only available on macOS.",
+  "reason.adm_tools_missing": "The Apple tools (afconvert and afclip) are missing. Install them from https://www.apple.com/apple-music/apple-digital-masters/",
+  "reason.adm_parse": "The afclip output could not be understood.",
   "reason.adm_failed": "The AAC conversion with Apple's tools failed.",
   "reason.adm_cancelled": "Validation cancelled.",
   "report.adm_clipping": "Apple Digital Masters: {n} clipped samples in the AAC",
   "report.adm_unavailable": "Apple Digital Masters: not available: {reason}",
-  "adm_clipping": "The Apple Digital Masters AAC has clipped samples"
+  "adm_clipping": "The Apple Digital Masters AAC has clipped samples",
+  "report.adm_clipping_one": "Apple Digital Masters: 1 clipped sample in the AAC",
+  "err.adm_log": "The validation log could not be created."
 }

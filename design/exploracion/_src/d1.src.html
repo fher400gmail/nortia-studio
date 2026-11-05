@@ -128,7 +128,7 @@ function sync(){
   cards.forEach(c=>{const id=c.dataset.id,on=MO.on.has(id);c.classList.toggle('on',on);c.classList.toggle('off',!on);
     c.querySelector('.sw').setAttribute('aria-checked',on);
     const d=MO.byId[id];const fs=MO.files().filter(x=>x.d&&x.d.id===id);
-    if(fs.length){const p=fs.reduce((s,x)=>s+(MO.exp.pct[x.k]||0)*x.mb,0)/fs.reduce((s,x)=>s+x.mb,0);c.querySelector('[data-dp]').style.width=p+'%';c.classList.toggle('done',p>=100)}});
+    if(fs.length){const p=fs.reduce((s,x)=>s+(MO.exp.pct[x.k]||0)*x.mb,0)/fs.reduce((s,x)=>s+x.mb,0);c.querySelector('[data-dp]').style.width=p+'%';c.classList.toggle('done',p>=99.9)}});
   const s=MO.stats();document.getElementById('cnt').textContent=s.dest+' de '+D.length+' activos';
   document.getElementById('sum').innerHTML=`<span><b>${s.n+s.docs}</b> archivos</span><span><b>${sizeStr(s.mb)}</b></span>`;
   xarea()}

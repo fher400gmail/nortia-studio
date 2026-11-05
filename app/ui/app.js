@@ -200,7 +200,7 @@ const Store = (() => {
   const mediaInputs = () => Object.fromEntries(Object.entries(st.media).map(([id, m]) => [Data.preset[id], m.path]));
   /* la ficha espera material (portada o el suyo) y acepta que se lo suelten: se insinúa con borde discontinuo */
   const awaiting = id => awaitingMaterial({ media: Data.media, id, disabled: !!disabledReason(id), own: !!own(id), cover: !!st.cover, sidecar: st.info && st.info.sidecar_available });
-  const plannedVerdicts = () => Object.fromEntries((st.plan ? st.plan.jobs : []).map(j => [j.preset_id, j.verdict]));
+  const plannedVerdicts = () => Object.fromEntries((st.plan ? st.plan.jobs : []).map(j => [j.preset_id, j.verdict_text || '']));
   const notesOf = jobs => [...new Set(jobs.flatMap(j => j.warnings || []))];
   const selected = () => Data.ids.filter(id => st.on.has(id) && !disabledReason(id));
   const selectedJobs = () => selected().map(id => job(id)).filter(j => j && j.enabled);

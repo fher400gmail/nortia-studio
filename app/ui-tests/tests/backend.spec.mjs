@@ -354,8 +354,12 @@ test('final_notes_list_only_verdicts_that_got_worse_than_the_plan_with_the_chip_
     { preset_id: 'apple_adm', verdict: 'warn', verdict_text: 'pasa de 0 dB al codificar' },
     { preset_id: 'spotify', verdict: 'warn', verdict_text: 'El pico real supera 0 dBTP' },
     { preset_id: 'cover', verdict: 'ok', verdict_text: '' }
-  ], byPreset, t, { apple_adm: 'ok', spotify: 'warn' });
+  ], byPreset, t, { apple_adm: '', spotify: 'El pico real supera 0 dBTP' });
   assert.deepEqual(notes, [{ id: 'apple', preset_id: 'apple_adm', name: 'Apple Music', text: 'pasa de 0 dB al codificar' }]);
+  // máster caliente: el plan ya avisaba en Apple (mismo nivel, otro texto) y el AAC además pasa de 0 dB
+  const hot = finalNotes([{ preset_id: 'apple_adm', verdict: 'warn', verdict_text: 'pasa de 0 dB al codificar' }], byPreset, t, { apple_adm: 'El pico real supera 0 dBTP' });
+  assert.equal(hot.length, 1);
+  assert.equal(hot[0].text, 'pasa de 0 dB al codificar');
   assert.deepEqual(finalNotes(undefined, byPreset, t), []);
 });
 

@@ -36,10 +36,10 @@ export function awaitingMaterial({ media, id, disabled, own, cover, sidecar }) {
 
 /** Avisos que nacen al exportar: destinos cuyo veredicto final (tras codificar, p. ej. el AAC de
     Apple Digital Masters) es peor que el que se anunció en el plan. Lo que ya se sabía antes de
-    exportar (el pico real de la canción) no se repite. `planned`: preset_id -> veredicto del plan. */
+    exportar (el pico real de la canción) no se repite. `planned`: preset_id -> texto del veredicto del plan (se compara el texto, no el nivel). */
 export function finalNotes(verdicts, byPreset, t, planned = {}) {
   return (verdicts || [])
-    .filter(v => v.verdict !== 'ok' && v.verdict_text && planned[v.preset_id] !== v.verdict)
+    .filter(v => v.verdict !== 'ok' && v.verdict_text && planned[v.preset_id] !== v.verdict_text)
     .map(v => {
       const id = byPreset[v.preset_id] || v.preset_id;
       return { id, preset_id: v.preset_id, name: t('chip.long.' + id), text: v.verdict_text };

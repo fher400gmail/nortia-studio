@@ -128,3 +128,7 @@ La app se llama **Master Check** (sustituye al provisional "Master Out" en toda 
 ## Adenda 05/11/2026 15:51 — nombre definitivo: **Master Ready** (Fer)
 
 Sustituye a "Master Check" (15:50) y a "Master Out". Crate interno pasará a `masterready-core` al cerrar el hito 1. Pendiente: dominio y conflictos de marca de "Master Ready".
+
+## Adenda 05/11/2026 15:52 — nombre definitivo: **master check** (en minúsculas, Fer)
+
+Sustituye a las adendas de 15:50 y 15:51. Se escribe siempre en minúsculas, como la marca ("nortia. studio · master check"). Crate interno pasará a `mastercheck-core` al cerrar el hito 1. Pendiente: dominio y conflictos de marca.

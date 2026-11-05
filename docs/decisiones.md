@@ -67,6 +67,13 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 - 10 de 11 tareas completas con revisión independiente por tarea (4 fix rounds; hallazgos reales: resample fallaba con múltiplos de 1024 muestras; subcarpetas fuera del contrato; panic con versión larga; etiqueta Apple "Apple Music" en vez de "Apple Digital Masters" oculta por tests que asertaban el valor erróneo). CI en GitHub Actions: Linux y Windows en verde (lame real en Windows); macOS pendiente por falta de capacidad de runners (se reintenta con macos-15 y timeout por job). Revisión final de rama en curso (modelo más capaz); después PR y fusión a `main`.
 - Lección: los tests que copian el valor de la implementación en vez del contrato no protegen nada; el revisor debe comprobar los literales contra la spec.
 
+## D-30 · Hito 2 cerrado (05/11/2026 21:00): la app existe
+- Fusionado en `main` (8f0e2ae): crate `mastercheck-bridge` (DTOs JSON, onda, errores por clave localizados), motor con contrato en inglés, caché de muestras (memoria ~2× el máster, antes ~10×), cancelación con checkpoints y protección de panics; app Tauri 2 (`app/src-tauri`: comandos finos, ventana = tarjeta, capacidades mínimas, asset scope cerrado con allow_file, humo headless `MASTERCHECK_SMOKE`); UI real (`app/ui`, backend mock|tauri, idioma del sistema); CI `app-build.yml` (check Linux, build macOS universal .dmg 5,7 MB y Windows NSIS .exe 2,4 MB, humo en macOS con el binario real).
+- **Bug grave cazado:** flacenc 0.5.1 (Rice de 4 bits) producía FLAC 2,6× mayores que el WAV en material fuerte → sustituido por `flac-codec` 1.3.3 (MIT/Apache); 82 % del WAV, bit-idéntico, MD5 correcto. Lección: los tests comprobaban "sin pérdida" pero no "comprime".
+- Rulings: dither también al remuestrear (≤ 24 bit); carpeta de salida no escribible → error (no Finished); glifos de plataformas provisionales (TODO(brand)) hasta activos oficiales; MP3 desactivado hasta empaquetar `lame` (LGPL); binario `mastercheck-app` (renombrar en hito 3); umbral FLAC real 85 %.
+- Pendiente de Fer: pasar `docs/pruebas/hito2-checklist.md` (16 comprobaciones) en su Mac con el .dmg de Actions.
+- Hito 3 (del revisor final): progreso "preparando"; humo vía Tauri y en Windows; carrera mínima de cancel; textos sueltos en app.js; claves err.lame_failed/err.id3; open_path acotado; tope de duración (err.too_long); set_hook; feature test-hooks; mainBinaryName; lame + licencia; logos oficiales; además vídeo/Canvas/portada conformados, ADM/afclip en Mac.
+
 ---
 
 # FASE 1 (histórico, cerrada)

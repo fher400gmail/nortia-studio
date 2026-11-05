@@ -90,7 +90,7 @@
   "warn.cover_upscaled": "The cover is smaller than 3000×3000 and was enlarged. For best quality use 3000×3000 or larger.",
   "warn.cover_cropped": "The cover was not square: it was cropped from the center.",
   "warn.cover_profile_assumed_srgb": "The cover's color profile could not be read: it was treated as sRGB.",
-  "err.cover_too_small": "The cover is too small. It needs at least 1400 px per side.",
+  "err.cover_too_small": "The cover is too small. It needs at least 1400 px on its longer side.",
   "err.cover_unreadable": "The cover could not be read.",
   "err.cover_write": "The cover could not be written."
 }

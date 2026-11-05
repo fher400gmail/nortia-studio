@@ -159,8 +159,8 @@ fn non_srgb_profile_is_converted_or_flagged() {
     {
         assert!(near(p, [40, 200, 60], 6));
     } else {
-        // Verde Adobe RGB -> sRGB: más saturado (R baja, G sube).
-        assert!(p[0] < 30 && p[1] > 205, "no convertido: {p:?}");
+        // Verde Adobe RGB -> sRGB: más saturado (R y B bajan).
+        assert!(p[0] < 15 && p[2] < 50, "no convertido: {p:?}");
     }
     // Nunca queda un perfil incrustado distinto de sRGB.
     for f in [&out.jpg, &out.png] {
@@ -237,6 +237,6 @@ fn output_dimensions_and_formats_via_image_crate() {
     let sof = jb.windows(2).position(|w| w == [0xFF, 0xC0]).unwrap();
     assert_eq!(&jb[sof + 9..sof + 9 + 1], &[3]);
     for i in 0..3 {
-        assert_eq!(jb[sof + 11 + i * 3 + 1], 0x11);
+        assert_eq!(jb[sof + 11 + i * 3], 0x11);
     }
 }

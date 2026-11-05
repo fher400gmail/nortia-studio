@@ -494,6 +494,7 @@ fn cancel_mid_export_leaves_no_partials() {
     assert!(!events.iter().any(|e| matches!(e, Progress::Finished(_))));
     assert!(kept >= 1 && (kept as usize) < 5, "files_kept = {kept}");
     assert_eq!(d.files.len(), kept as usize);
+    assert!(d.cancelled);
     let mut all = Vec::new();
     walk(&d.folder, &mut all);
     assert!(all.iter().all(|p| !p.to_string_lossy().ends_with(".part")));
@@ -571,4 +572,126 @@ fn english_export_uses_english_contract() {
     assert!(f.join("loudness-report.txt").is_file());
     assert!(f.join("release-sheet.csv").is_file());
     assert!(!f.join("informe-loudness.txt").exists());
+}
+
+#[test]
+fn job_errors_are_keys_never_spanish_text() {
+    if mp3::find_lame().is_some() {
+        eprintln!("skip: lame presente");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let events = Mutex::new(Vec::new());
+    let mut req = request(&master, &tmp.path().join("out"), &["deezer", "mp3_promo"]);
+    req.lang = Lang::En;
+    let d = export::run(&req, &|p| events.lock().unwrap().push(p)).unwrap();
+    assert_eq!(
+        d.failed,
+        vec![("mp3_promo".to_string(), "err.lame_missing".to_string())]
+    );
+    let failed = events
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .find_map(|e| match e {
+            Progress::JobFailed { error, .. } => Some(error),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(failed, "err.lame_missing");
+    assert!(!failed.contains("formato no soportado"));
+    assert!(masterout_core::i18n::t(Lang::En, &failed).contains("lame"));
+}
+
+#[test]
+fn mp3_shares_the_dithered_cd_version_with_deezer() {
+    use masterout_core::plan::{self, Resolved};
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let (_, info) = export::analyze(&master).unwrap();
+    let plan = plan::resolve(&info, &meta(), &["deezer", "mp3_promo", "distributor_std"]);
+    let jobs: Vec<&plan::Job> = plan
+        .iter()
+        .filter_map(|r| match r {
+            Resolved::Job(j) => Some(j),
+            Resolved::Disabled { .. } => None,
+        })
+        .collect();
+    assert_eq!(jobs.len(), 3);
+    assert!(jobs.iter().all(|j| j.needs_dither));
+    assert_eq!(export::plan_sample_keys(&jobs), vec![(16, 44_100, true)]);
+}
+
+#[test]
+fn panic_inside_a_job_is_contained_and_leaves_no_partials() {
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    *export::TEST_PANIC_PRESET.lock().unwrap() = Some("tidal".into());
+    let events = Mutex::new(Vec::new());
+    let d = export::run(
+        &request(&master, &tmp.path().join("out"), &["tidal", "deezer"]),
+        &|p| events.lock().unwrap().push(p),
+    )
+    .unwrap();
+    let ev = events.into_inner().unwrap();
+    assert!(ev.iter().any(|e| matches!(
+        e,
+        Progress::JobFailed { preset_id, error, .. } if preset_id == "tidal" && error == "err.internal"
+    )));
+    assert!(matches!(ev.last(), Some(Progress::Finished(_))));
+    assert_eq!(
+        d.failed,
+        vec![("tidal".to_string(), "err.internal".to_string())]
+    );
+    assert!(d
+        .files
+        .iter()
+        .any(|(p, _)| p.to_string_lossy().contains("[Deezer]")));
+    let mut all = Vec::new();
+    walk(&d.folder, &mut all);
+    assert!(all.iter().all(|p| !p.to_string_lossy().ends_with(".part")));
+    assert!(!d.folder.join("04 Tidal").exists());
+}
+
+#[test]
+fn cancel_at_job_start_is_much_faster_than_a_full_flac_run() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::Instant;
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 60);
+    let t = Instant::now();
+    let full = export::run(
+        &request(&master, &tmp.path().join("full"), &["spotify"]),
+        &|_| {},
+    )
+    .unwrap();
+    let full_time = t.elapsed();
+    assert!(!full.cancelled && full.failed.is_empty());
+
+    let cancel = Arc::new(AtomicBool::new(false));
+    let req =
+        request(&master, &tmp.path().join("cancelled"), &["spotify"]).with_cancel(cancel.clone());
+    let events = Mutex::new(Vec::new());
+    let t = Instant::now();
+    let d = export::run(&req, &|p| {
+        if matches!(p, Progress::JobStarted { .. }) {
+            cancel.store(true, Ordering::Relaxed);
+        }
+        events.lock().unwrap().push(p);
+    })
+    .unwrap();
+    let cancelled_time = t.elapsed();
+    assert!(d.cancelled && d.files.is_empty());
+    assert!(!d.folder.exists());
+    assert!(matches!(
+        events.into_inner().unwrap().last(),
+        Some(Progress::Cancelled { files_kept: 0 })
+    ));
+    eprintln!("completo {full_time:?}, cancelado {cancelled_time:?}");
+    assert!(
+        cancelled_time < full_time / 2,
+        "cancelar tardó {cancelled_time:?} de {full_time:?}"
+    );
 }

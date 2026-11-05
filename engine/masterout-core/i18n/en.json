@@ -80,5 +80,10 @@
   "err.generic": "The operation could not be completed.",
   "err.too_many_channels": "master check supports mono or stereo masters.",
   "err.cancelled": "Export cancelled.",
-  "err.rf64_unsupported": "RF64 files are not supported. Export the master as a standard WAV."
+  "err.rf64_unsupported": "RF64 files are not supported. Export the master as a standard WAV.",
+  "err.lame_missing": "lame was not found; it is required to create the MP3.",
+  "err.container": "File format not supported in this version.",
+  "err.threadpool": "The worker threads could not be started.",
+  "err.flac": "The FLAC file could not be created.",
+  "err.documents": "The delivery documents could not be written."
 }

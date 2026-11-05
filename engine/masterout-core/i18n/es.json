@@ -80,5 +80,10 @@
   "err.generic": "No se pudo completar la operación.",
   "err.too_many_channels": "master check admite másters mono o estéreo.",
   "err.cancelled": "Exportación cancelada.",
-  "err.rf64_unsupported": "Los archivos RF64 no están soportados. Exporta el máster como WAV estándar."
+  "err.rf64_unsupported": "Los archivos RF64 no están soportados. Exporta el máster como WAV estándar.",
+  "err.lame_missing": "No se encontró lame, necesario para crear el MP3.",
+  "err.container": "Formato de archivo no soportado en esta versión.",
+  "err.threadpool": "No se pudieron iniciar los hilos de trabajo.",
+  "err.flac": "No se pudo crear el archivo FLAC.",
+  "err.documents": "No se pudieron escribir los documentos de la entrega."
 }

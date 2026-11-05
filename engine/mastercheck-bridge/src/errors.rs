@@ -27,21 +27,6 @@ impl BridgeError {
 }
 
 pub fn localize(err: &AudioError, lang: Lang) -> BridgeError {
-    match err {
-        AudioError::UnsupportedFormat(s) if s.starts_with("err.") => {
-            BridgeError::from_key(s, lang, None)
-        }
-        AudioError::UnsupportedFormat(s) => {
-            BridgeError::from_key("err.generic", lang, Some(s.clone()))
-        }
-        AudioError::Io(e) => BridgeError::from_key("err.io", lang, Some(e.to_string())),
-        AudioError::NotRiffWave => BridgeError::from_key("err.not_wav", lang, None),
-        AudioError::MissingFmt | AudioError::MissingData => {
-            BridgeError::from_key("err.not_wav", lang, Some(err.to_string()))
-        }
-        AudioError::TooManyChannels(_) => {
-            BridgeError::from_key("err.too_many_channels", lang, Some(err.to_string()))
-        }
-        AudioError::Rf64Unsupported => BridgeError::from_key("err.rf64_unsupported", lang, None),
-    }
+    let (key, detail) = err.key_and_detail();
+    BridgeError::from_key(&key, lang, detail)
 }

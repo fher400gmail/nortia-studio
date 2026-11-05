@@ -80,7 +80,8 @@ pub struct ExportRequestDto {
 
 /// Evento de progreso. Según `kind`, solo se rellenan algunos campos:
 /// "analyzed" | "planned" | "job_started" | "job_progress" (`preset_id`, `fraction`) |
-/// "job_done" (`preset_id`, `path`, `bytes`) | "job_failed" (`preset_id`, `error` localizado) |
+/// "job_done" (`preset_id`, `path`, `bytes`) |
+/// "job_failed" (`preset_id`, `error` localizado, `error_key` estable, `error_detail` técnico) |
 /// "cancelled" | "finished" (`delivery`).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct ProgressDto {
@@ -90,15 +91,26 @@ pub struct ProgressDto {
     pub path: Option<String>,
     pub bytes: Option<u64>,
     pub error: Option<String>,
+    /// Clave estable del error (`err.*`).
+    pub error_key: Option<String>,
+    /// Detalle técnico sin localizar.
+    pub error_detail: Option<String>,
     pub delivery: Option<DeliveryDto>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct DeliveryDto {
+    /// Carpeta de la entrega; vacía si se canceló y se borró por no tener archivos completos.
     pub folder: String,
+    /// La exportación se canceló; `files` son los archivos completos que se conservan.
+    pub cancelled: bool,
     /// (ruta, bytes) de cada archivo escrito, audio y documentos.
     pub files: Vec<(String, u64)>,
     /// (destino, mensaje localizado) de lo que falló.
     pub failed: Vec<(String, String)>,
+    /// (destino, clave estable `err.*`) de lo que falló, en el mismo orden que `failed`.
+    pub failed_keys: Vec<(String, String)>,
+    /// (destino, detalle técnico sin localizar).
+    pub failed_details: Vec<(String, String)>,
     pub elapsed_ms: u64,
 }

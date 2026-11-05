@@ -88,12 +88,65 @@ pub fn quantize_with(channels: &[Vec<f32>], target_bits: u16, dither: Dither) ->
 /// Igual que `quantize_with` (mismo resultado, bit a bit) pero consume los canales
 /// para reutilizar su memoria: no hay copia f32 + i32 a la vez.
 pub fn quantize_owned(channels: Vec<Vec<f32>>, target_bits: u16, dither: Dither) -> Vec<Vec<i32>> {
-    channels
-        .into_iter()
-        .enumerate()
-        .map(|(c, samples)| {
-            let mut q = Quantizer::new(target_bits, dither, c);
-            samples.into_iter().map(|x| q.q(x)).collect()
-        })
-        .collect()
+    quantize_owned_cancellable(channels, target_bits, dither, &|| false)
+        .expect("sin cancelación no hay None")
+}
+
+/// Como `quantize_owned`, comprobando `should_cancel` cada 64 Ki muestras; `None` si se cancela.
+pub fn quantize_owned_cancellable(
+    channels: Vec<Vec<f32>>,
+    target_bits: u16,
+    dither: Dither,
+    should_cancel: &dyn Fn() -> bool,
+) -> Option<Vec<Vec<i32>>> {
+    const CHECK_EVERY: usize = 1 << 16;
+    let stopped = std::cell::Cell::new(false);
+    let mut out = Vec::with_capacity(channels.len());
+    for (c, samples) in channels.into_iter().enumerate() {
+        let mut q = Quantizer::new(target_bits, dither, c);
+        let mut n = 0usize;
+        // `into_iter().map().collect()` reutiliza la memoria del Vec<f32> (mismo tamaño).
+        let v: Vec<i32> = samples
+            .into_iter()
+            .map(|x| {
+                if n.is_multiple_of(CHECK_EVERY) && !stopped.get() && should_cancel() {
+                    stopped.set(true);
+                }
+                n += 1;
+                if stopped.get() {
+                    0
+                } else {
+                    q.q(x)
+                }
+            })
+            .collect();
+        if stopped.get() {
+            return None;
+        }
+        out.push(v);
+    }
+    Some(out)
+}
+
+/// Como `quantize_with` pero comprobando `should_cancel` cada 64 Ki muestras; `None` si se cancela.
+pub fn quantize_cancellable(
+    channels: &[Vec<f32>],
+    target_bits: u16,
+    dither: Dither,
+    should_cancel: &dyn Fn() -> bool,
+) -> Option<Vec<Vec<i32>>> {
+    const CHECK_EVERY: usize = 1 << 16;
+    let mut out = Vec::with_capacity(channels.len());
+    for (c, samples) in channels.iter().enumerate() {
+        let mut q = Quantizer::new(target_bits, dither, c);
+        let mut v = Vec::with_capacity(samples.len());
+        for chunk in samples.chunks(CHECK_EVERY) {
+            if should_cancel() {
+                return None;
+            }
+            v.extend(chunk.iter().map(|&x| q.q(x)));
+        }
+        out.push(v);
+    }
+    Some(out)
 }

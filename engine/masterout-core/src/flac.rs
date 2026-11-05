@@ -63,11 +63,24 @@ pub fn write(
     bits: u16,
     tags: Option<&FlacTags>,
 ) -> Result<(), AudioError> {
+    write_cancellable(path, samples_i32, sample_rate, bits, tags, &|| false)
+}
+
+/// Como `write`, comprobando `should_cancel` cada 64 bloques; si devuelve `true` termina con
+/// `AudioError::Cancelled` (el archivo parcial lo borra quien lo llama, p. ej. `atomic`).
+pub fn write_cancellable(
+    path: &Path,
+    samples_i32: &[Vec<i32>],
+    sample_rate: u32,
+    bits: u16,
+    tags: Option<&FlacTags>,
+    should_cancel: &dyn Fn() -> bool,
+) -> Result<(), AudioError> {
     if bits != 16 && bits != 24 {
-        return Err(unsupported(format!("FLAC de {bits} bit")));
+        return Err(unsupported(format!("err.flac: {bits} bit")));
     }
     if sample_rate > 96_000 {
-        return Err(unsupported("FLAC > 96 kHz"));
+        return Err(unsupported("err.rate_over_96k"));
     }
     let channels = samples_i32.len();
     if channels == 0 || channels > 2 {
@@ -75,7 +88,7 @@ pub fn write(
     }
     let frames = samples_i32[0].len();
     if samples_i32.iter().any(|c| c.len() != frames) {
-        return Err(unsupported("canales de distinta longitud"));
+        return Err(unsupported("err.flac: channel length mismatch"));
     }
     let limit = 1i32 << (bits - 1);
     if samples_i32
@@ -83,13 +96,13 @@ pub fn write(
         .flatten()
         .any(|&s| s < -limit || s >= limit)
     {
-        return Err(unsupported("muestra fuera del rango de bits"));
+        return Err(unsupported("err.flac: sample out of range"));
     }
     let config = flacenc::config::Encoder::default()
         .into_verified()
-        .map_err(|e| unsupported(format!("configuración FLAC: {e:?}")))?;
+        .map_err(|e| unsupported(format!("err.flac: config {e:?}")))?;
     let block_size = config.block_size;
-    let enc = |e: flacenc::error::EncodeError| unsupported(format!("codificación FLAC: {e:?}"));
+    let enc = |e: flacenc::error::EncodeError| unsupported(format!("err.flac: encode {e:?}"));
     let mut stream = flacenc::component::Stream::new(sample_rate as usize, channels, bits as usize)
         .map_err(enc_verify)?;
     stream
@@ -112,7 +125,12 @@ pub fn write(
     let mut scratch: Vec<i32> = Vec::with_capacity(block_size * channels);
     let mut sink = ByteSink::new();
     let mut head = 0;
+    let mut blocks = 0usize;
     while head < frames {
+        if blocks.is_multiple_of(64) && should_cancel() {
+            return Err(AudioError::Cancelled);
+        }
+        blocks += 1;
         let end = (head + block_size).min(frames);
         scratch.clear();
         for i in head..end {
@@ -122,12 +140,12 @@ pub fn write(
         }
         fb_ctx
             .fill_interleaved(&scratch)
-            .map_err(|e| unsupported(format!("fuente FLAC: {e:?}")))?;
+            .map_err(|e| unsupported(format!("err.flac: source {e:?}")))?;
         head = end;
         let number = fb_ctx
             .1
             .current_frame_number()
-            .ok_or_else(|| unsupported("numeración de bloques FLAC"))?;
+            .ok_or_else(|| unsupported("err.flac: block numbering"))?;
         let frame =
             flacenc::encode_fixed_size_frame(&config, &fb_ctx.0, number, stream.stream_info())
                 .map_err(enc)?;
@@ -135,7 +153,7 @@ pub fn write(
         sink.clear();
         frame
             .write(&mut sink)
-            .map_err(|e| unsupported(format!("escritura FLAC: {e:?}")))?;
+            .map_err(|e| unsupported(format!("err.flac: write {e:?}")))?;
         file.write_all(sink.as_slice())?;
     }
     stream
@@ -147,14 +165,14 @@ pub fn write(
     let mut head_sink = ByteSink::new();
     stream
         .write(&mut head_sink)
-        .map_err(|e| unsupported(format!("escritura FLAC: {e:?}")))?;
+        .map_err(|e| unsupported(format!("err.flac: write {e:?}")))?;
     let mut header = head_sink.as_slice().to_vec();
     if let Some(block) = &comment_block {
         header[4] &= 0x7f;
         header.extend_from_slice(block);
     }
     if header.len() != header_len || &header[..4] != b"fLaC" {
-        return Err(unsupported("salida FLAC inesperada"));
+        return Err(unsupported("err.flac: unexpected output"));
     }
     file.flush()?;
     let mut file = file.into_inner().map_err(|e| e.into_error())?;
@@ -165,5 +183,5 @@ pub fn write(
 }
 
 fn enc_verify(e: impl std::fmt::Debug) -> AudioError {
-    unsupported(format!("configuración FLAC: {e:?}"))
+    unsupported(format!("err.flac: config {e:?}"))
 }

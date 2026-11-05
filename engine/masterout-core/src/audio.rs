@@ -50,4 +50,31 @@ pub enum AudioError {
     TooManyChannels(u16),
     #[error("los archivos RF64 no están soportados")]
     Rf64Unsupported,
+    /// La operación se detuvo porque se pidió cancelar; no es un fallo.
+    #[error("cancelado")]
+    Cancelled,
+}
+
+impl AudioError {
+    /// Clave i18n estable y detalle técnico (no localizado). `UnsupportedFormat("err.x: detalle")`
+    /// aporta su propia clave; E/S es `err.io`; el resto, `err.generic` con el texto como detalle.
+    pub fn key_and_detail(&self) -> (String, Option<String>) {
+        match self {
+            AudioError::UnsupportedFormat(s) if s.starts_with("err.") => match s.split_once(':') {
+                Some((k, d)) => (k.trim().to_string(), Some(d.trim().to_string())),
+                None => (s.clone(), None),
+            },
+            AudioError::Io(e) => ("err.io".into(), Some(e.to_string())),
+            AudioError::Cancelled => ("err.cancelled".into(), None),
+            AudioError::NotRiffWave => ("err.not_wav".into(), None),
+            AudioError::MissingFmt | AudioError::MissingData => {
+                ("err.not_wav".into(), Some(self.to_string()))
+            }
+            AudioError::TooManyChannels(_) => {
+                ("err.too_many_channels".into(), Some(self.to_string()))
+            }
+            AudioError::Rf64Unsupported => ("err.rf64_unsupported".into(), None),
+            AudioError::UnsupportedFormat(s) => ("err.generic".into(), Some(s.clone())),
+        }
+    }
 }

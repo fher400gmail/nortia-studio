@@ -31,7 +31,9 @@ jobs:
         with:
           workspaces: engine
       - name: Instalar lame y ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y lame ffmpeg
+        timeout-minutes: 8
+        continue-on-error: true
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y lame ffmpeg
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features
@@ -51,6 +53,8 @@ jobs:
         with:
           workspaces: engine
       - name: Instalar lame y ffmpeg
+        timeout-minutes: 8
+        continue-on-error: true
         run: brew install lame ffmpeg
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
@@ -70,6 +74,7 @@ jobs:
         with:
           workspaces: engine
       - name: Instalar lame y ffmpeg
+        timeout-minutes: 8
         continue-on-error: true
         shell: bash
         run: choco install lame ffmpeg -y

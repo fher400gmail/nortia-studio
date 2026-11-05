@@ -86,5 +86,11 @@
   "err.container": "Formato de archivo no soportado en esta versión.",
   "err.threadpool": "No se pudieron iniciar los hilos de trabajo.",
   "err.flac": "No se pudo crear el archivo FLAC.",
-  "err.documents": "No se pudieron escribir los documentos de la entrega."
+  "err.documents": "No se pudieron escribir los documentos de la entrega.",
+  "warn.cover_upscaled": "La portada es más pequeña que 3000×3000 y se ha ampliado. Para máxima calidad usa una de 3000×3000 o más.",
+  "warn.cover_cropped": "La portada no era cuadrada: se ha recortado desde el centro.",
+  "warn.cover_profile_assumed_srgb": "El perfil de color de la portada no se ha podido interpretar: se ha tratado como sRGB.",
+  "err.cover_too_small": "La portada es demasiado pequeña. Necesita al menos 1400 px por lado.",
+  "err.cover_unreadable": "No se pudo leer la portada.",
+  "err.cover_write": "No se pudo escribir la portada."
 }

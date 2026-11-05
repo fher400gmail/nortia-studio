@@ -13,8 +13,11 @@ flac-codec = { version = "1.3.3", default-features = false }
 rayon = "1.12.0"
 id3 = "1.17.2"
 num_cpus = "1.17.0"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+moxcms = "0.9.1"
 
 [dev-dependencies]
 claxon = "0.4.3"
+img-parts = "0.4.2"
 metaflac = "0.2.8"
 tempfile = "3"

@@ -1,0 +1,142 @@
+name: ffmpeg-sidecar
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/ffmpeg/**'
+      - '.github/workflows/ffmpeg-sidecar.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      ffmpeg_version: ${{ steps.v.outputs.ffmpeg_version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          source tools/ffmpeg/common.sh
+          V=$(resolve_ffmpeg_version)
+          test -n "$V"
+          echo "ffmpeg_version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=ffmpeg-sidecar-v${V}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: prepare
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      FFMPEG_VERSION: ${{ needs.prepare.outputs.ffmpeg_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias de compilación
+        run: brew install nasm pkg-config
+      - name: Compilar (arm64 + x86_64, lipo)
+        run: tools/ffmpeg/build-macos.sh "$RUNNER_TEMP/work" "$PWD/dist"
+      - name: Comprobar enlaces dinámicos
+        run: |
+          for f in dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin; do
+            for a in arm64 x86_64; do
+              echo "--- $f ($a)"; otool -arch $a -L "$f"
+              if otool -arch $a -L "$f" | grep -E '/opt/homebrew|/usr/local'; then echo "enlace a lib no del sistema"; exit 1; fi
+            done
+          done
+      - name: Pruebas de aceptación (slice arm64)
+        run: tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept"
+      - name: Slice x86_64 (Rosetta, informativo)
+        continue-on-error: true
+        run: |
+          arch -x86_64 dist/ffmpeg-universal-apple-darwin -hide_banner -version | head -n 2
+      - name: SHA256SUMS
+        run: tools/ffmpeg/finalize.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-sidecar-macos
+          path: dist/
+          if-no-files-found: error
+
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      FFMPEG_VERSION: ${{ needs.prepare.outputs.ffmpeg_version }}
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-python
+            nasm make pkg-config diffutils curl tar xz
+      - name: Compilar
+        run: tools/ffmpeg/build-windows.sh "$RUNNER_TEMP/work" "$PWD/dist"
+      - name: Comprobar DLLs
+        run: |
+          for f in dist/ffmpeg-x86_64-pc-windows-msvc.exe dist/ffprobe-x86_64-pc-windows-msvc.exe; do
+            echo "--- $f"; objdump -p "$f" | grep 'DLL Name'
+            if objdump -p "$f" | grep -iE 'libwinpthread|libgcc|zlib1|libmp3lame'; then echo "DLL no estática"; exit 1; fi
+          done
+      - name: Pruebas de aceptación
+        run: tools/ffmpeg/accept.sh dist/ffmpeg-x86_64-pc-windows-msvc.exe dist/ffprobe-x86_64-pc-windows-msvc.exe h264_mf dist "$RUNNER_TEMP/accept"
+      - name: SHA256SUMS
+        run: tools/ffmpeg/finalize.sh dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-sidecar-windows
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: [prepare, macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-sidecar-macos
+          path: art/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-sidecar-windows
+          path: art/windows
+      - name: Reunir archivos del release
+        run: |
+          mkdir rel
+          cp art/macos/ffmpeg-universal-apple-darwin art/macos/ffprobe-universal-apple-darwin rel/
+          cp art/windows/ffmpeg-x86_64-pc-windows-msvc.exe art/windows/ffprobe-x86_64-pc-windows-msvc.exe rel/
+          # comunes (idénticos en ambos SO)
+          cp art/macos/ffmpeg-*.tar.xz art/macos/lame-*.tar.gz art/macos/LICENSE.LGPLv2.1 art/macos/COPYING.LGPL rel/
+          for os in macos windows; do
+            for f in SHA256SUMS configure_line.txt buildconf.txt; do
+              ext="${f##*.}"; [ "$ext" = "$f" ] && n="$f-$os" || n="${f%.*}-$os.$ext"
+              cp "art/$os/$f" "rel/$n"
+            done
+          done
+          ls -l rel
+      - name: Crear o actualizar release
+        run: |
+          NOTES="Sidecar ffmpeg LGPL (sin GPL ni nonfree) para master check. Fuentes exactas, configure_line y licencias adjuntas. Commit ${GITHUB_SHA}."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" rel/* --clobber
+          else
+            gh release create "$TAG" rel/* --prerelease --target "$GITHUB_SHA" --title "$TAG" --notes "$NOTES"
+          fi

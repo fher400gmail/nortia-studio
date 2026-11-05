@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es" data-theme="light" data-os="mac">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Master Out · nortia. studio</title>
+<link rel="stylesheet" href="styles.css">
+<script>
+/* antes del primer pintado: tema, sistema y entorno desde querystring / sistema */
+(function(){var q=new URLSearchParams(location.search),d=document.documentElement;
+d.dataset.theme=q.get("theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");
+d.dataset.os=q.get("os")||(/Win/.test(navigator.platform)?"win":"mac");
+d.dataset.native=String(!!(window.__TAURI_INTERNALS__||window.__TAURI__));})();
+</script>
+</head>
+<body>
+<div class="window" id="window">
+  <div class="ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="shell">
+    <header class="titlebar" id="titlebar" data-tauri-drag-region>
+      <div class="lights" aria-hidden="true" data-tauri-drag-region><i></i><i></i><i></i></div>
+      <span class="wm" data-tauri-drag-region>
+        <svg width="14" height="42" viewBox="22 2 20 60" aria-hidden="true" style="flex:none;height:21px;width:auto"><path d="M32 2L42 31H22Z" fill="#BF7F12"/><path d="M22 33H42L32 62Z" fill="var(--brand)"/></svg>
+        <span class="nm"><b>nortia.</b><span>studio</span></span>
+      </span>
+      <span class="appn" data-tauri-drag-region>Master Out</span>
+      <div class="tb-sp" data-tauri-drag-region></div>
+      <button class="tbtn" id="advBtn" data-act="pop" data-p="adv" aria-expanded="false" aria-controls="pop-adv">Ajustes avanzados</button>
+      <button class="tbtn ico" id="themeBtn" aria-label="Cambiar entre claro y oscuro" title="Claro / oscuro"></button>
+      <div class="winctl" aria-label="Controles de ventana">
+        <button data-win="min" aria-label="Minimizar"><svg viewBox="0 0 10 10"><path d="M0 5.5h10"/></svg></button>
+        <button data-win="max" aria-label="Maximizar"><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9"/></svg></button>
+        <button data-win="close" class="x" aria-label="Cerrar"><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10"/></svg></button>
+      </div>
+    </header>
+    <main class="body" id="view" aria-live="polite"></main>
+  </div>
+  <div class="pop" id="pop-adv" role="dialog" aria-label="Ajustes avanzados"></div>
+</div>
+<input type="file" id="fsong" hidden accept=".wav,.aif,.aiff,.flac,.caf,.m4a,audio/*">
+<input type="file" id="fcov" hidden accept="image/*">
+<script src="app.js"></script>
+</body>
+</html>

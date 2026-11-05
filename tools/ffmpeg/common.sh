@@ -20,7 +20,8 @@ resolve_ffmpeg_version() { echo "${FFMPEG_VERSION:-$FFMPEG_VERSION_PINNED}"; }
 
 # Lista blanca de componentes: fuente única para los flags de configure Y para el inventario de accept.sh.
 ALLOW_PROTOCOLS="file,pipe"
-ALLOW_DEMUXERS="wav,aiff,flac,mp3,mov,matroska,image2,png_pipe,mjpeg,webp_pipe"
+# Nombres de configure; en tiempo de ejecución image_png_pipe aparece como png_pipe (accept.sh quita "image_").
+ALLOW_DEMUXERS="wav,aiff,flac,mp3,mov,matroska,image2,image_png_pipe,mjpeg,image_webp_pipe"
 ALLOW_DECODERS="pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_s16be,pcm_s24be,pcm_s32be,pcm_f32be,alac,flac,mp3,aac,h264,hevc,vp9,png,mjpeg,webp"
 ALLOW_PARSERS="aac,h264,hevc,vp9,mjpeg,png,webp,flac,mpegaudio"
 ALLOW_BSFS="aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata,vp9_superframe,vp9_superframe_split"

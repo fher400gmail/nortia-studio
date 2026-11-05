@@ -46,6 +46,7 @@ ff -hide_banner -muxers > inv.muxers 2>&1
 ff -hide_banner -demuxers > inv.demuxers 2>&1
 ff -hide_banner -bsfs > inv.bsfs 2>&1
 ff -hide_banner -protocols > inv.protocols 2>&1
+ff -hide_banner -devices 2>&1 | grep -q " lavfi" || fail "indev lavfi ausente"
 export ALLOW_FILTERS ALLOW_DECODERS ALLOW_MUXERS ALLOW_DEMUXERS ALLOW_BSFS ALLOW_PROTOCOLS
 "$PY" - <<'PYEOF'
 import os, re, sys
@@ -70,13 +71,16 @@ def protocols():
         if sec and l: got[sec].add(l)
     return got["Input"] | got["Output"]
 # Implícitos de libavfilter, siempre compilados (no dependen de --enable-filter).
-IMPLICIT_FILTERS = {"abuffer", "abuffersink", "buffer", "buffersink"}
+# + hflip/vflip/transpose/rotate: los arrastra el propio ejecutable ffmpeg (autorotate); son LGPL.
+IMPLICIT_FILTERS = {"abuffer", "abuffersink", "buffer", "buffersink", "hflip", "vflip", "transpose", "rotate"}
+# vp8: decodificador LGPL que arrastra la dependencia de matroska/vp9 en configure.
+IMPLICIT_DECODERS = {"vp8"}
 checks = [
   ("filters",  names("filters"),  set(os.environ["ALLOW_FILTERS"].split(",")) | IMPLICIT_FILTERS),
   ("encoders", names("encoders"), set(os.environ["ALLOW_ENC"].split(","))),
-  ("decoders", names("decoders"), set(os.environ["ALLOW_DECODERS"].split(","))),
+  ("decoders", names("decoders"), set(os.environ["ALLOW_DECODERS"].split(",")) | IMPLICIT_DECODERS),
   ("muxers",   names("muxers"),   set(os.environ["ALLOW_MUXERS"].split(","))),
-  ("demuxers", names("demuxers"), set(os.environ["ALLOW_DEMUXERS"].split(",")) | {"lavfi"}),
+  ("demuxers", names("demuxers"), {d.replace("image_", "") for d in os.environ["ALLOW_DEMUXERS"].split(",")}),
   ("bsfs",     names("bsfs"),     set(os.environ["ALLOW_BSFS"].split(","))),
   ("protocols", protocols(),      set(os.environ["ALLOW_PROTOCOLS"].split(","))),
 ]
@@ -88,6 +92,7 @@ for kind, got, want in checks:
     if miss or extra:
         bad = True
         print("FALLO inventario %s: faltan=%s sobran=%s" % (kind, miss, extra))
+        print(open("inv." + kind, errors="replace").read()[:4000])
 if bad: sys.exit(1)
 print("inventario ok")
 PYEOF

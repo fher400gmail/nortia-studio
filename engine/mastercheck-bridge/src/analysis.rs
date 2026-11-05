@@ -58,6 +58,7 @@ pub fn analyze(
     lang: Lang,
     bins: usize,
 ) -> Result<(MasterDto, WaveformDto), BridgeError> {
+    let bins = bins.clamp(1, 8192);
     if path.is_dir() {
         return Err(BridgeError::from_key("err.not_wav", lang, None));
     }

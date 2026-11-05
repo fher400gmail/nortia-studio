@@ -147,8 +147,8 @@ fn waveform_handles_mono_few_frames_and_zero_frames() {
     assert_eq!(w.bins.len(), 100);
     assert!(w.bins.iter().all(|b| (0.0..=1.0).contains(b)));
     assert!(w.bins.iter().any(|&b| b > 0.0));
-    // 0 tramos: lista vacía.
-    assert!(analyze(&tiny, Lang::Es, 0).unwrap().1.bins.is_empty());
+    // 0 tramos se sube a 1 (tope inferior del clamp).
+    assert_eq!(analyze(&tiny, Lang::Es, 0).unwrap().1.bins.len(), 1);
 
     // Cero frames: sin pánico, ya sea Ok con onda a 0 o un error con clave.
     let empty = tmp.path().join("vacio.wav");
@@ -162,4 +162,15 @@ fn waveform_handles_mono_few_frames_and_zero_frames() {
         }
         Err(e) => assert!(e.key.starts_with("err."), "{e:?}"),
     }
+}
+
+#[test]
+fn bins_are_clamped_to_8192() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("clamp.wav");
+    common::write_wav(&path, 48_000, 24, &common::sine_stereo(48_000, 24, 2, 0.5));
+    let (_, w) = analyze(&path, Lang::En, usize::MAX).unwrap();
+    assert_eq!(w.bins.len(), 8192);
+    let (_, w) = analyze(&path, Lang::En, 0).unwrap();
+    assert_eq!(w.bins.len(), 1);
 }

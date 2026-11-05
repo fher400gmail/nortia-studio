@@ -1,6 +1,6 @@
 # master check · lista de pruebas del hito 2 (en tu Mac)
 
-Para Fer. Son 12 comprobaciones, unos 20 minutos. Necesitas un Mac con macOS 14 o superior y un máster real en WAV (24 bit, 44,1 o 48 kHz, mejor de 3 a 5 minutos). Para la prueba 12 necesitas además un WAV a 192 kHz (si no tienes, expórtalo de tu DAW o pídemelo).
+Para Fer. Son 16 comprobaciones, unos 30 minutos. Necesitas un Mac con macOS 14 o superior y un máster real en WAV (24 bit, 44,1 o 48 kHz, mejor de 3 a 5 minutos). Para la prueba 12 necesitas además un WAV a 192 kHz (si no tienes, expórtalo de tu DAW o pídemelo).
 
 ## Antes de empezar
 
@@ -63,6 +63,22 @@ Marca cada comprobación y, al final, responde con una línea por prueba: **func
 - Haz: suelta un WAV a 192 kHz sobre la ventana.
 - Esperado: no se crea nada y aparece el mensaje exacto: "master check admite másters de hasta 96 kHz". La app no se bloquea y puedes soltar otro archivo sin reiniciarla. (Opcional: un archivo que no sea WAV debe mostrar "Este archivo no es un WAV válido. master check admite másters en formato WAV.")
 
+### 13. Reproducir y saltar en la onda
+- Haz: con un máster cargado, pulsa **Escuchar** y, mientras suena, haz clic en distintos puntos de la onda.
+- Esperado: el audio suena y la reproducción salta al punto pulsado (el indicador de la onda se mueve a ese sitio). Pausar y volver a pulsar continúa sin cortes ni errores.
+
+### 14. Portada: arrastrar y elegir con el selector
+- Haz: arrastra un `.png` o `.jpg` sobre el cuadro de portada; después pulsa el cuadro, elige otra imagen con el selector del sistema y repite con la otra extensión.
+- Esperado: en ambos casos la portada se ve en miniatura en el cuadro. Cancelar el selector no cambia la portada actual.
+
+### 15. Máster con corchetes, acentos y espacios en el nombre
+- Haz: suelta un WAV llamado, por ejemplo, `Canción [versión final] ñandú.wav`.
+- Esperado: se analiza igual que cualquier otro máster (nombre, onda, **Escuchar** funcionando) y se puede crear la carpeta de entrega sin errores.
+
+### 16. Soltar un MP3 o una carpeta
+- Haz: suelta un archivo `.mp3` y, después, una carpeta cualquiera.
+- Esperado: aparece un mensaje en tu idioma ("Este archivo no es un WAV válido…"), sin claves tipo `err.not_wav`, la app no se queda colgada y puedes soltar un WAV a continuación.
+
 ---
 
 ## Para responder
@@ -82,5 +98,9 @@ Copia esto y complétalo:
 10 funciona / falla: 
 11 funciona / falla: 
 12 funciona / falla: 
+13 funciona / falla: 
+14 funciona / falla: 
+15 funciona / falla: 
+16 funciona / falla: 
 Mac (chip y versión de macOS): 
 ```

@@ -1,4 +1,4 @@
-// Capturas con el mock (880×860, ×2): 02 normal claro, 03 normal oscuro, 06 creando, 07 listo.
+// Capturas con el mock (880×860, ×2): 01 vacío, 02 normal claro, 03 normal oscuro, 06 creando, 07 listo.
 // Uso: node ui-tests/scripts/capturas.mjs [es|en]
 import { fileURLToPath } from 'node:url';
 import { serve, loadPlaywright } from './serve.mjs';
@@ -10,6 +10,7 @@ const { server, base } = await serve();
 const browser = await chromium.launch();
 
 const SHOTS = [
+  ['01_vacio.png', 'theme=light&state=empty'],
   ['02_normal_claro.png', 'theme=light&state=normal'],
   ['03_normal_oscuro.png', 'theme=dark&state=normal'],
   ['06_creando.png', 'theme=light&state=creating'],

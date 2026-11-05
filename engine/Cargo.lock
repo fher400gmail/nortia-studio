@@ -315,6 +315,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
+name = "mastercheck-bridge"
+version = "0.1.0"
+dependencies = [
+ "masterout-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "masterout-core"
 version = "0.1.0"
 dependencies = [

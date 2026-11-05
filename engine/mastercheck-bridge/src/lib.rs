@@ -3,6 +3,7 @@
 //! progreso y errores localizados. Sin dependencias de Tauri: se prueba en cualquier sitio.
 
 pub mod analysis;
+pub mod app_support;
 pub mod dto;
 pub mod errors;
 pub mod exporting;

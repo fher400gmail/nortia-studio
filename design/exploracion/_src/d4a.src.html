@@ -1,0 +1,45 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Master Out · D4a Una tarjeta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script>document.documentElement.dataset.theme=new URLSearchParams(location.search).get("theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light")</script>
+<style>
+/*__COMMON_CSS__*/
+/*__D4_CSS__*/
+/* ---- D4a Una tarjeta ---- */
+.stage{flex:1;display:grid;place-items:center;min-height:0}
+.card{width:min(640px,calc(100% - 32px));background:var(--surf);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:18px 22px 14px;display:flex;flex-direction:column;gap:14px;position:relative}
+.card.fixed{height:586px}
+.meta{display:flex;gap:12px;align-items:flex-start}
+.mf{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;position:relative}
+.mf .moreb{align-self:flex-start}
+.hero .wvw{margin-top:2px}
+.g2{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:10px}
+.g2 .gh{margin:0}
+.t6{grid-template-columns:repeat(6,1fr)}.t1{grid-template-columns:1fr}.t3{grid-template-columns:repeat(3,1fr)}
+.cmini{display:none}
+.card .flist{flex:1;min-height:0}
+.donebox{flex:1;justify-content:center;gap:18px}
+.donebox .markdone{width:18px;height:56px}
+</style></head><body><div class="win" id="win"><div id="tbw"></div><div id="app"></div></div>
+<input type="file" id="fsong" hidden accept=".wav,.aif,.aiff,.flac,.caf,.m4a,audio/*"><input type="file" id="fcov" hidden accept="image/*">
+<script>/*__COMMON_JS__*/</script><script>/*__D4_JS__*/</script>
+<script>
+const heroBar=()=>S.mode==='idle'
+ ?`<div class="hbar"><button class="play" data-act="play" aria-label="Escuchar">${IC.play}</button><span class="tm" data-time>${timeTxt()}</span><span class="sp"></span>${lpill()}<button class="ib" data-act="song" title="Cambiar canción" aria-label="Cambiar canción">${ICO.reset}</button></div>`
+ :`<div class="hbar"><span class="ttl"><b>${esc(S.title)}</b>${esc(S.artist)}</span><span class="sp"></span>${S.mode==='creating'?'<span class="pct" data-pc>0 %</span>':'<span class="pct" style="display:inline-flex">'+IC.check+'</span>'}</div>`;
+const hero=()=>`<div class="dz hero">${heroBar()}${waveBox(520,96,84,S.mode==='done'?1:(S.mode==='creating'?0:null))}</div>`;
+const VW={html(){
+ const m=S.mode;
+ if(m==='creating')return `<div class="stage"><section class="card fixed">${hero()}<div class="flist" data-flist></div>${busyBtn()}</section></div>`;
+ if(m==='done')return `<div class="stage"><section class="card fixed">${hero()}<div class="donebox">${MO.doneMark(52)}<h1>Listo: ${totalFiles()} archivos en <span data-fname></span></h1><div class="acts"><button class="bb pri" data-act="open">${IC.folder}<span>Abrir carpeta</span></button><button class="bb" data-act="again">${IC.plus}<span>Nueva canción</span></button></div>${sumHTML()}</div></section></div>`;
+ return `<div class="stage"><section class="card" id="card">
+  ${S.loaded?hero():heroEmpty('style="height:172px"')}
+  <div class="meta">${coverHTML(68)}<div class="mf">${inputs()}<button class="moreb" data-act="more">Más datos</button>${fieldsMore()}</div></div>
+  <div class="dests"><div class="gh"><span>Plataformas</span><span class="sp"></span>${presetHTML()}${sumHTML()}</div>
+   <div class="tiles t6">${G4[0].ids.map(dest).join('')}</div>
+   <div class="g2"><div style="grid-column:1"><div class="gh">Distribuidora</div><div class="tiles t1">${dest('dist')}</div></div>
+    <div style="grid-column:3/span 3"><div class="gh">Extras</div><div class="tiles t3">${G4[2].ids.map(dest).join('')}</div></div></div></div>
+  ${goBtn()}${folderLine()}</section></div>`}};
+const totalFiles=()=>{const s=MO.stats();return s.n+s.docs};
+D4.boot(VW);
+</script></body></html>

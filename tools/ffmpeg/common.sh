@@ -5,6 +5,8 @@ LAME_URL="https://downloads.sourceforge.net/project/lame/lame/${LAME_VERSION}/la
 # Clave de firma de releases de FFmpeg (huella publicada en ffmpeg.org/download.html), solo para el plan B.
 FFMPEG_GPG_FPR=FCF986EA15E6E293A5644F10B4322F04D67658D8
 
+curl_r() { curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -A 'Mozilla/5.0 (nortia-ci)' "$@"; }
+
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
   else shasum -a 256 "$1" | cut -d' ' -f1; fi
@@ -15,7 +17,7 @@ ncpu() { nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2; }
 # Última versión 7.x publicada en ffmpeg.org/releases (o $FFMPEG_VERSION si está fijada).
 resolve_ffmpeg_version() {
   if [ -n "${FFMPEG_VERSION:-}" ]; then echo "$FFMPEG_VERSION"; return; fi
-  curl -fsSL https://ffmpeg.org/releases/ \
+  curl_r https://ffmpeg.org/releases/ \
     | grep -oE 'ffmpeg-7\.[0-9]+(\.[0-9]+)?\.tar\.xz' | sed -E 's/^ffmpeg-//; s/\.tar\.xz$//' \
     | sort -uV | tail -n1
 }

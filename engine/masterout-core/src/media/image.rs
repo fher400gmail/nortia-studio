@@ -15,7 +15,7 @@ use moxcms::{ColorProfile, Layout, TransformOptions};
 use crate::audio::AudioError;
 use crate::i18n::Lang;
 
-/// Lado mínimo (tras orientar) por debajo del cual se rechaza la portada.
+/// Lado mayor mínimo (tras orientar) por debajo del cual se rechaza la portada.
 pub const MIN_SIDE: u32 = 1400;
 
 #[derive(Debug, Clone)]
@@ -90,7 +90,7 @@ pub fn conform_cover(
     dynimg.apply_orientation(orientation);
 
     let (w, h) = (dynimg.width(), dynimg.height());
-    if w.min(h) < MIN_SIDE {
+    if w.max(h) < MIN_SIDE {
         return Err(err("err.cover_too_small", format!("{w}x{h}")));
     }
     let mut warnings = Vec::new();

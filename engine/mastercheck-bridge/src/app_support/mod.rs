@@ -39,9 +39,9 @@ pub struct AppInfo {
     pub os: String,
     /// ffmpeg/ffprobe (vídeo y MP3) disponibles junto al ejecutable, en el entorno o en PATH.
     pub sidecar_available: bool,
-    /// Release del componente de vídeo y MP3 (vacío si no está disponible).
+    /// Release del componente de vídeo y MP3 empaquetado; `None` si no está junto al ejecutable.
     #[serde(default)]
-    pub sidecar_release: String,
+    pub sidecar_release: Option<String>,
     /// Destinos que arrancan encendidos (`default_on` de presets.json): la interfaz no duplica la lista.
     #[serde(default)]
     pub default_on: Vec<String>,
@@ -50,16 +50,35 @@ pub struct AppInfo {
 }
 
 pub fn app_info(version: &str, exe_dir: &Path, default_out_root: Option<String>) -> AppInfo {
-    let sidecar_available = masterout_core::media::discover(exe_dir).is_some();
+    app_info_with(
+        version,
+        exe_dir,
+        default_out_root,
+        &|k| std::env::var_os(k),
+        std::env::var_os("PATH"),
+    )
+}
+
+/// Como [`app_info`], con el entorno y el PATH inyectados (para probarlo). La release del
+/// sidecar solo se anuncia si ffmpeg y ffprobe están junto al ejecutable (lo empaquetado por
+/// `externalBin`): uno de `MASTERCHECK_FFMPEG` o del PATH puede ser cualquier otra compilación
+/// (p. ej. con GPL) y «Acerca de» no debe atribuirle la release.
+pub fn app_info_with(
+    version: &str,
+    exe_dir: &Path,
+    default_out_root: Option<String>,
+    env: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+    path_var: Option<std::ffi::OsString>,
+) -> AppInfo {
+    let found = masterout_core::media::discover_with(exe_dir, env, path_var);
+    let bundled = found
+        .as_ref()
+        .is_some_and(|s| s.ffmpeg.parent() == Some(exe_dir) && s.ffprobe.parent() == Some(exe_dir));
     AppInfo {
         version: version.to_string(),
         os: os_name().to_string(),
-        sidecar_available,
-        sidecar_release: if sidecar_available {
-            SIDECAR_RELEASE.to_string()
-        } else {
-            String::new()
-        },
+        sidecar_available: found.is_some(),
+        sidecar_release: bundled.then(|| SIDECAR_RELEASE.to_string()),
         default_on: masterout_core::presets::all()
             .into_iter()
             .filter(|p| p.default_on)

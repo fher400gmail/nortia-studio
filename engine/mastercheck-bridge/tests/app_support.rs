@@ -289,12 +289,9 @@ fn app_info_announces_the_sidecar_release_only_when_it_is_there() {
     assert_eq!(SIDECAR_RELEASE, tag.trim());
     let tmp = tempfile::tempdir().unwrap();
     let info = app_info("0.1.0", tmp.path(), None);
-    let expect = if info.sidecar_available {
-        SIDECAR_RELEASE
-    } else {
-        ""
-    };
-    assert_eq!(info.sidecar_release, expect);
+    // ni junto al ejecutable ni en ninguna parte: sin release (con PATH real puede haber ffmpeg
+    // y entonces `sidecar_available` es true, pero la release sigue siendo None)
+    assert_eq!(info.sidecar_release, None);
     // junto al ejecutable (lo que hace externalBin): se anuncia con seguridad
     let name = if cfg!(windows) {
         ["ffmpeg.exe", "ffprobe.exe"]
@@ -305,9 +302,47 @@ fn app_info_announces_the_sidecar_release_only_when_it_is_there() {
         std::fs::write(tmp.path().join(n), b"x").unwrap();
     }
     assert_eq!(
-        app_info("0.1.0", tmp.path(), None).sidecar_release,
-        SIDECAR_RELEASE
+        app_info("0.1.0", tmp.path(), None)
+            .sidecar_release
+            .as_deref(),
+        Some(SIDECAR_RELEASE)
     );
+}
+
+#[test]
+fn sidecar_release_is_none_when_ffmpeg_comes_from_env_or_path() {
+    use mastercheck_bridge::app_support::{app_info_with, SIDECAR_RELEASE};
+    let exe_dir = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    let (ff, fp) = if cfg!(windows) {
+        ("ffmpeg.exe", "ffprobe.exe")
+    } else {
+        ("ffmpeg", "ffprobe")
+    };
+    for n in [ff, fp] {
+        std::fs::write(other.path().join(n), b"x").unwrap();
+    }
+    let (eff, efp) = (other.path().join(ff), other.path().join(fp));
+    let env = |k: &str| match k {
+        "MASTERCHECK_FFMPEG" => Some(eff.clone().into_os_string()),
+        "MASTERCHECK_FFPROBE" => Some(efp.clone().into_os_string()),
+        _ => None,
+    };
+    // variable de entorno: hay componente, pero no es el empaquetado -> no se anuncia la release
+    let info = app_info_with("0.1.0", exe_dir.path(), None, &env, None);
+    assert!(info.sidecar_available);
+    assert_eq!(info.sidecar_release, None);
+    // PATH: igual
+    let path = std::env::join_paths([other.path()]).ok();
+    let info = app_info_with("0.1.0", exe_dir.path(), None, &|_| None, path.clone());
+    assert!(info.sidecar_available);
+    assert_eq!(info.sidecar_release, None);
+    // junto al ejecutable gana sobre entorno y PATH: se anuncia
+    for n in [ff, fp] {
+        std::fs::write(exe_dir.path().join(n), b"x").unwrap();
+    }
+    let info = app_info_with("0.1.0", exe_dir.path(), None, &env, path);
+    assert_eq!(info.sidecar_release.as_deref(), Some(SIDECAR_RELEASE));
 }
 
 // ---------------------------------------------------------------- tarea 7 (hito 3)

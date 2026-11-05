@@ -153,15 +153,11 @@ fn non_srgb_profile_is_converted_or_flagged() {
     let out = run(&src, d.path()).unwrap();
     let got = image::open(&out.jpg).unwrap().to_rgb8();
     let p = got.get_pixel(1500, 1500);
-    if out
+    assert!(!out
         .warnings
-        .contains(&"warn.cover_profile_assumed_srgb".to_string())
-    {
-        assert!(near(p, [40, 200, 60], 6));
-    } else {
-        // Verde Adobe RGB -> sRGB: más saturado (R y B bajan).
-        assert!(p[0] < 15 && p[2] < 50, "no convertido: {p:?}");
-    }
+        .contains(&"warn.cover_profile_assumed_srgb".to_string()));
+    // Verde Adobe RGB -> sRGB: más saturado (R y B bajan).
+    assert!(p[0] < 15 && p[2] < 50, "no convertido: {p:?}");
     // Nunca queda un perfil incrustado distinto de sRGB.
     for f in [&out.jpg, &out.png] {
         let mut dec = ImageReader::open(f)
@@ -239,4 +235,77 @@ fn output_dimensions_and_formats_via_image_crate() {
     for i in 0..3 {
         assert_eq!(jb[sof + 11 + i * 3], 0x11);
     }
+}
+
+#[test]
+fn rejects_huge_header_without_decoding() {
+    use std::io::Write;
+    let d = tempfile::tempdir().unwrap();
+    // PNG con IHDR 20000x20000 y datos truncados.
+    let mut b = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13];
+    let mut ihdr = b"IHDR".to_vec();
+    ihdr.extend(20000u32.to_be_bytes());
+    ihdr.extend(20000u32.to_be_bytes());
+    ihdr.extend([8, 2, 0, 0, 0]);
+    let crc = crc32(&ihdr);
+    b.extend(&ihdr);
+    b.extend(crc.to_be_bytes());
+    // IDAT vacío (datos truncados).
+    b.extend([0, 0, 0, 0]);
+    b.extend(b"IDAT");
+    b.extend(crc32(b"IDAT").to_be_bytes());
+    let src = d.path().join("huge.png");
+    std::fs::File::create(&src).unwrap().write_all(&b).unwrap();
+    let e = run(&src, d.path()).unwrap_err();
+    assert_eq!(e.key_and_detail().0, "err.cover_too_large");
+    assert!(!d.path().join("c.jpg").exists() && !d.path().join("c.png").exists());
+}
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut c = 0xFFFF_FFFFu32;
+    for &x in data {
+        c ^= u32::from(x);
+        for _ in 0..8 {
+            c = if c & 1 != 0 {
+                0xEDB8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
+        }
+    }
+    !c
+}
+
+#[test]
+fn portrait_crops_vertical_center() {
+    let d = tempfile::tempdir().unwrap();
+    // 1500x2000: franja central (y 750..1250) verde, resto rojo.
+    let img = RgbImage::from_fn(1500, 2000, |_, y| {
+        if (750..1250).contains(&y) {
+            Rgb([0, 255, 0])
+        } else {
+            Rgb([255, 0, 0])
+        }
+    });
+    let src = d.path().join("p.jpg");
+    std::fs::write(&src, jpeg_bytes(&img)).unwrap();
+    let out = run(&src, d.path()).unwrap();
+    assert!(out.warnings.contains(&"warn.cover_cropped".to_string()));
+    let got = image::open(&out.png).unwrap().to_rgb8();
+    assert!(near(got.get_pixel(1500, 1500), [0, 255, 0], 8));
+    assert!(near(got.get_pixel(1500, 500), [255, 0, 0], 8));
+    assert!(near(got.get_pixel(1500, 2500), [255, 0, 0], 8));
+}
+
+#[test]
+fn sixteen_bit_png_is_reduced_to_8_bit() {
+    let d = tempfile::tempdir().unwrap();
+    let img =
+        image::ImageBuffer::<Rgb<u16>, Vec<u16>>::from_pixel(3000, 3000, Rgb([65535, 0, 32768]));
+    let src = d.path().join("16.png");
+    DynamicImage::ImageRgb16(img).save(&src).unwrap();
+    let out = run(&src, d.path()).unwrap();
+    let png = image::open(&out.png).unwrap();
+    assert!(matches!(png, DynamicImage::ImageRgb8(_)));
+    assert!(near(png.to_rgb8().get_pixel(5, 5), [255, 0, 128], 1));
 }

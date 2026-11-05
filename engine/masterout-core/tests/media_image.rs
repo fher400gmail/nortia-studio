@@ -75,8 +75,8 @@ fn conform_image_crops_center_and_warns_upscale() {
     assert!(near(got.get_pixel(1500, 1500), [0, 255, 0], 6));
     assert!(near(got.get_pixel(100, 1500), [255, 0, 0], 6));
     assert!(near(got.get_pixel(2900, 1500), [255, 0, 0], 6));
-    assert!(near(got.get_pixel(900, 1500), [255, 0, 0], 6));
-    assert!(near(got.get_pixel(2100, 1500), [255, 0, 0], 6));
+    assert!(near(got.get_pixel(600, 1500), [255, 0, 0], 6));
+    assert!(near(got.get_pixel(2400, 1500), [255, 0, 0], 6));
 }
 
 #[test]

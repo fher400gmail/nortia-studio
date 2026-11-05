@@ -68,6 +68,8 @@ pub struct Preset {
     pub embed_metadata: bool,
     pub status: Status,
     pub source_url: String,
+    /// "url" (enlace real) o "note" (referencia interna; la interfaz no la muestra como enlace).
+    pub source_kind: String,
     /// "streaming" | "distributor" | "extras"
     pub group: String,
     pub default_on: bool,
@@ -109,6 +111,7 @@ fn parse(v: &Value) -> Preset {
             Status::Recommendation
         },
         source_url: s(v, "source_url"),
+        source_kind: v["source_kind"].as_str().unwrap_or("url").to_string(),
         group: s(v, "group"),
         default_on: v["default_on"].as_bool().unwrap_or(false),
         min_bits: v["min_bits"].as_u64().map(|b| b as u16),
@@ -116,16 +119,15 @@ fn parse(v: &Value) -> Preset {
     }
 }
 
-/// Todos los presets, en el orden de `presets.json` (orden de las subcarpetas).
+/// Todos los presets, en el orden de `presets.json` (orden estable; varias entradas pueden compartir subcarpeta).
 pub fn all() -> Vec<Preset> {
     let root: Value = serde_json::from_str(include_str!("../presets.json"))
         .expect("presets.json debe ser JSON válido");
-    let mut v: Vec<Preset> = root
+    let v: Vec<Preset> = root
         .as_array()
         .expect("presets.json debe ser una lista")
         .iter()
         .map(parse)
         .collect();
-    v.sort_by(|a, b| a.subfolder.cmp(&b.subfolder));
     v
 }

@@ -139,7 +139,7 @@ fn writes_bext_and_list_info_when_metadata() {
     assert_eq!(get("INAM").as_deref(), Some("Canción de prueba"));
     assert_eq!(get("IART").as_deref(), Some("Artista"));
     assert_eq!(get("ICRD").as_deref(), Some("2026"));
-    assert_eq!(get("ISFT").as_deref(), Some("Master Out"));
+    assert_eq!(get("ISFT").as_deref(), Some("master check"));
     assert!(get("ISRC").is_none());
     assert!(subs.iter().all(|s| s.0 != "ISRC"));
 

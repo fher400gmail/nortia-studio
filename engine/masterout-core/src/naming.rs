@@ -3,6 +3,8 @@
 use std::path::Path;
 
 const MAX_BYTES: usize = 200;
+/// Tope de etiquetas, sufijos y versión, para que siempre quepa el título.
+const MAX_PART_BYTES: usize = 40;
 
 fn is_forbidden(c: char) -> bool {
     matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control()
@@ -65,17 +67,16 @@ fn base_name(artist: &str, title: &str) -> String {
 
 /// `"Artista - Título"` o `"Artista - Título (Versión)"`.
 pub fn delivery_folder(artist: &str, title: &str, version: Option<&str>) -> String {
-    let mut name = base_name(artist, title);
-    let suffix = match version.map(sanitize_component) {
+    let name = base_name(artist, title);
+    let suffix = match version.map(|v| sanitize_max(v, MAX_PART_BYTES)) {
         Some(v) if !v.is_empty() => format!(" ({v})"),
         _ => String::new(),
     };
-    name = format!(
+    format!(
         "{}{}",
-        sanitize_max(&name, MAX_BYTES - suffix.len()),
+        sanitize_max(&name, MAX_BYTES.saturating_sub(suffix.len())),
         suffix
-    );
-    name
+    )
 }
 
 fn compose(artist: &str, title: &str, tail: &str) -> String {
@@ -95,19 +96,25 @@ pub fn audio_file_name(
 ) -> String {
     let tail = format!(
         " [{}] {}bit-{}.{}",
-        sanitize_component(tag),
+        sanitize_max(tag, MAX_PART_BYTES),
         bits,
         khz_label(sample_rate),
-        ext
+        truncate_bytes(ext, 10)
     );
     compose(artist, title, &tail)
 }
 
 /// `"Artista - Título [Portada] 3000x3000.jpg"`; con `suffix` vacío no hay espacio extra.
 pub fn media_file_name(artist: &str, title: &str, tag: &str, suffix: &str, ext: &str) -> String {
-    let suffix = sanitize_component(suffix);
+    let suffix = sanitize_max(suffix, MAX_PART_BYTES);
     let sep = if suffix.is_empty() { "" } else { " " };
-    let tail = format!(" [{}]{}{}.{}", sanitize_component(tag), sep, suffix, ext);
+    let tail = format!(
+        " [{}]{}{}.{}",
+        sanitize_max(tag, MAX_PART_BYTES),
+        sep,
+        suffix,
+        truncate_bytes(ext, 10)
+    );
     compose(artist, title, &tail)
 }
 

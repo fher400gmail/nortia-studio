@@ -161,3 +161,41 @@ fn estimate_bytes_wav_exact() {
     let flac = job(&resolve(&master(96000, 24), &meta(), &["spotify"])[0]).clone();
     assert_eq!(estimate_bytes(&flac, 96000 * 60, 2), 21_427_200);
 }
+
+#[test]
+fn subfolder_contract() {
+    let all = presets::all();
+    let sub = |id: &str| all.iter().find(|p| p.id == id).unwrap().subfolder.clone();
+    assert_eq!(sub("spotify"), "01 Spotify");
+    assert_eq!(sub("deezer"), "05 Deezer");
+    assert_eq!(sub("youtube_music"), "06 YouTube");
+    assert_eq!(sub("youtube_video"), "06 YouTube");
+    for id in ["distributor_std", "distributor_hires", "tunecore"] {
+        assert_eq!(sub(id), "07 Distribuidora");
+    }
+    assert_eq!(sub("mp3_promo"), "08 Promo");
+    assert_eq!(sub("cover"), "09 Imagen");
+    assert_eq!(sub("canvas"), "09 Imagen");
+}
+
+#[test]
+fn distributor_tags_and_note_sources() {
+    let r = resolve(
+        &master(96000, 24),
+        &meta(),
+        &["distributor_hires", "distributor_std", "tunecore"],
+    );
+    assert_eq!(
+        job(&r[0]).file_name,
+        "Vera Alcón - Luz de Noviembre [Distribuidora] 16bit-44kHz.wav"
+    );
+    assert_eq!(
+        job(&r[1]).file_name,
+        "Vera Alcón - Luz de Noviembre [Distribuidora Hi-Res] 24bit-96kHz.wav"
+    );
+    assert!(job(&r[2]).file_name.contains("[TuneCore] 24bit-192kHz"));
+    for p in presets::all() {
+        let note = ["tidal", "deezer", "youtube_music"].contains(&p.id.as_str());
+        assert_eq!(p.source_kind, if note { "note" } else { "url" }, "{}", p.id);
+    }
+}

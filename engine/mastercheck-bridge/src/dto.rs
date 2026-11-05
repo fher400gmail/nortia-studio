@@ -68,3 +68,37 @@ pub struct PlanDto {
     pub total_files: u32,
     pub total_bytes: u64,
 }
+
+/// Petición de exportación.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ExportRequestDto {
+    pub master_path: String,
+    pub out_root: String,
+    pub meta: ReleaseMetaDto,
+    pub active_ids: Vec<String>,
+}
+
+/// Evento de progreso. Según `kind`, solo se rellenan algunos campos:
+/// "analyzed" | "planned" | "job_started" | "job_progress" (`preset_id`, `fraction`) |
+/// "job_done" (`preset_id`, `path`, `bytes`) | "job_failed" (`preset_id`, `error` localizado) |
+/// "cancelled" | "finished" (`delivery`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct ProgressDto {
+    pub kind: String,
+    pub preset_id: Option<String>,
+    pub fraction: Option<f32>,
+    pub path: Option<String>,
+    pub bytes: Option<u64>,
+    pub error: Option<String>,
+    pub delivery: Option<DeliveryDto>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct DeliveryDto {
+    pub folder: String,
+    /// (ruta, bytes) de cada archivo escrito, audio y documentos.
+    pub files: Vec<(String, u64)>,
+    /// (destino, mensaje localizado) de lo que falló.
+    pub failed: Vec<(String, String)>,
+    pub elapsed_ms: u64,
+}

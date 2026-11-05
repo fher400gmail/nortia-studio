@@ -15,10 +15,11 @@ use crate::reports::{self, DeliverySummary};
 use crate::resample;
 use crate::wav::{self, WavMetadata, WavWriteOptions};
 use rayon::prelude::*;
-use std::borrow::Cow;
+use std::collections::HashMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 pub struct ExportRequest {
@@ -29,6 +30,40 @@ pub struct ExportRequest {
     pub lang: Lang,
     /// `None`: núcleos físicos.
     pub threads: Option<usize>,
+    /// Si se activa, la exportación se detiene entre pasos: los archivos ya completos se
+    /// conservan, no quedan temporales y se emite `Progress::Cancelled`.
+    pub cancel: Option<Arc<AtomicBool>>,
+}
+
+impl ExportRequest {
+    /// Petición con hilos automáticos y sin cancelación.
+    pub fn new(
+        master_path: PathBuf,
+        meta: ReleaseMeta,
+        active_ids: Vec<String>,
+        out_root: PathBuf,
+        lang: Lang,
+    ) -> Self {
+        ExportRequest {
+            master_path,
+            meta,
+            active_ids,
+            out_root,
+            lang,
+            threads: None,
+            cancel: None,
+        }
+    }
+
+    pub fn with_threads(mut self, threads: usize) -> Self {
+        self.threads = Some(threads);
+        self
+    }
+
+    pub fn with_cancel(mut self, cancel: Arc<AtomicBool>) -> Self {
+        self.cancel = Some(cancel);
+        self
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +85,10 @@ pub enum Progress {
     JobFailed {
         preset_id: String,
         error: String,
+    },
+    /// Exportación cancelada; `files_kept` son los archivos de audio completos que se conservan.
+    Cancelled {
+        files_kept: u32,
     },
     Finished(Delivery),
 }
@@ -160,75 +199,79 @@ fn atomic(
     Ok(std::fs::metadata(final_path)?.len())
 }
 
+/// Clave de la caché de muestras: (bits, frecuencia, dither).
+type SampleKey = (u16, u32, bool);
+type Shared = Arc<Vec<Vec<i32>>>;
+
+struct CacheEntry {
+    data: Result<Shared, String>,
+    /// Destinos que aún tienen que usar esta combinación; al llegar a 0 se libera.
+    remaining: usize,
+}
+
+type Cache = HashMap<SampleKey, CacheEntry>;
+
 struct Ctx<'a> {
-    buf: &'a AudioBuffer,
     meta: &'a ReleaseMeta,
     folder: &'a Path,
     stamp: (u16, u8, u8, u8, u8, u8),
     lang: Lang,
-    /// Versión 16 bit / 44,1 kHz, calculada una sola vez y compartida por Deezer,
-    /// distribuidora estándar y MP3.
-    cd: OnceLock<Result<Vec<Vec<i32>>, String>>,
+    cancel: Option<Arc<AtomicBool>>,
+    /// Muestras cuantizadas por combinación (bits, frecuencia, dither), calculadas una sola vez
+    /// y compartidas entre destinos; se liberan cuando el último destino que las usa termina.
+    cache: Mutex<Cache>,
+}
+
+/// Dither de un destino: lo decide el plan (`needs_dither`), nunca la detección automática.
+///
+/// Nota v1: con un máster float32 el plan marca `needs_dither` al bajar a 24 bit
+/// (comparando con 32), y aquí se respeta tal cual.
+fn dither_for(needs: bool) -> Dither {
+    if needs {
+        Dither::Tpdf { seed: DITHER_SEED }
+    } else {
+        Dither::None
+    }
+}
+
+/// Combinación de muestras que necesita un destino (el MP3 parte de la versión CD).
+fn sample_key(job: &Job) -> SampleKey {
+    if job.container == Container::Mp3 {
+        (16, 44_100, job.needs_dither)
+    } else {
+        (job.bits, job.sample_rate, job.needs_dither)
+    }
 }
 
 impl Ctx<'_> {
-    /// Dither de un destino: lo decide el plan (`needs_dither`), nunca la detección automática.
-    ///
-    /// Nota v1: con un máster float32 el plan marca `needs_dither` al bajar a 24 bit
-    /// (comparando con 32), y aquí se respeta tal cual.
-    fn dither_for(needs: bool) -> Dither {
-        if needs {
-            Dither::Tpdf { seed: DITHER_SEED }
-        } else {
-            Dither::None
-        }
-    }
-
-    fn cd_samples(&self) -> Result<&[Vec<i32>], AudioError> {
-        self.cd
-            .get_or_init(|| {
-                let resampled;
-                let channels = if self.buf.sample_rate == 44_100 {
-                    &self.buf.channels
-                } else {
-                    match resample::resample(self.buf, 44_100) {
-                        Ok(r) => {
-                            resampled = r;
-                            &resampled.channels
-                        }
-                        Err(e) => return Err(e.to_string()),
-                    }
-                };
-                // Misma regla que el plan para un destino de 16 bit.
-                let master_bits = if self.buf.source_float {
-                    32
-                } else {
-                    self.buf.source_bits
-                };
-                let dither = Self::dither_for(16 < master_bits);
-                Ok(dither::quantize_with(channels, 16, dither))
-            })
+    fn cancelled(&self) -> bool {
+        self.cancel
             .as_ref()
-            .map(Vec::as_slice)
-            .map_err(|e| unsupported(e.clone()))
+            .is_some_and(|c| c.load(Ordering::Relaxed))
     }
 
-    fn samples(&self, job: &Job) -> Result<Cow<'_, [Vec<i32>]>, AudioError> {
-        if job.bits == 16 && job.sample_rate == 44_100 {
-            return Ok(Cow::Borrowed(self.cd_samples()?));
+    fn cache_lock(&self) -> std::sync::MutexGuard<'_, Cache> {
+        self.cache.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Muestras cuantizadas de un destino, de la caché compartida.
+    fn samples(&self, job: &Job) -> Result<Shared, AudioError> {
+        match self.cache_lock().get(&sample_key(job)) {
+            Some(e) => e.data.clone().map_err(unsupported),
+            None => Err(unsupported("err.internal")),
         }
-        let resampled;
-        let channels = if job.needs_resample {
-            resampled = resample::resample(self.buf, job.sample_rate)?;
-            &resampled.channels
-        } else {
-            &self.buf.channels
-        };
-        Ok(Cow::Owned(dither::quantize_with(
-            channels,
-            job.bits,
-            Self::dither_for(job.needs_dither),
-        )))
+    }
+
+    /// Un destino ha terminado (bien, mal o saltado): libera la combinación si ya nadie la usa.
+    fn release(&self, job: &Job) {
+        let key = sample_key(job);
+        let mut cache = self.cache_lock();
+        if let Some(e) = cache.get_mut(&key) {
+            e.remaining = e.remaining.saturating_sub(1);
+            if e.remaining == 0 {
+                cache.remove(&key);
+            }
+        }
     }
 
     fn wav_metadata(&self) -> WavMetadata {
@@ -268,7 +311,11 @@ impl Ctx<'_> {
         }
     }
 
-    fn render(&self, job: &Job, step: &dyn Fn(f32)) -> Result<(PathBuf, u64), AudioError> {
+    /// `Ok(None)`: cancelado antes de escribir; no se ha creado ningún archivo.
+    fn render(&self, job: &Job, step: &dyn Fn(f32)) -> Result<Option<(PathBuf, u64)>, AudioError> {
+        if self.cancelled() {
+            return Ok(None);
+        }
         let dir = self.folder.join(&job.subfolder);
         let path = dir.join(&job.file_name);
         let lame = if job.container == Container::Mp3 {
@@ -279,23 +326,21 @@ impl Ctx<'_> {
         } else {
             None
         };
-        let samples = match job.container {
-            Container::Wav | Container::Flac | Container::Mp3 => {
-                if job.container == Container::Mp3 {
-                    Cow::Borrowed(self.cd_samples()?)
-                } else {
-                    self.samples(job)?
-                }
-            }
-            other => {
-                return Err(unsupported(tf(
-                    self.lang,
-                    "export.err.container",
-                    &[("ext", other.extension())],
-                )))
-            }
-        };
+        if !matches!(
+            job.container,
+            Container::Wav | Container::Flac | Container::Mp3
+        ) {
+            return Err(unsupported(tf(
+                self.lang,
+                "export.err.container",
+                &[("ext", job.container.extension())],
+            )));
+        }
+        let samples = self.samples(job)?;
         step(0.6);
+        if self.cancelled() {
+            return Ok(None);
+        }
         std::fs::create_dir_all(&dir)?;
         let bytes = match job.container {
             Container::Wav => atomic(&path, |tmp| {
@@ -340,7 +385,7 @@ impl Ctx<'_> {
                 r
             })?,
         };
-        Ok((path, bytes))
+        Ok(Some((path, bytes)))
     }
 }
 
@@ -348,20 +393,92 @@ fn write_text(path: &Path, text: &str) -> Result<u64, AudioError> {
     atomic(path, |tmp| std::fs::write(tmp, text).map_err(Into::into))
 }
 
+/// Calcula una sola vez las muestras de cada combinación (bits, frecuencia, dither) que piden
+/// los destinos y libera el máster f32 en cuanto no hace falta: la última combinación a
+/// frecuencia nativa lo consume para reutilizar su memoria. Pico: máster + una combinación
+/// en curso + las ya calculadas (en i32), nunca varias copias remuestreadas a la vez.
+fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool) -> Cache {
+    let mut cache: Cache = HashMap::new();
+    for job in jobs {
+        if matches!(
+            job.container,
+            Container::Wav | Container::Flac | Container::Mp3
+        ) {
+            cache
+                .entry(sample_key(job))
+                .or_insert_with(|| CacheEntry {
+                    data: Err(String::new()),
+                    remaining: 0,
+                })
+                .remaining += 1;
+        }
+    }
+    let native = buf.sample_rate;
+    // Primero las remuestreadas (transitorios pequeños), al final las nativas.
+    let mut keys: Vec<SampleKey> = cache.keys().copied().collect();
+    keys.sort_by_key(|&(bits, rate, dither)| (rate == native, rate, bits, dither));
+    let last = keys.len().saturating_sub(1);
+    for (i, key) in keys.into_iter().enumerate() {
+        if cancelled() {
+            // Los destinos se saltan; no se calcula nada más.
+            cache.remove(&key);
+            continue;
+        }
+        let (bits, rate, dither) = key;
+        let data = catch_unwind(AssertUnwindSafe(|| -> Result<Shared, String> {
+            let d = dither_for(dither);
+            if rate == native {
+                if i == last {
+                    let channels = std::mem::take(&mut buf.channels);
+                    Ok(Arc::new(dither::quantize_owned(channels, bits, d)))
+                } else {
+                    Ok(Arc::new(dither::quantize_with(&buf.channels, bits, d)))
+                }
+            } else {
+                let resampled = resample::resample(&buf, rate).map_err(|e| e.to_string())?;
+                Ok(Arc::new(dither::quantize_owned(
+                    resampled.channels,
+                    bits,
+                    d,
+                )))
+            }
+        }))
+        .unwrap_or_else(|_| Err("err.internal".to_string()));
+        if let Some(e) = cache.get_mut(&key) {
+            e.data = data;
+        }
+    }
+    cache
+}
+
+/// Resultado de un destino dentro de la exportación paralela.
+enum Outcome {
+    Done(PathBuf, u64),
+    Failed(String),
+    /// Cancelado antes de escribir.
+    Skipped,
+}
+
 /// Ejecuta la exportación completa y devuelve la entrega.
+///
+/// Ningún panic de un destino ni del callback de progreso aborta la exportación: un destino
+/// que entra en pánico se informa como `JobFailed { error: "err.internal" }`.
 pub fn run(
     req: &ExportRequest,
     on_progress: &(dyn Fn(Progress) + Sync),
 ) -> Result<Delivery, AudioError> {
     let t0 = Instant::now();
+    let emit = |p: Progress| {
+        let _ = catch_unwind(AssertUnwindSafe(|| on_progress(p)));
+    };
     let (buf, info) = analyze(&req.master_path)?;
-    on_progress(Progress::Analyzed(info.clone()));
+    emit(Progress::Analyzed(info.clone()));
 
     let mut meta = req.meta.clone();
     meta.title = naming::fallback_title(&meta.title, &req.master_path);
     let ids: Vec<&str> = req.active_ids.iter().map(String::as_str).collect();
-    let plan = plan::resolve(&info, &meta, &ids);
-    on_progress(Progress::Planned(plan.clone()));
+    let plan = plan::resolve_in(&info, &meta, &ids, req.lang);
+    emit(Progress::Planned(plan.clone()));
 
     let threads = req.threads.unwrap_or_else(num_cpus::get_physical).max(1);
     let pool = rayon::ThreadPoolBuilder::new()
@@ -379,14 +496,6 @@ pub fn run(
         &naming::delivery_folder(&meta.artist, &meta.title, meta.version.as_deref()),
     )?;
     let stamp = now_utc();
-    let ctx = Ctx {
-        buf: &buf,
-        meta: &meta,
-        folder: &folder,
-        stamp,
-        lang: req.lang,
-        cd: OnceLock::new(),
-    };
 
     let jobs: Vec<&Job> = plan
         .iter()
@@ -395,54 +504,103 @@ pub fn run(
             Resolved::Disabled { .. } => None,
         })
         .collect();
-    let results: Vec<Result<(PathBuf, u64), String>> = pool.install(|| {
+    let cache = build_cache(buf, &jobs, &|| {
+        req.cancel
+            .as_ref()
+            .is_some_and(|c| c.load(Ordering::Relaxed))
+    });
+    let ctx = Ctx {
+        meta: &meta,
+        folder: &folder,
+        stamp,
+        lang: req.lang,
+        cancel: req.cancel.clone(),
+        cache: Mutex::new(cache),
+    };
+
+    let outcomes: Vec<Outcome> = pool.install(|| {
         jobs.par_iter()
             .map(|job| {
+                if ctx.cancelled() {
+                    ctx.release(job);
+                    return Outcome::Skipped;
+                }
                 let id = job.preset_id.clone();
-                on_progress(Progress::JobStarted {
+                emit(Progress::JobStarted {
                     preset_id: id.clone(),
                 });
                 let step = |fraction: f32| {
-                    on_progress(Progress::JobProgress {
+                    emit(Progress::JobProgress {
                         preset_id: id.clone(),
                         fraction,
                     })
                 };
                 step(0.0);
-                match ctx.render(job, &step) {
-                    Ok((path, bytes)) => {
+                let r = catch_unwind(AssertUnwindSafe(|| ctx.render(job, &step)));
+                ctx.release(job);
+                match r {
+                    Ok(Ok(Some((path, bytes)))) => {
                         step(1.0);
-                        on_progress(Progress::JobDone {
+                        emit(Progress::JobDone {
                             preset_id: id,
                             path: path.clone(),
                             bytes,
                         });
-                        Ok((path, bytes))
+                        Outcome::Done(path, bytes)
                     }
-                    Err(e) => {
+                    Ok(Ok(None)) => Outcome::Skipped,
+                    Ok(Err(e)) => {
                         let error = e.to_string();
-                        on_progress(Progress::JobFailed {
+                        emit(Progress::JobFailed {
                             preset_id: id,
                             error: error.clone(),
                         });
-                        Err(error)
+                        Outcome::Failed(error)
+                    }
+                    Err(_) => {
+                        let error = "err.internal".to_string();
+                        emit(Progress::JobFailed {
+                            preset_id: id,
+                            error: error.clone(),
+                        });
+                        Outcome::Failed(error)
                     }
                 }
             })
             .collect()
     });
+    drop(ctx);
 
     let mut files = Vec::new();
     let mut failed = Vec::new();
-    for (job, r) in jobs.iter().zip(results) {
+    for (job, r) in jobs.iter().zip(outcomes) {
         match r {
-            Ok(f) => files.push(f),
-            Err(e) => failed.push((job.preset_id.clone(), e)),
+            Outcome::Done(p, b) => files.push((p, b)),
+            Outcome::Failed(e) => failed.push((job.preset_id.clone(), e)),
+            Outcome::Skipped => {}
         }
     }
-    // Sin subcarpetas vacías (p. ej. si todos los jobs de una carpeta fallaron).
+    // Sin subcarpetas vacías (p. ej. si todos los jobs de una carpeta fallaron o se canceló).
     for job in &jobs {
         let _ = std::fs::remove_dir(folder.join(&job.subfolder));
+    }
+
+    let cancelled = req
+        .cancel
+        .as_ref()
+        .is_some_and(|c| c.load(Ordering::Relaxed));
+    if cancelled {
+        // Se conservan los archivos completos; sin ninguno, la carpeta parcial se elimina.
+        let _ = std::fs::remove_dir(&folder);
+        emit(Progress::Cancelled {
+            files_kept: files.len() as u32,
+        });
+        return Ok(Delivery {
+            folder,
+            files,
+            failed,
+            elapsed_ms: t0.elapsed().as_millis(),
+        });
     }
 
     let summary = DeliverySummary {
@@ -452,24 +610,22 @@ pub fn run(
         created_at: iso(stamp),
         app_version: env!("CARGO_PKG_VERSION"),
     };
+    let names = naming::document_names(req.lang);
     let docs = [
-        ("README.txt", reports::readme(req.lang, &summary)),
+        (names.readme, reports::readme(req.lang, &summary)),
         (
-            "informe-loudness.txt",
+            names.loudness_report,
             reports::loudness_report(req.lang, &summary),
         ),
+        (names.sheet_csv, reports::release_sheet_csv(&summary)),
         (
-            "ficha-lanzamiento.csv",
-            reports::release_sheet_csv(&summary),
-        ),
-        (
-            "ficha-lanzamiento.txt",
+            names.sheet_txt,
             reports::release_sheet_txt(req.lang, &summary),
         ),
     ];
     // Un fallo en los documentos no aborta: se informa en `failed` y `Finished` siempre se emite.
     for (name, text) in docs {
-        let path = folder.join(name);
+        let path = folder.join(&name);
         match write_text(&path, &text) {
             Ok(bytes) => files.push((path, bytes)),
             Err(e) => failed.push((
@@ -489,6 +645,6 @@ pub fn run(
         failed,
         elapsed_ms: t0.elapsed().as_millis(),
     };
-    on_progress(Progress::Finished(delivery.clone()));
+    emit(Progress::Finished(delivery.clone()));
     Ok(delivery)
 }

@@ -4,6 +4,8 @@ use crate::audio::AudioError;
 use flacenc::bitsink::ByteSink;
 use flacenc::component::BitRepr;
 use flacenc::error::Verify;
+use flacenc::source::Fill;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 
 #[derive(Debug, Clone, Default)]
@@ -53,22 +55,6 @@ fn vorbis_comment_block(tags: &FlacTags, last: bool) -> Vec<u8> {
     block
 }
 
-/// Inserta el bloque de comentarios justo tras STREAMINFO.
-fn insert_tags(bytes: Vec<u8>, tags: &FlacTags) -> Result<Vec<u8>, AudioError> {
-    const STREAMINFO_END: usize = 4 + 4 + 34;
-    if bytes.len() < STREAMINFO_END || &bytes[..4] != b"fLaC" || bytes[4] & 0x7f != 0 {
-        return Err(unsupported("salida FLAC inesperada"));
-    }
-    let streaminfo_was_last = bytes[4] & 0x80 != 0;
-    let mut out = Vec::with_capacity(bytes.len() + 256);
-    out.extend_from_slice(&bytes[..STREAMINFO_END]);
-    out[4] &= 0x7f;
-    // Si STREAMINFO era el último bloque, el nuestro pasa a serlo.
-    out.extend_from_slice(&vorbis_comment_block(tags, streaminfo_was_last));
-    out.extend_from_slice(&bytes[STREAMINFO_END..]);
-    Ok(out)
-}
-
 /// Escribe un FLAC de 16 o 24 bit. `samples_i32[canal][frame]` en el rango de `bits`.
 pub fn write(
     path: &Path,
@@ -99,31 +85,85 @@ pub fn write(
     {
         return Err(unsupported("muestra fuera del rango de bits"));
     }
-    let mut interleaved = Vec::with_capacity(frames * channels);
-    for i in 0..frames {
-        for c in samples_i32 {
-            interleaved.push(c[i]);
-        }
-    }
     let config = flacenc::config::Encoder::default()
         .into_verified()
         .map_err(|e| unsupported(format!("configuración FLAC: {e:?}")))?;
-    let source = flacenc::source::MemSource::from_samples(
-        &interleaved,
-        channels,
-        bits as usize,
-        sample_rate as usize,
-    );
-    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
-        .map_err(|e| unsupported(format!("codificación FLAC: {e:?}")))?;
-    let mut sink = ByteSink::new();
+    let block_size = config.block_size;
+    let enc = |e: flacenc::error::EncodeError| unsupported(format!("codificación FLAC: {e:?}"));
+    let mut stream = flacenc::component::Stream::new(sample_rate as usize, channels, bits as usize)
+        .map_err(enc_verify)?;
     stream
-        .write(&mut sink)
-        .map_err(|e| unsupported(format!("escritura FLAC: {e:?}")))?;
-    let mut bytes = sink.as_slice().to_vec();
-    if let Some(t) = tags {
-        bytes = insert_tags(bytes, t)?;
+        .stream_info_mut()
+        .set_block_sizes(block_size, block_size)
+        .map_err(enc_verify)?;
+
+    // Se codifica y escribe bloque a bloque: ni el audio entrelazado completo ni el flujo
+    // FLAC completo están nunca en memoria. La cabecera (STREAMINFO con tamaños, MD5 y total
+    // de muestras, más los comentarios) se escribe al final, sobre el hueco reservado.
+    let comment_block = tags.map(|t| vorbis_comment_block(t, true));
+    let header_len = 4 + 4 + 34 + comment_block.as_ref().map_or(0, Vec::len);
+    let mut file = std::io::BufWriter::new(std::fs::File::create(path)?);
+    file.write_all(&vec![0u8; header_len])?;
+
+    let mut fb_ctx = (
+        flacenc::source::FrameBuf::with_size(channels, block_size).map_err(enc_verify)?,
+        flacenc::source::Context::new(bits as usize, channels),
+    );
+    let mut scratch: Vec<i32> = Vec::with_capacity(block_size * channels);
+    let mut sink = ByteSink::new();
+    let mut head = 0;
+    while head < frames {
+        let end = (head + block_size).min(frames);
+        scratch.clear();
+        for i in head..end {
+            for c in samples_i32 {
+                scratch.push(c[i]);
+            }
+        }
+        fb_ctx
+            .fill_interleaved(&scratch)
+            .map_err(|e| unsupported(format!("fuente FLAC: {e:?}")))?;
+        head = end;
+        let number = fb_ctx
+            .1
+            .current_frame_number()
+            .ok_or_else(|| unsupported("numeración de bloques FLAC"))?;
+        let frame =
+            flacenc::encode_fixed_size_frame(&config, &fb_ctx.0, number, stream.stream_info())
+                .map_err(enc)?;
+        stream.stream_info_mut().update_frame_info(&frame);
+        sink.clear();
+        frame
+            .write(&mut sink)
+            .map_err(|e| unsupported(format!("escritura FLAC: {e:?}")))?;
+        file.write_all(sink.as_slice())?;
     }
-    std::fs::write(path, bytes)?;
+    stream
+        .stream_info_mut()
+        .set_md5_digest(&fb_ctx.1.md5_digest());
+    stream.stream_info_mut().set_total_samples(frames);
+
+    // Cabecera: "fLaC" + STREAMINFO (sin frames) + comentarios.
+    let mut head_sink = ByteSink::new();
+    stream
+        .write(&mut head_sink)
+        .map_err(|e| unsupported(format!("escritura FLAC: {e:?}")))?;
+    let mut header = head_sink.as_slice().to_vec();
+    if let Some(block) = &comment_block {
+        header[4] &= 0x7f;
+        header.extend_from_slice(block);
+    }
+    if header.len() != header_len || &header[..4] != b"fLaC" {
+        return Err(unsupported("salida FLAC inesperada"));
+    }
+    file.flush()?;
+    let mut file = file.into_inner().map_err(|e| e.into_error())?;
+    file.seek(SeekFrom::Start(0))?;
+    file.write_all(&header)?;
+    file.flush()?;
     Ok(())
+}
+
+fn enc_verify(e: impl std::fmt::Debug) -> AudioError {
+    unsupported(format!("configuración FLAC: {e:?}"))
 }

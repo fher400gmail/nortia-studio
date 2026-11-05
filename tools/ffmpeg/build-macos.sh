@@ -35,7 +35,7 @@ build_arch() {
   local args=(--prefix="$WORK/ff-$arch/install" --arch="$arch" --cc="$cc"
     ${cross[@]+"${cross[@]}"}
     "${FFMPEG_BASE_FLAGS[@]}"
-    --enable-encoder="$FFMPEG_ENCODERS_BASE,h264_videotoolbox" --enable-videotoolbox
+    --enable-encoder="$FFMPEG_ENCODERS_BASE,h264_videotoolbox,hevc_videotoolbox" --enable-videotoolbox
     --extra-cflags="-I$prefix/include -mmacosx-version-min=14.0"
     --extra-ldflags="-L$prefix/lib -mmacosx-version-min=14.0")
   { echo "# macOS $arch"; printf './configure'; printf ' %q' "${args[@]}"; echo; echo; } >> "$OUT/configure_line.txt"

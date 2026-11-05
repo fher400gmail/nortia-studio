@@ -37,7 +37,8 @@ done
 ff -hide_banner -h "encoder=$ENC" || true
 
 echo "== inventario de componentes (lista blanca) =="
-export ALLOW_ENC="$ALLOW_ENCODERS_BASE,$ENC"
+HEVC_ENC=${ENC/h264/hevc}
+export ALLOW_ENC="$ALLOW_ENCODERS_BASE,$ENC,$HEVC_ENC"
 ff -hide_banner -filters > inv.filters 2>&1
 ff -hide_banner -encoders > inv.encoders 2>&1
 ff -hide_banner -decoders > inv.decoders 2>&1
@@ -140,12 +141,37 @@ run -framerate 30 -loop 1 -i in.png -i in.wav -t 8 \
 echo "== mp3 =="
 run -i in.wav -vn -c:a libmp3lame -b:a 320k out.mp3
 
-for f in canvas.mp4 youtube.mp4 out.mp3; do fp -v error -show_format -show_streams -of json "$f" > "$f.json"; done
+echo "== canvas con zoompan (grafo real) =="
+MOV="+faststart+negative_cts_offsets"
+run -framerate 30 -loop 1 -i in.png -t 6 -an \
+  -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.1)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps=30,setsar=1,format=yuv420p" \
+  -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -profile:v "$PROFILE" -b:v 5M -movflags "$MOV" -use_editlist 0 canvas_zoom.mp4
+
+echo "== youtube con split + gblur + overlay (grafo real) =="
+run -framerate 30 -loop 1 -i in.png -i in.wav -t 8 \
+  -filter_complex "[0:v]setpts=PTS-STARTPTS,split=2[bg][fg];[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,gblur=sigma=30[b];[fg]scale=1080:1080[f];[b][f]overlay=(W-w)/2:(H-h)/2,fade=t=in:st=0:d=0.5,setsar=1,format=yuv420p[v]" \
+  -map "[v]" -map 1:a -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -g 15 -bf 2 -profile:v "$PROFILE" -b:v 8M \
+  -c:a aac -b:a 384k -ar 48000 -movflags "$MOV" -use_editlist 0 youtube_graph.mp4
+
+echo "== HEVC 3840x3840 (motion artwork) =="
+HEVC_OK=1
+if ! run -framerate 24 -loop 1 -i in.png -t 2 -an \
+  -vf "scale=3840:3840,setsar=1,format=yuv420p" -r 24 -c:v "$HEVC_ENC" ${EXTRA[@]+"${EXTRA[@]}"} -b:v 45M -tag:v hvc1 -movflags "$MOV" -use_editlist 0 hevc.mp4; then
+  HEVC_OK=0
+  case "$ENC" in
+    h264_mf) echo "AVISO: $HEVC_ENC no pudo codificar (la extensión HEVC de Windows no está garantizada en el runner); no es fatal en Windows" ;;
+    *) fail "$HEVC_ENC no pudo codificar 3840x3840" ;;
+  esac
+fi
+export HEVC_OK
+
+for f in canvas.mp4 canvas_zoom.mp4 youtube.mp4 youtube_graph.mp4 out.mp3; do fp -v error -show_format -show_streams -of json "$f" > "$f.json"; done
+[ "${HEVC_OK:-0}" = 1 ] && fp -v error -show_format -show_streams -of json hevc.mp4 > hevc.mp4.json || true
 fp -v error -show_streams -select_streams v:0 -show_entries stream=profile,has_b_frames,r_frame_rate,avg_frame_rate -of default youtube.mp4 || true
 
 echo "== aserciones =="
 "$PY" - <<'PYEOF'
-import json, struct, sys
+import json, os, struct, sys
 errs = []
 def load(f): return json.load(open(f + ".json"))
 def chk(c, m):
@@ -168,6 +194,23 @@ def atoms(path, limit=16):
             if size < 8: break
             fh.seek(pos + size)
     return out
+CONT = {"moov", "trak", "edts", "mdia", "minf", "stbl"}
+def boxes(path):
+    """Cajas anidadas (ruta tipo moov/trak/edts/elst)."""
+    found = []
+    data = open(path, "rb").read()
+    def walk(start, end, prefix):
+        pos = start
+        while pos + 8 <= end:
+            size, typ = struct.unpack(">I4s", data[pos:pos+8]); typ = typ.decode("latin1"); hdr = 8
+            if size == 1: size = struct.unpack(">Q", data[pos+8:pos+16])[0]; hdr = 16
+            elif size == 0: size = end - pos
+            if size < hdr: break
+            found.append(prefix + typ)
+            if typ in CONT: walk(pos + hdr, pos + size, prefix + typ + "/")
+            pos += size
+    walk(0, len(data), "")
+    return found
 def vs(j): return [s for s in j["streams"] if s["codec_type"] == "video"]
 def au(j): return [s for s in j["streams"] if s["codec_type"] == "audio"]
 
@@ -199,6 +242,29 @@ j = load("out.mp3"); s = j["streams"]
 chk(len(s) == 1 and s[0]["codec_name"] == "mp3", "mp3 codec mp3, 1 stream")
 chk(316800 <= int(j["format"]["bit_rate"]) <= 323200, "mp3 320 kbps CBR, margen 1 por ciento (%s)" % j["format"]["bit_rate"])
 d = float(j["format"]["duration"]); chk(abs(d - 8) <= 0.1, "mp3 duración 8 s (%.3f)" % d)
+
+for name, dur in (("canvas_zoom.mp4", 6), ("youtube_graph.mp4", 8)):
+    j = load(name); v = vs(j)[0]; s = au(j)
+    w, h = (1080, 1920) if name.startswith("canvas") else (1920, 1080)
+    chk(v["codec_name"] == "h264" and v.get("profile") == "High", name + " h264 High (%s)" % v.get("profile"))
+    chk((v["width"], v["height"]) == (w, h), name + " tamaño %dx%d" % (w, h))
+    chk(abs(fps(v) - 30) < 0.01, name + " 30 fps (%s)" % v["r_frame_rate"])
+    d = float(j["format"]["duration"]); chk(abs(d - dur) <= 0.1, name + " duración %d s (%.3f)" % (dur, d))
+    if name.startswith("canvas"):
+        chk(len(s) == 0 and j["format"]["nb_streams"] == 1, name + " sin audio")
+    else:
+        chk(len(s) == 1 and s[0]["codec_name"] == "aac" and int(s[0]["sample_rate"]) == 48000, name + " audio aac 48 kHz")
+    top = [b for b in boxes(name) if "/" not in b]
+    chk(top.index("moov") < top.index("mdat"), name + " moov antes de mdat %s" % top)
+    allb = boxes(name)
+    chk(not any(b.endswith("elst") for b in allb), name + " sin caja elst (negative_cts_offsets)")
+
+if os.environ.get("HEVC_OK") == "1":
+    j = load("hevc.mp4"); v = vs(j)[0]
+    chk(v["codec_name"] == "hevc" and (v["width"], v["height"]) == (3840, 3840), "hevc 3840x3840 (%s %sx%s)" % (v["codec_name"], v["width"], v["height"]))
+    chk(len(au(j)) == 0, "hevc sin audio")
+else:
+    print("hevc: omitido (codificación no disponible en este runner)")
 
 if errs:
     print("\n%d aserciones fallidas" % len(errs)); sys.exit(1)

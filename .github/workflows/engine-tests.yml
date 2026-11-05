@@ -21,6 +21,7 @@ jobs:
   linux:
     name: ubuntu-latest
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -36,9 +37,11 @@ jobs:
       - run: cargo test --manifest-path engine/Cargo.toml --all-features
 
   macos:
-    name: macos-latest
+    name: macos-15
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
-    runs-on: macos-latest
+    # 05/11/2026: macos-latest (arm64) sin capacidad, jobs sin adquirir; se usa macos-15 hasta que se recupere.
+    runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -57,6 +60,7 @@ jobs:
     name: windows-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

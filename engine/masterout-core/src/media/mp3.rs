@@ -4,7 +4,6 @@
 use super::video::run_ffmpeg;
 use super::SidecarPaths;
 use crate::audio::AudioError;
-use crate::i18n::{tf, Lang};
 use id3::frame::{Comment, Content, Picture, PictureType};
 use id3::{Frame, Tag, TagLike, Version};
 use std::path::Path;
@@ -27,8 +26,9 @@ fn unsupported(msg: impl Into<String>) -> AudioError {
     AudioError::UnsupportedFormat(msg.into())
 }
 
-fn id3_err(lang: Lang, e: id3::Error) -> AudioError {
-    unsupported(tf(lang, "export.err.id3", &[("detail", &e.to_string())]))
+/// `err.id3` con el detalle técnico aparte (la interfaz traduce la clave).
+fn id3_err(e: id3::Error) -> AudioError {
+    unsupported(format!("err.id3: {e}"))
 }
 
 fn mime_for(path: &Path) -> &'static str {
@@ -47,12 +47,7 @@ fn text_frame(id: &str, text: &str) -> Frame {
 }
 
 /// Reescribe la etiqueta del MP3 como ID3v2.3 con todos los campos.
-fn write_id3(
-    lang: Lang,
-    out: &Path,
-    tags: &Id3Tags,
-    cover: Option<&Path>,
-) -> Result<(), AudioError> {
+fn write_id3(out: &Path, tags: &Id3Tags, cover: Option<&Path>) -> Result<(), AudioError> {
     let mut tag = Tag::new();
     tag.set_title(&tags.title);
     tag.set_artist(&tags.artist);
@@ -87,8 +82,7 @@ fn write_id3(
             data: std::fs::read(path)?,
         });
     }
-    tag.write_to_path(out, Version::Id3v23)
-        .map_err(|e| id3_err(lang, e))
+    tag.write_to_path(out, Version::Id3v23).map_err(id3_err)
 }
 
 /// Argumentos de ffmpeg para el MP3 320 kbps CBR (libmp3lame, máxima calidad de codificación,
@@ -125,7 +119,6 @@ pub fn build_mp3_args(wav_16_44: &Path, out: &Path) -> Vec<String> {
 /// `cancel` se consulta mientras ffmpeg trabaja.
 pub fn encode(
     sidecar: &SidecarPaths,
-    lang: Lang,
     wav_16_44_path: &Path,
     out: &Path,
     tags: &Id3Tags,
@@ -133,5 +126,5 @@ pub fn encode(
     cancel: &dyn Fn() -> bool,
 ) -> Result<(), AudioError> {
     run_ffmpeg(sidecar, &build_mp3_args(wav_16_44_path, out), cancel)?;
-    write_id3(lang, out, tags, cover)
+    write_id3(out, tags, cover)
 }

@@ -1,9 +1,9 @@
 //! Exportación con progreso como DTOs, cancelación y errores localizados.
 
 use crate::analysis::suggest;
-use crate::dto::{DeliveryDto, ExportRequestDto, ProgressDto};
+use crate::dto::{DeliveryDto, ExportRequestDto, ProgressDto, VerdictDto};
 use crate::errors::{localize, BridgeError};
-use crate::planning::{to_media_inputs, to_release_meta};
+use crate::planning::{to_media_inputs, to_release_meta, verdict_parts};
 use masterout_core::export::{self, default_sidecar, Delivery, ExportRequest, Progress};
 use masterout_core::i18n::{t, Lang};
 use masterout_core::media::SidecarPaths;
@@ -32,6 +32,18 @@ fn delivery_dto(d: &Delivery, lang: Lang) -> DeliveryDto {
             .collect(),
         failed_keys: d.failed.clone(),
         failed_details: d.failed_details.clone(),
+        verdicts: d
+            .verdicts
+            .iter()
+            .map(|(id, v)| {
+                let (verdict, verdict_text) = verdict_parts(v, lang);
+                VerdictDto {
+                    preset_id: id.clone(),
+                    verdict: verdict.to_string(),
+                    verdict_text,
+                }
+            })
+            .collect(),
         elapsed_ms: u64::try_from(d.elapsed_ms).unwrap_or(u64::MAX),
     }
 }
@@ -44,6 +56,10 @@ fn progress_dto(p: Progress, lang: Lang) -> ProgressDto {
     match p {
         Progress::Analyzed(_) => kind("analyzed"),
         Progress::Planned(_) => kind("planned"),
+        Progress::Preparing { fraction } => ProgressDto {
+            fraction: Some(fraction),
+            ..kind("preparing")
+        },
         Progress::JobStarted { preset_id } => ProgressDto {
             preset_id: Some(preset_id),
             ..kind("job_started")
@@ -104,6 +120,19 @@ pub fn export_with(
     cancel: Arc<AtomicBool>,
     sidecar: Option<SidecarPaths>,
 ) -> Result<DeliveryDto, BridgeError> {
+    export_custom(req, lang, on_progress, cancel, sidecar, None)
+}
+
+/// Como [`export_with`], con las herramientas de Apple Digital Masters indicadas
+/// `(afconvert, afclip)` en vez de buscarlas en el sistema (pruebas con herramientas falsas).
+pub fn export_custom(
+    req: &ExportRequestDto,
+    lang: Lang,
+    on_progress: &(dyn Fn(ProgressDto) + Sync),
+    cancel: Arc<AtomicBool>,
+    sidecar: Option<SidecarPaths>,
+    adm_tools: Option<(PathBuf, PathBuf)>,
+) -> Result<DeliveryDto, BridgeError> {
     let master_path = PathBuf::from(&req.master_path);
     let mut meta = to_release_meta(&req.meta);
     // Título vacío: el sugerido por el nombre de archivo ("Artista - Título" se separa, sin
@@ -127,6 +156,10 @@ pub fn export_with(
     .with_cancel(cancel)
     .with_sidecar(sidecar)
     .with_media(to_media_inputs(&req.meta, &req.media_inputs));
+    let request = match adm_tools {
+        Some((afconvert, afclip)) => request.with_adm_tools(afconvert, afclip),
+        None => request,
+    };
     export::run(&request, &|p| on_progress(progress_dto(p, lang)))
         .map(|d| delivery_dto(&d, lang))
         .map_err(|e| localize(&e, lang))

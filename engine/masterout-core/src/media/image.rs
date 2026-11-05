@@ -188,8 +188,8 @@ pub fn conform_cover(
     // JPG 4:4:4 sin EXIF ni ICC; PNG 8 bits RGB sin alfa. Si falla algo no queda nada a medias.
     let r = write_both(&rgb, out_jpg, out_png, opts);
     if r.is_err() {
-        let _ = std::fs::remove_file(out_jpg);
-        let _ = std::fs::remove_file(out_png);
+        crate::fsutil::remove_temp(out_jpg);
+        crate::fsutil::remove_temp(out_png);
     }
     r?;
 
@@ -239,8 +239,8 @@ fn write_both(
         Ok(())
     })();
     if res.is_err() {
-        let _ = std::fs::remove_file(&tj);
-        let _ = std::fs::remove_file(&tp);
+        crate::fsutil::remove_temp(&tj);
+        crate::fsutil::remove_temp(&tp);
     }
     res
 }

@@ -5,6 +5,7 @@ pub mod audio;
 pub mod dither;
 pub mod export;
 pub mod flac;
+pub mod fsutil;
 pub mod i18n;
 pub mod loudness;
 pub mod media;

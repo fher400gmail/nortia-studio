@@ -37,7 +37,6 @@
   "mp3.comment": "nortia. studio - master check",
   "export.err.container": "contenedor no soportado: {ext}",
   "export.err.threadpool": "no se pudieron iniciar los hilos de trabajo: {detail}",
-  "export.err.id3": "no se pudieron escribir las etiquetas ID3: {detail}",
   "export.err.documents": "no se pudieron escribir los documentos de la entrega: {detail}",
   "preset.spotify": "Spotify",
   "preset.apple_adm": "Apple Music (Digital Masters)",
@@ -75,6 +74,8 @@
   "err.not_wav": "Este archivo no es un WAV válido. master check admite másters en formato WAV.",
   "err.io": "No se pudo leer o escribir un archivo o carpeta.",
   "err.internal": "Error interno inesperado.",
+  "err.too_long": "master check admite másters de hasta 30 minutos.",
+  "err.id3": "No se pudieron escribir las etiquetas del MP3.",
   "err.busy": "Ya hay una exportación en curso.",
   "err.generic": "No se pudo completar la operación.",
   "err.too_many_channels": "master check admite másters mono o estéreo.",
@@ -108,7 +109,7 @@
   "reason.adm_cancelled": "Validación cancelada.",
   "report.adm_clipping": "Apple Digital Masters: {n} muestras con clipping en el AAC",
   "report.adm_unavailable": "Apple Digital Masters: no disponible: {reason}",
-  "adm_clipping": "El AAC de Apple Digital Masters tiene muestras con clipping",
+  "adm_clipping": "pasa de 0 dB al codificar",
   "report.adm_clipping_one": "Apple Digital Masters: 1 muestra con clipping en el AAC",
   "err.adm_log": "No se pudo crear el registro de la validación."
 }

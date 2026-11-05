@@ -468,6 +468,10 @@ fn i18n_keys_exist_in_both_languages() {
             "reason.adm_failed",
             "reason.adm_cancelled",
             "adm_clipping",
+            "report.adm_clipping",
+            "report.adm_clipping_one",
+            "report.adm_unavailable",
+            "err.adm_log",
         ] {
             assert!(!t(lang, k).starts_with('⟦'), "{k}");
         }

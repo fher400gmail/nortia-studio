@@ -94,7 +94,7 @@ fn encode_writes_320k_cbr_with_id3v23_and_apic() {
         year: Some(2026),
         ..Default::default()
     };
-    encode(&sc, Lang::Es, &wav, &out, &tags, Some(&jpg), &|| false).unwrap();
+    encode(&sc, &wav, &out, &tags, Some(&jpg), &|| false).unwrap();
     let info = probe(&sc, &out).unwrap();
     assert_eq!(info.audio_codec.as_deref(), Some("mp3"));
     assert_eq!(info.audio_bitrate, Some(320_000));
@@ -114,16 +114,35 @@ fn encode_without_cover_has_no_picture() {
     let d = tempfile::tempdir().unwrap();
     let (wav, out) = (d.path().join("a.wav"), d.path().join("a.mp3"));
     write_wav(&wav, 1);
-    encode(
-        &sc,
-        Lang::En,
-        &wav,
-        &out,
-        &Id3Tags::default(),
-        None,
-        &|| false,
-    )
-    .unwrap();
+    encode(&sc, &wav, &out, &Id3Tags::default(), None, &|| false).unwrap();
     let tag = id3::Tag::read_from_path(&out).unwrap();
     assert_eq!(tag.pictures().count(), 0);
+}
+
+/// Un fallo al escribir las etiquetas ID3 es una clave estable (`err.id3`) con el detalle
+/// aparte, no `err.generic` con un texto ya traducido dentro.
+#[cfg(unix)]
+#[test]
+fn id3_write_failure_is_a_stable_key_with_the_detail_apart() {
+    use std::os::unix::fs::PermissionsExt;
+    let d = tempfile::tempdir().unwrap();
+    let ffmpeg = d.path().join("ffmpeg");
+    std::fs::write(&ffmpeg, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&ffmpeg, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let sc = SidecarPaths {
+        ffmpeg: ffmpeg.clone(),
+        ffprobe: ffmpeg,
+    };
+    let wav = d.path().join("in.wav");
+    write_wav(&wav, 1);
+    // la salida es una carpeta: ffmpeg «termina bien» y la etiqueta no se puede escribir
+    let out = d.path().join("salida");
+    std::fs::create_dir(&out).unwrap();
+    let e = encode(&sc, &wav, &out, &Id3Tags::default(), None, &|| false).unwrap_err();
+    let (key, detail) = e.key_and_detail();
+    assert_eq!(key, "err.id3");
+    assert!(detail.is_some_and(|x| !x.is_empty()));
+    for l in [Lang::Es, Lang::En] {
+        assert!(!masterout_core::i18n::t(l, "err.id3").starts_with('⟦'));
+    }
 }

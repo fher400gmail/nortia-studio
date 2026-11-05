@@ -90,7 +90,8 @@ pub struct ExportRequestDto {
 }
 
 /// Evento de progreso. Según `kind`, solo se rellenan algunos campos:
-/// "analyzed" | "planned" | "job_started" | "job_progress" (`preset_id`, `fraction`) |
+/// "analyzed" | "planned" | "preparing" (`fraction`: se preparan las muestras antes del primer
+/// destino) | "job_started" | "job_progress" (`preset_id`, `fraction`) |
 /// "job_done" (`preset_id`, `path`, `bytes`) |
 /// "job_failed" (`preset_id`, `error` localizado, `error_key` estable, `error_detail` técnico) |
 /// "cancelled" | "finished" (`delivery`).
@@ -121,7 +122,22 @@ pub struct DeliveryDto {
     pub failed: Vec<(String, String)>,
     /// (destino, clave estable `err.*`) de lo que falló, en el mismo orden que `failed`.
     pub failed_keys: Vec<(String, String)>,
-    /// (destino, detalle técnico sin localizar).
-    pub failed_details: Vec<(String, String)>,
+    /// (destino, detalle técnico sin localizar o `None`), **alineado por posición con `failed`**:
+    /// misma longitud y mismo orden.
+    pub failed_details: Vec<(String, Option<String>)>,
+    /// Veredicto final de cada destino que se escribió (el del plan, salvo `apple_adm`, que pasa a
+    /// aviso si el AAC validado tiene clipping). Vacío si se canceló.
+    #[serde(default)]
+    pub verdicts: Vec<VerdictDto>,
     pub elapsed_ms: u64,
+}
+
+/// Veredicto final de un destino tras la exportación.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct VerdictDto {
+    pub preset_id: String,
+    /// "ok" | "warn" | "fail"
+    pub verdict: String,
+    /// Localizado.
+    pub verdict_text: String,
 }

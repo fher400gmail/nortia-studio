@@ -16,7 +16,13 @@ num_cpus = "1.17.0"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 moxcms = "0.9.1"
 
+[features]
+# Ganchos de prueba (inyección de fallos). Sin ella no existen en el binario de producción;
+# las pruebas del propio crate la activan por la dependencia de desarrollo de abajo.
+test-hooks = []
+
 [dev-dependencies]
+masterout-core = { path = ".", features = ["test-hooks"] }
 claxon = "0.4.3"
 img-parts = "0.4.2"
 metaflac = "0.2.8"

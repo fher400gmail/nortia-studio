@@ -302,6 +302,7 @@ dependencies = [
  "id3",
  "image",
  "img-parts",
+ "masterout-core",
  "metaflac",
  "moxcms 0.9.1",
  "num_cpus",

@@ -576,9 +576,10 @@ pub fn run_ffmpeg_with_deadline(
         real.insert(n - 1, "mp4".into());
         real.insert(n - 1, "-f".into());
     }
+    // `kill` ya espera al hijo; aun así en Windows el archivo puede seguir abierto un instante
     let cleanup = || {
         if let Some(p) = &part {
-            let _ = std::fs::remove_file(p);
+            crate::fsutil::remove_temp(p);
         }
     };
     let mut cmd = Command::new(&sidecar.ffmpeg);

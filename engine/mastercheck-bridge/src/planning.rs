@@ -70,7 +70,7 @@ fn master_info(m: &MasterDto) -> MasterInfo {
     }
 }
 
-fn verdict_parts(v: &Verdict, lang: Lang) -> (&'static str, String) {
+pub(crate) fn verdict_parts(v: &Verdict, lang: Lang) -> (&'static str, String) {
     match v {
         Verdict::Ok => ("ok", t(lang, "verdict.ok")),
         Verdict::Warn(k) => ("warn", t(lang, k)),

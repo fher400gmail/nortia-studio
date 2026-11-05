@@ -6,7 +6,7 @@ use crate::audio::{AudioBuffer, AudioError};
 use crate::dither::{self, Dither};
 use crate::flac::{self, FlacTags};
 use crate::i18n::{t, Lang};
-use crate::loudness;
+use crate::loudness::{self, Verdict};
 use crate::media::adm::{self, AdmReport};
 use crate::media::image::{self as cover_image, CoverOptions, CoverOutput};
 use crate::media::mp3::{self, Id3Tags};
@@ -17,7 +17,7 @@ use crate::media::{self, Platform, SidecarPaths};
 use crate::naming;
 use crate::plan::{self, Job, MasterInfo, MediaInputs, MediaKind, ReleaseMeta, Resolved};
 use crate::presets::Container;
-use crate::reports::{self, DeliverySummary};
+use crate::reports::{self, verdict_with_adm, DeliverySummary};
 use crate::resample;
 use crate::wav::{self, WavMetadata, WavWriteOptions};
 use rayon::prelude::*;
@@ -45,6 +45,9 @@ pub struct ExportRequest {
     pub sidecar: Option<SidecarPaths>,
     /// Codificadores de vídeo a usar (solo las pruebas cambian el de la plataforma real).
     pub platform: Platform,
+    /// `(afconvert, afclip)` a usar en la validación de Apple Digital Masters en vez de buscarlos
+    /// en el sistema (solo las pruebas, con herramientas falsas; salta la comprobación de macOS).
+    pub adm_tools: Option<(PathBuf, PathBuf)>,
 }
 
 impl ExportRequest {
@@ -67,7 +70,14 @@ impl ExportRequest {
             media: MediaInputs::default(),
             sidecar: default_sidecar(),
             platform: Platform::current(),
+            adm_tools: None,
         }
+    }
+
+    /// Herramientas de Apple Digital Masters indicadas (pruebas).
+    pub fn with_adm_tools(mut self, afconvert: PathBuf, afclip: PathBuf) -> Self {
+        self.adm_tools = Some((afconvert, afclip));
+        self
     }
 
     pub fn with_media(mut self, media: MediaInputs) -> Self {
@@ -100,6 +110,11 @@ impl ExportRequest {
 pub enum Progress {
     Analyzed(MasterInfo),
     Planned(Vec<Resolved>),
+    /// Preparando las muestras de cada combinación (bits, frecuencia, dither) antes del primer
+    /// destino; `fraction` en (0, 1], una vez por combinación calculada.
+    Preparing {
+        fraction: f32,
+    },
     JobStarted {
         preset_id: String,
     },
@@ -133,8 +148,12 @@ pub struct Delivery {
     pub files: Vec<(PathBuf, u64)>,
     /// `(preset_id, clave de error)` de los destinos que fallaron (`"documents"` para los documentos).
     pub failed: Vec<(String, String)>,
-    /// `(preset_id, detalle técnico)` de los que tienen detalle.
-    pub failed_details: Vec<(String, String)>,
+    /// Detalle técnico de cada fallo, **alineado por posición con `failed`** (mismo orden y
+    /// misma longitud): `None` si el fallo no tiene detalle (p. ej. un panic).
+    pub failed_details: Vec<(String, Option<String>)>,
+    /// Veredicto final de cada destino que se escribió, tras la exportación: el del plan salvo el
+    /// de `apple_adm`, que empeora a aviso si el AAC validado tiene clipping. Vacío si se canceló.
+    pub verdicts: Vec<(String, Verdict)>,
     /// La exportación se canceló; `files` son los archivos completos que se conservan.
     pub cancelled: bool,
     pub elapsed_ms: u128,
@@ -156,8 +175,22 @@ fn unsupported(msg: impl Into<String>) -> AudioError {
     AudioError::UnsupportedFormat(msg.into())
 }
 
+/// Duración máxima de un máster: más largo agotaría la memoria de un equipo modesto (el WAV
+/// se carga entero a f32 y se le suman las copias cuantizadas).
+pub const MAX_MASTER_SECS: u64 = 30 * 60;
+
+/// Rechaza (`err.too_long`) un máster de más de [`MAX_MASTER_SECS`], mirando solo la cabecera.
+pub fn check_length(info: &wav::WavInfo) -> Result<(), AudioError> {
+    if info.frames > MAX_MASTER_SECS * u64::from(info.sample_rate) {
+        return Err(unsupported("err.too_long"));
+    }
+    Ok(())
+}
+
 /// Lee el máster y mide su loudness.
 pub fn analyze(master_path: &Path) -> Result<(AudioBuffer, MasterInfo), AudioError> {
+    // La cabecera primero: un máster demasiado largo se rechaza sin cargar el audio.
+    check_length(&wav::probe(master_path)?)?;
     let buf = wav::read(master_path)?;
     if buf.sample_rate > 96_000 {
         // Clave i18n `err.rate_over_96k`: la interfaz la traduce.
@@ -239,7 +272,7 @@ struct TempGuard<'a> {
 impl Drop for TempGuard<'_> {
     fn drop(&mut self) {
         if self.armed {
-            let _ = std::fs::remove_file(self.path);
+            crate::fsutil::remove_temp(self.path);
         }
     }
 }
@@ -264,10 +297,12 @@ fn atomic(
 }
 
 /// Punto de inyección de fallos para pruebas: si el id de destino coincide, escribe el
-/// temporal y entra en pánico (una sola vez).
+/// temporal y entra en pánico (una sola vez). Solo existe con la feature `test-hooks`.
+#[cfg(feature = "test-hooks")]
 #[doc(hidden)]
 pub static TEST_PANIC_PRESET: Mutex<Option<String>> = Mutex::new(None);
 
+#[cfg(feature = "test-hooks")]
 fn inject_fault(job: &Job, tmp: &Path) {
     let hit = {
         let mut g = TEST_PANIC_PRESET.lock().unwrap_or_else(|e| e.into_inner());
@@ -282,6 +317,10 @@ fn inject_fault(job: &Job, tmp: &Path) {
         panic!("fallo inyectado en {}", job.preset_id);
     }
 }
+
+#[cfg(not(feature = "test-hooks"))]
+#[inline(always)]
+fn inject_fault(_job: &Job, _tmp: &Path) {}
 
 /// Clave de la caché de muestras: (bits, frecuencia, dither). El dither es un bool porque la
 /// semilla TPDF (`DITHER_SEED`) es constante: dos destinos con la misma clave producen
@@ -316,6 +355,7 @@ struct Ctx<'a> {
     covers: Mutex<HashMap<PathBuf, Arc<Result<CoverOutput, AudioError>>>>,
     /// Resultado de la validación Apple Digital Masters (destino `apple_adm`), para el informe.
     adm: Mutex<Option<AdmReport>>,
+    adm_tools: Option<&'a (PathBuf, PathBuf)>,
 }
 
 /// Dither de un destino: lo decide el plan (`needs_dither`), nunca la detección automática.
@@ -531,7 +571,7 @@ impl Ctx<'_> {
                         Ok(b) => out.push((to.clone(), b)),
                         Err(e) => {
                             for (p, _) in &out {
-                                let _ = std::fs::remove_file(p);
+                                crate::fsutil::remove_temp(p);
                             }
                             return Err(e);
                         }
@@ -582,7 +622,7 @@ impl Ctx<'_> {
                         Err(e) => {
                             // un destino es todo o nada
                             for (p, _) in &out {
-                                let _ = std::fs::remove_file(p);
+                                crate::fsutil::remove_temp(p);
                             }
                             return Err(e);
                         }
@@ -690,7 +730,6 @@ impl Ctx<'_> {
                 step(0.8);
                 mp3::encode(
                     sidecar,
-                    self.lang,
                     &wav_tmp,
                     tmp,
                     &self.id3_tags(),
@@ -702,7 +741,15 @@ impl Ctx<'_> {
         // Apple Digital Masters: se valida el WAV recién escrito (solo hace algo en macOS).
         if job.preset_id == "apple_adm" && !self.cancelled() {
             step(0.9);
-            let report = adm::validate_adm(&path, &self.temp.join("adm"), &|| self.cancelled());
+            let workdir = self.temp.join("adm");
+            let report = match self.adm_tools {
+                Some((afconvert, afclip)) => {
+                    adm::validate_with_tools(afconvert, afclip, &path, &workdir, &|| {
+                        self.cancelled()
+                    })
+                }
+                None => adm::validate_adm(&path, &workdir, &|| self.cancelled()),
+            };
             *self.adm.lock().unwrap_or_else(|e| e.into_inner()) = Some(report);
         }
         Ok(Some(vec![(path, bytes)]))
@@ -714,7 +761,7 @@ struct TempFile(PathBuf);
 
 impl Drop for TempFile {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        crate::fsutil::remove_temp(&self.0);
     }
 }
 
@@ -762,7 +809,12 @@ fn write_text(path: &Path, text: &str) -> Result<u64, AudioError> {
 /// los destinos y libera el máster f32 en cuanto no hace falta: la última combinación a
 /// frecuencia nativa lo consume para reutilizar su memoria. Pico: máster + una combinación
 /// en curso + las ya calculadas (en i32), nunca varias copias remuestreadas a la vez.
-fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool) -> Cache {
+fn build_cache(
+    mut buf: AudioBuffer,
+    jobs: &[&Job],
+    cancelled: &dyn Fn() -> bool,
+    prepared: &dyn Fn(f32),
+) -> Cache {
     let mut cache: Cache = HashMap::new();
     for key in plan_sample_keys(jobs) {
         let remaining = jobs
@@ -782,6 +834,7 @@ fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool
     let mut keys: Vec<SampleKey> = cache.keys().copied().collect();
     keys.sort_by_key(|&(bits, rate, dither)| (rate == native, rate, bits, dither));
     let last = keys.len().saturating_sub(1);
+    let total = keys.len();
     for (i, key) in keys.into_iter().enumerate() {
         if cancelled() {
             // Los destinos se saltan; no se calcula nada más.
@@ -820,6 +873,7 @@ fn build_cache(mut buf: AudioBuffer, jobs: &[&Job], cancelled: &dyn Fn() -> bool
         if let Some(e) = cache.get_mut(&key) {
             e.data = data;
         }
+        prepared((i + 1) as f32 / total as f32);
     }
     cache
 }
@@ -887,11 +941,16 @@ pub fn run(
             Resolved::Disabled { .. } => None,
         })
         .collect();
-    let cache = build_cache(buf, &jobs, &|| {
-        req.cancel
-            .as_ref()
-            .is_some_and(|c| c.load(Ordering::Relaxed))
-    });
+    let cache = build_cache(
+        buf,
+        &jobs,
+        &|| {
+            req.cancel
+                .as_ref()
+                .is_some_and(|c| c.load(Ordering::Relaxed))
+        },
+        &|fraction| emit(Progress::Preparing { fraction }),
+    );
     let temp = TempDir::new()?;
     let ctx = Ctx {
         meta: &meta,
@@ -906,6 +965,7 @@ pub fn run(
         temp: &temp.0,
         covers: Mutex::new(HashMap::new()),
         adm: Mutex::new(None),
+        adm_tools: req.adm_tools.as_ref(),
     };
 
     let outcomes: Vec<Outcome> = pool.install(|| {
@@ -968,14 +1028,19 @@ pub fn run(
     let mut files = Vec::new();
     let mut failed = Vec::new();
     let mut failed_details = Vec::new();
+    let mut verdicts = Vec::new();
     for (job, r) in jobs.iter().zip(outcomes) {
         match r {
-            Outcome::Done(fs) => files.extend(fs),
+            Outcome::Done(fs) => {
+                files.extend(fs);
+                verdicts.push((
+                    job.preset_id.clone(),
+                    verdict_with_adm(&job.preset_id, &job.verdict, adm_report.as_ref()),
+                ));
+            }
             Outcome::Failed(e, d) => {
                 failed.push((job.preset_id.clone(), e));
-                if let Some(d) = d {
-                    failed_details.push((job.preset_id.clone(), d));
-                }
+                failed_details.push((job.preset_id.clone(), d));
             }
             Outcome::Skipped => {}
         }
@@ -1000,6 +1065,7 @@ pub fn run(
             files,
             failed,
             failed_details,
+            verdicts: Vec::new(),
             cancelled: true,
             elapsed_ms: t0.elapsed().as_millis(),
         });
@@ -1039,7 +1105,7 @@ pub fn run(
                     (_, Some(d)) => d,
                     (k, None) => k,
                 };
-                failed_details.push(("documents".to_string(), format!("{name}: {detail}")));
+                failed_details.push(("documents".to_string(), Some(format!("{name}: {detail}"))));
             }
         }
     }
@@ -1049,6 +1115,7 @@ pub fn run(
         files,
         failed,
         failed_details,
+        verdicts,
         cancelled: false,
         elapsed_ms: t0.elapsed().as_millis(),
     };

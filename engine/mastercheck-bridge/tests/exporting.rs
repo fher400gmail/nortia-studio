@@ -284,3 +284,116 @@ fn blank_title_uses_suggested_title_without_duplicating_artist() {
         d.folder
     );
 }
+
+// ---------------------------------------------------------------- tarea 7 (hito 3)
+
+#[test]
+fn preparing_events_are_dtos_with_a_fraction_before_the_first_job() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path());
+    let events = Mutex::new(Vec::new());
+    export(
+        &request(&m, &tmp.path().join("salida"), &["spotify", "deezer"]),
+        Lang::Es,
+        &|p| events.lock().unwrap().push(p),
+        Arc::new(AtomicBool::new(false)),
+    )
+    .unwrap();
+    let ev = events.into_inner().unwrap();
+    let prep: Vec<f32> = ev
+        .iter()
+        .filter(|e| e.kind == "preparing")
+        .map(|e| e.fraction.expect("preparing lleva fraction"))
+        .collect();
+    assert!(!prep.is_empty() && *prep.last().unwrap() == 1.0, "{prep:?}");
+    let first_job = ev.iter().position(|e| e.kind == "job_started").unwrap();
+    let last_prep = ev.iter().rposition(|e| e.kind == "preparing").unwrap();
+    assert!(last_prep < first_job);
+}
+
+#[test]
+fn delivery_dto_lists_final_verdicts_and_aligned_details() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path());
+    let d = export(
+        &request(&m, &tmp.path().join("salida"), &["spotify", "deezer"]),
+        Lang::Es,
+        &|_| {},
+        Arc::new(AtomicBool::new(false)),
+    )
+    .unwrap();
+    let ids: Vec<&str> = d.verdicts.iter().map(|v| v.preset_id.as_str()).collect();
+    assert_eq!(ids, ["spotify", "deezer"]);
+    assert!(d.verdicts.iter().all(
+        |v| ["ok", "warn", "fail"].contains(&v.verdict.as_str()) && !v.verdict_text.is_empty()
+    ));
+    assert_eq!(d.failed_details.len(), d.failed.len());
+    // los verdicts viajan en el JSON con los nombres del contrato
+    let json = serde_json::to_value(&d).unwrap();
+    assert_eq!(json["verdicts"][0]["preset_id"], "spotify");
+    assert!(json["failed_details"].is_array());
+}
+
+#[cfg(unix)]
+mod adm_verdict {
+    use super::*;
+    use mastercheck_bridge::exporting::export_custom;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn script(dir: &Path, name: &str, body: &str) -> std::path::PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+
+    fn run(lang: Lang, clip: &str) -> mastercheck_bridge::dto::DeliveryDto {
+        let tmp = tempfile::tempdir().unwrap();
+        let m = master(tmp.path());
+        let conv = script(tmp.path(), "afconvert", "touch \"$2\"");
+        let clip = script(tmp.path(), "afclip", clip);
+        export_custom(
+            &request(&m, &tmp.path().join("o"), &["apple_adm", "deezer"]),
+            lang,
+            &|_| {},
+            Arc::new(AtomicBool::new(false)),
+            None,
+            Some((conv, clip)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn apple_card_gets_a_status_warning_when_the_aac_clips() {
+        let clips = "printf 'CLIPPED SAMPLES:\\n   total clipped samples    Left   on-sample:   1    inter-sample:   2\\n'";
+        let es = run(Lang::Es, clips);
+        let apple = es
+            .verdicts
+            .iter()
+            .find(|v| v.preset_id == "apple_adm")
+            .unwrap();
+        // aviso (warn), no fallo, con el texto de la ficha
+        assert_eq!(apple.verdict, "warn");
+        assert_eq!(apple.verdict_text, "pasa de 0 dB al codificar");
+        assert!(es.failed.is_empty(), "no es un error de exportación");
+        // el resto de destinos conserva el veredicto del plan (el mismo con o sin clipping)
+        let clean = run(Lang::Es, "echo ' -- no samples clipped --'");
+        let pick = |d: &mastercheck_bridge::dto::DeliveryDto, id: &str| {
+            let v = d.verdicts.iter().find(|v| v.preset_id == id).unwrap();
+            (v.verdict.clone(), v.verdict_text.clone())
+        };
+        assert_eq!(pick(&es, "deezer"), pick(&clean, "deezer"));
+        let en = run(Lang::En, clips);
+        let apple = en
+            .verdicts
+            .iter()
+            .find(|v| v.preset_id == "apple_adm")
+            .unwrap();
+        assert_eq!(
+            (apple.verdict.as_str(), apple.verdict_text.as_str()),
+            ("warn", "clips when encoded")
+        );
+        // sin clipping, el aviso de ADM no aparece
+        assert_ne!(pick(&clean, "apple_adm").1, "pasa de 0 dB al codificar");
+    }
+}

@@ -419,6 +419,11 @@ fn document_failure_is_reported_and_finished_still_fires() {
     })
     .unwrap();
     assert!(d.failed.iter().any(|(id, _)| id == "documents"));
+    assert_eq!(d.failed_details.len(), d.failed.len());
+    assert!(d
+        .failed_details
+        .iter()
+        .all(|(id, det)| id == "documents" && det.is_some()));
     assert!(matches!(
         events.into_inner().unwrap().last(),
         Some(Progress::Finished(_))
@@ -715,6 +720,8 @@ fn panic_inside_a_job_is_contained_and_leaves_no_partials() {
         d.failed,
         vec![("tidal".to_string(), "err.internal".to_string())]
     );
+    // sin detalle técnico (un panic no lo tiene): sigue habiendo una entrada por posición
+    assert_eq!(d.failed_details, vec![("tidal".to_string(), None)]);
     assert!(d
         .files
         .iter()
@@ -764,5 +771,242 @@ fn cancel_at_job_start_is_much_faster_than_a_full_flac_run() {
     assert!(
         cancelled_time < full_time / 2,
         "cancelar tardó {cancelled_time:?} de {full_time:?}"
+    );
+}
+
+// ---------------------------------------------------------------- tarea 7 (hito 3)
+
+#[test]
+fn preparing_progress_precedes_the_first_job_and_ends_at_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let events = Mutex::new(Vec::new());
+    // spotify (nativo) y deezer (16 bit / 44,1 kHz): dos combinaciones de muestras
+    export::run(
+        &request(&master, &tmp.path().join("out"), &["spotify", "deezer"]),
+        &|p| events.lock().unwrap().push(p),
+    )
+    .unwrap();
+    let ev = events.into_inner().unwrap();
+    let fractions: Vec<f32> = ev
+        .iter()
+        .filter_map(|e| match e {
+            Progress::Preparing { fraction } => Some(*fraction),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(fractions.len(), 2, "{fractions:?}");
+    assert!(fractions.windows(2).all(|w| w[0] < w[1]), "{fractions:?}");
+    assert!(fractions[0] > 0.0 && fractions[1] == 1.0, "{fractions:?}");
+    let first_job = ev
+        .iter()
+        .position(|e| matches!(e, Progress::JobStarted { .. }))
+        .unwrap();
+    let last_prep = ev
+        .iter()
+        .rposition(|e| matches!(e, Progress::Preparing { .. }))
+        .unwrap();
+    assert!(
+        last_prep < first_job,
+        "preparar va antes del primer destino"
+    );
+}
+
+/// WAV mono 16 bit de `secs` segundos a 8 kHz, esparcido (solo cabecera real).
+fn sparse_wav(path: &Path, secs: u64) {
+    use std::io::Write;
+    let data_len = secs * 8000 * 2;
+    let mut f = std::fs::File::create(path).unwrap();
+    let mut h = Vec::new();
+    h.extend_from_slice(b"RIFF");
+    h.extend_from_slice(&((36 + data_len) as u32).to_le_bytes());
+    h.extend_from_slice(b"WAVEfmt ");
+    h.extend_from_slice(&16u32.to_le_bytes());
+    h.extend_from_slice(&1u16.to_le_bytes());
+    h.extend_from_slice(&1u16.to_le_bytes());
+    h.extend_from_slice(&8000u32.to_le_bytes());
+    h.extend_from_slice(&16_000u32.to_le_bytes());
+    h.extend_from_slice(&2u16.to_le_bytes());
+    h.extend_from_slice(&16u16.to_le_bytes());
+    h.extend_from_slice(b"data");
+    h.extend_from_slice(&(data_len as u32).to_le_bytes());
+    f.write_all(&h).unwrap();
+    f.set_len(44 + data_len).unwrap();
+}
+
+#[test]
+fn master_longer_than_30_minutes_is_rejected_before_reading_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let long = tmp.path().join("larga.wav");
+    sparse_wav(&long, 30 * 60 + 1);
+    match export::analyze(&long) {
+        Err(masterout_core::audio::AudioError::UnsupportedFormat(k)) => {
+            assert_eq!(k, "err.too_long")
+        }
+        other => panic!("{:?}", other.map(|_| ())),
+    }
+    assert!(export::run(
+        &request(&long, &tmp.path().join("out"), &["spotify"]),
+        &|_| {}
+    )
+    .is_err());
+    // justo en el tope se acepta (la cabecera pasa; el contenido es silencio)
+    let ok = tmp.path().join("justa.wav");
+    sparse_wav(&ok, 30 * 60);
+    assert!(export::check_length(&masterout_core::wav::probe(&ok).unwrap()).is_ok());
+    // la clave existe en los dos idiomas
+    for l in [Lang::Es, Lang::En] {
+        assert!(!masterout_core::i18n::t(l, "err.too_long").starts_with('⟦'));
+    }
+}
+
+#[cfg(unix)]
+mod adm_in_export {
+    use super::*;
+    use masterout_core::loudness::Verdict;
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    fn script(dir: &Path, name: &str, body: &str) -> PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+
+    fn adm_request(
+        master: &Path,
+        out: &Path,
+        tools: &Path,
+        clip: &str,
+        convert: &str,
+    ) -> ExportRequest {
+        let conv = script(tools, "afconvert", convert);
+        let clip = script(tools, "afclip", clip);
+        request(master, out, &["apple_adm", "deezer"]).with_adm_tools(conv, clip)
+    }
+
+    const CLIPS: &str = "printf 'CLIPPED SAMPLES:\\n   total clipped samples    Left   on-sample:   4    inter-sample:   8\\n'";
+    const CLEAN: &str = "echo ' -- no samples clipped --'";
+
+    #[test]
+    fn the_delivery_carries_the_final_verdict_with_the_adm_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let master = synthetic_master(tmp.path(), 2);
+        let d = export::run(
+            &adm_request(
+                &master,
+                &tmp.path().join("o1"),
+                tmp.path(),
+                CLIPS,
+                "touch \"$2\"",
+            ),
+            &|_| {},
+        )
+        .unwrap();
+        let v: std::collections::HashMap<_, _> = d.verdicts.iter().cloned().collect();
+        assert_eq!(
+            v["apple_adm"],
+            Verdict::Warn("adm_clipping".into()),
+            "{:?}",
+            d.verdicts
+        );
+        assert!(!v.contains_key("tunecore"));
+        let report = std::fs::read_to_string(d.folder.join("informe-loudness.txt")).unwrap();
+        assert!(
+            report.contains("12"),
+            "el informe cuenta las 12 muestras: {report}"
+        );
+        // sin clipping, el veredicto es el del plan
+        let d = export::run(
+            &adm_request(
+                &master,
+                &tmp.path().join("o2"),
+                tmp.path(),
+                CLEAN,
+                "touch \"$2\"",
+            ),
+            &|_| {},
+        )
+        .unwrap();
+        let v: std::collections::HashMap<_, _> = d.verdicts.iter().cloned().collect();
+        assert_eq!(v["apple_adm"], Verdict::Ok);
+        assert!(v.contains_key("deezer"));
+    }
+
+    #[test]
+    fn cancelling_in_the_middle_of_adm_writes_no_report_and_no_adm_cancelled_text() {
+        let tmp = tempfile::tempdir().unwrap();
+        let master = synthetic_master(tmp.path(), 2);
+        let cancel = Arc::new(AtomicBool::new(false));
+        // afconvert tarda: la cancelación llega con la validación en marcha
+        let req = adm_request(&master, &tmp.path().join("o"), tmp.path(), CLEAN, "sleep 5")
+            .with_cancel(cancel.clone());
+        let events = Mutex::new(Vec::new());
+        let started = std::time::Instant::now();
+        let d = export::run(&req, &|p| {
+            if matches!(&p, Progress::JobProgress { preset_id, fraction } if preset_id == "apple_adm" && *fraction >= 0.9)
+            {
+                let c = cancel.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    c.store(true, Ordering::Relaxed);
+                });
+            }
+            events.lock().unwrap().push(p);
+        })
+        .unwrap();
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(4),
+            "la validación se corta al cancelar"
+        );
+        assert!(d.cancelled);
+        assert!(
+            d.verdicts.is_empty(),
+            "una entrega cancelada no promete veredictos: {:?}",
+            d.verdicts
+        );
+        assert!(matches!(
+            events.into_inner().unwrap().last(),
+            Some(Progress::Cancelled { .. })
+        ));
+        // ningún documento (el informe con `adm_cancelled` no se escribe) y sin temporales
+        let mut all = Vec::new();
+        walk(&d.folder, &mut all);
+        assert!(
+            all.iter().all(|p| {
+                let n = p.file_name().unwrap().to_string_lossy().into_owned();
+                n != "informe-loudness.txt" && n != "README.txt" && !n.ends_with(".part")
+            }),
+            "{all:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_details_line_up_with_failed_by_position() {
+    // un destino con detalle técnico (ffmpeg falla) y los documentos (detalle propio)
+    let tmp = tempfile::tempdir().unwrap();
+    let master = synthetic_master(tmp.path(), 2);
+    let req = request(&master, &tmp.path().join("out"), &["deezer", "mp3_promo"])
+        .with_sidecar(Some(failing_sidecar(tmp.path())));
+    let d = export::run(&req, &|_| {}).unwrap();
+    assert_eq!(d.failed.len(), 1);
+    assert_eq!(
+        d.failed_details.len(),
+        d.failed.len(),
+        "{:?}",
+        d.failed_details
+    );
+    assert_eq!(d.failed_details[0].0, d.failed[0].0);
+    assert!(
+        d.failed_details[0]
+            .1
+            .as_deref()
+            .is_some_and(|x| x.contains("boom")),
+        "{:?}",
+        d.failed_details
     );
 }

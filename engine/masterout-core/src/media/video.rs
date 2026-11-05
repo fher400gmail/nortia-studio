@@ -202,6 +202,12 @@ fn encoder_args(platform: Platform, codec: Codec) -> Vec<String> {
     v.iter().map(|x| s(x)).collect()
 }
 
+/// Argumentos del codificador de H.264 (`hevc: false`) o HEVC del sistema, para sondear si
+/// funciona en este equipo.
+pub fn probe_encoder_args(platform: Platform, hevc: bool) -> Vec<String> {
+    encoder_args(platform, if hevc { Codec::Hevc } else { Codec::H264 })
+}
+
 /// Conversión real a Rec.709 de rango limitado, YUV 4:2:0.
 const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p";
 

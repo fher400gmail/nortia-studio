@@ -97,5 +97,7 @@
   "err.media_unreadable": "The image or video file could not be read.",
   "preset.apple_motion": "Apple Motion",
   "reason.no_cover": "The cover is missing: drop an image on the cover chip.",
-  "reason.no_sidecar": "The video and MP3 component (ffmpeg) is missing from master check. Reinstall the app."
+  "reason.no_sidecar": "The video and MP3 component (ffmpeg) is missing from master check. Reinstall the app.",
+  "reason.encoder_unavailable": "This computer cannot create video: the system H.264 encoder is missing.",
+  "reason.hevc_unavailable": "This computer has no HEVC encoder: Apple Motion is delivered only at 2048×2732 (H.264) and the 3840×3840 file is skipped."
 }

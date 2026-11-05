@@ -97,5 +97,7 @@
   "err.media_unreadable": "No se pudo leer el archivo de imagen o vídeo.",
   "preset.apple_motion": "Apple Motion",
   "reason.no_cover": "Falta la portada: arrastra una imagen a la ficha de portada.",
-  "reason.no_sidecar": "Falta el componente de vídeo y MP3 (ffmpeg) de master check. Reinstala la aplicación."
+  "reason.no_sidecar": "Falta el componente de vídeo y MP3 (ffmpeg) de master check. Reinstala la aplicación.",
+  "reason.encoder_unavailable": "Este equipo no puede crear vídeo: falta el codificador H.264 del sistema.",
+  "reason.hevc_unavailable": "Este equipo no tiene codificador HEVC: Apple Motion se entrega solo en 2048×2732 (H.264) y se omite el de 3840×3840."
 }

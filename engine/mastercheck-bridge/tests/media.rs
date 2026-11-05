@@ -3,6 +3,9 @@ use mastercheck_bridge::dto::{ExportRequestDto, JobDto, MasterDto, ReleaseMetaDt
 use mastercheck_bridge::planning::{plan_with, to_media_inputs};
 use mastercheck_bridge::thumbnail::{base64, media_thumbnail};
 use masterout_core::i18n::Lang;
+use masterout_core::media::MediaCaps;
+
+const ALL: Option<MediaCaps> = Some(MediaCaps::ALL);
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -112,13 +115,13 @@ fn plan_dto_media_chips_follow_cover_and_sidecar() {
     ]);
     let none = HashMap::new();
     // sin portada: imagen y vídeo deshabilitados con motivo
-    let p = plan_with(&master(), &meta(None), &all, &none, Lang::Es, true);
+    let p = plan_with(&master(), &meta(None), &all, &none, Lang::Es, ALL);
     for j in p.jobs.iter().filter(|j| j.preset_id != "mp3_promo") {
         assert!(!j.enabled, "{}", j.preset_id);
         assert!(j.disabled_reason.as_deref().unwrap().contains("portada"));
     }
     // con portada y sidecar: todo habilitado, con avisos localizados en la portada
-    let p = plan_with(&master(), &meta(Some(&cover)), &all, &none, Lang::Es, true);
+    let p = plan_with(&master(), &meta(Some(&cover)), &all, &none, Lang::Es, ALL);
     assert!(p.jobs.iter().all(|j| j.enabled), "{:?}", p.jobs);
     let c = p.jobs.iter().find(|j| j.preset_id == "cover").unwrap();
     assert_eq!(c.file_name, "Vera Alcón - Luz [Portada] 3000x3000.jpg");
@@ -130,11 +133,11 @@ fn plan_dto_media_chips_follow_cover_and_sidecar() {
     assert!(c.warnings[0].contains("recortado"), "{:?}", c.warnings);
     // 4 destinos de medios + MP3 + 2 archivos extra + 4 documentos
     assert_eq!(p.total_files, 5 + 2 + 4);
-    let en = plan_with(&master(), &meta(Some(&cover)), &all, &none, Lang::En, true);
+    let en = plan_with(&master(), &meta(Some(&cover)), &all, &none, Lang::En, ALL);
     let c = en.jobs.iter().find(|j| j.preset_id == "cover").unwrap();
     assert!(c.warnings[0].contains("cropped"), "{:?}", c.warnings);
     // sin sidecar: vídeo y MP3 deshabilitados; la portada sigue
-    let p = plan_with(&master(), &meta(Some(&cover)), &all, &none, Lang::Es, false);
+    let p = plan_with(&master(), &meta(Some(&cover)), &all, &none, Lang::Es, None);
     for j in &p.jobs {
         assert_eq!(j.enabled, j.preset_id == "cover", "{}", j.preset_id);
     }
@@ -146,7 +149,7 @@ fn plan_dto_media_chips_follow_cover_and_sidecar() {
         &ids(&["canvas", "cover"]),
         &own,
         Lang::Es,
-        true,
+        ALL,
     );
     assert!(
         p.jobs
@@ -268,4 +271,59 @@ fn thumbnail_errors_are_localized_keys() {
     let e = media_thumbnail(&bad.to_string_lossy(), Lang::En).unwrap_err();
     assert_eq!(e.key, "err.media_unreadable");
     assert!(e.message.contains("could not be read"));
+}
+
+#[test]
+fn plan_dto_reports_missing_hevc_in_the_apple_motion_warnings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cover = tmp.path().join("c.png");
+    image::RgbImage::from_pixel(3000, 3000, image::Rgb([1, 2, 3]))
+        .save(&cover)
+        .unwrap();
+    let caps = Some(MediaCaps {
+        h264: true,
+        hevc: false,
+    });
+    let p = plan_with(
+        &master(),
+        &meta(Some(&cover)),
+        &ids(&["apple_motion"]),
+        &HashMap::new(),
+        Lang::Es,
+        caps,
+    );
+    let j = &p.jobs[0];
+    assert!(j.enabled && j.extra_files.is_empty());
+    assert!(
+        j.file_name.ends_with("[Apple Motion] 2048x2732.mp4"),
+        "{}",
+        j.file_name
+    );
+    assert!(j.warnings[0].contains("HEVC"), "{:?}", j.warnings);
+    let no264 = Some(MediaCaps {
+        h264: false,
+        hevc: false,
+    });
+    let p = plan_with(
+        &master(),
+        &meta(Some(&cover)),
+        &ids(&["apple_motion", "cover"]),
+        &HashMap::new(),
+        Lang::En,
+        no264,
+    );
+    assert!(
+        !p.jobs
+            .iter()
+            .find(|j| j.preset_id == "apple_motion")
+            .unwrap()
+            .enabled
+    );
+    assert!(
+        p.jobs
+            .iter()
+            .find(|j| j.preset_id == "cover")
+            .unwrap()
+            .enabled
+    );
 }

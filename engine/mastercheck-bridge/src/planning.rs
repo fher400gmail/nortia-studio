@@ -4,6 +4,7 @@ use crate::dto::{JobDto, MasterDto, PlanDto, ReleaseMetaDto};
 use masterout_core::export::default_sidecar;
 use masterout_core::i18n::{t, Lang};
 use masterout_core::loudness::{LoudnessReport, Verdict};
+use masterout_core::media::{capabilities, MediaCaps, Platform};
 use masterout_core::naming;
 use masterout_core::plan::{self, MasterInfo, MediaInputs, ReleaseMeta, Resolved};
 use masterout_core::presets;
@@ -91,18 +92,18 @@ pub fn plan(
         active_ids,
         media_inputs,
         lang,
-        default_sidecar().is_some(),
+        default_sidecar().map(|sc| capabilities(&sc, Platform::current())),
     )
 }
 
-/// Como [`plan`], con la disponibilidad del sidecar indicada (para probar sin ffmpeg).
+/// Como [`plan`], con los codificadores disponibles indicados (`None`: sin sidecar).
 pub fn plan_with(
     master: &MasterDto,
     meta: &ReleaseMetaDto,
     active_ids: &[String],
     media_inputs: &HashMap<String, String>,
     lang: Lang,
-    sidecar: bool,
+    caps: Option<MediaCaps>,
 ) -> PlanDto {
     let info = master_info(master);
     let mut rmeta = to_release_meta(meta);
@@ -120,7 +121,7 @@ pub fn plan_with(
     let all = presets::all();
 
     let media = to_media_inputs(meta, media_inputs);
-    let jobs: Vec<JobDto> = plan::resolve_in(&info, &rmeta, &ids, &media, lang, sidecar)
+    let jobs: Vec<JobDto> = plan::resolve_in(&info, &rmeta, &ids, &media, lang, caps)
         .into_iter()
         .map(|r| match r {
             Resolved::Job(j) => {

@@ -3,6 +3,7 @@
 use crate::i18n::Lang;
 use crate::loudness::{self, LoudnessReport, Verdict};
 use crate::media::image as cover_image;
+use crate::media::MediaCaps;
 use crate::naming;
 use crate::presets::{self, BitsPolicy, Container, Preset, RatePolicy};
 use std::collections::HashMap;
@@ -86,6 +87,9 @@ pub struct Job {
     /// Nombres de los archivos adicionales del mismo destino (el PNG de la portada, el
     /// segundo tamaño de Apple Motion), en la misma subcarpeta.
     pub extra_files: Vec<String>,
+    /// Apple Motion sin codificador HEVC: solo sale el archivo de 2048×2732 (H.264) y el de
+    /// 3840×3840 se omite (el aviso `reason.hevc_unavailable` va en `warnings`).
+    pub hevc_skipped: bool,
     /// Claves `warn.*` que se mostrarán en la interfaz y en el README.
     pub warnings: Vec<String>,
 }
@@ -112,7 +116,7 @@ type CoverCheck = Result<Vec<String>, String>;
 struct Ctx<'a> {
     media: &'a MediaInputs,
     cover: Option<PathBuf>,
-    sidecar: bool,
+    caps: Option<MediaCaps>,
     cover_check: Option<CoverCheck>,
 }
 
@@ -140,8 +144,12 @@ fn resolve_media(
 ) -> Resolved {
     let own = cx.media.per_preset.get(&p.id).cloned();
     // Sin sidecar no hay vídeo; la portada se hace con el crate `image`.
-    if kind != MediaKind::Cover && !cx.sidecar {
-        return disabled(p, "reason.no_sidecar");
+    if kind != MediaKind::Cover {
+        match cx.caps {
+            None => return disabled(p, "reason.no_sidecar"),
+            Some(c) if !c.h264 => return disabled(p, "reason.encoder_unavailable"),
+            Some(_) => {}
+        }
     }
     let mut warnings = Vec::new();
     // La portada de la entrega solo hace falta si el destino no trae material propio.
@@ -179,6 +187,14 @@ fn resolve_media(
         MediaKind::Canvas => (name("1080x1920", "mp4"), vec![]),
         MediaKind::YoutubeVideo => (name("1080p", "mp4"), vec![]),
         MediaKind::AppleMotion => (name("3840x3840", "mp4"), vec![name("2048x2732", "mp4")]),
+    };
+    // sin HEVC solo sale el tamaño vertical (H.264); el cuadrado se omite con aviso
+    let hevc_skipped = kind == MediaKind::AppleMotion && cx.caps.is_some_and(|c| !c.hevc);
+    let (file_name, extra_files) = if hevc_skipped {
+        warnings.push("reason.hevc_unavailable".to_string());
+        (name("2048x2732", "mp4"), Vec::new())
+    } else {
+        (file_name, extra_files)
     };
     let (bits, sample_rate, needs_resample, needs_dither, is_upsampling, verdict) =
         if kind == MediaKind::YoutubeVideo {
@@ -221,6 +237,7 @@ fn resolve_media(
         media: Some(kind),
         own_media: own,
         extra_files,
+        hevc_skipped,
         warnings,
     })
 }
@@ -236,7 +253,7 @@ fn resolve_one(
         return resolve_media(master, meta, p, kind, cx, lang);
     }
     // MP3 e imagen/vídeo comparten el sidecar (ffmpeg): sin él, solo el audio PCM sale.
-    if p.container == Container::Mp3 && !cx.sidecar {
+    if p.container == Container::Mp3 && cx.caps.is_none() {
         return disabled(p, "reason.no_sidecar");
     }
     // Bits efectivos del máster: un float de 32 bit se entrega como mucho a 24.
@@ -309,6 +326,7 @@ fn resolve_one(
         media: None,
         own_media: None,
         extra_files: Vec::new(),
+        hevc_skipped: false,
         warnings: Vec::new(),
     })
 }
@@ -321,24 +339,32 @@ pub fn resolve(
     active_ids: &[&str],
     media: &MediaInputs,
 ) -> Vec<Resolved> {
-    resolve_in(master, meta, active_ids, media, Lang::Es, true)
+    resolve_in(
+        master,
+        meta,
+        active_ids,
+        media,
+        Lang::Es,
+        Some(MediaCaps::ALL),
+    )
 }
 
 /// Resuelve los destinos activos, en el orden de las subcarpetas, con los nombres
-/// de carpeta y etiquetas del idioma pedido. `sidecar`: hay ffmpeg/ffprobe; sin él se
-/// deshabilitan (con motivo) las fichas de vídeo y el MP3 y el resto sale igual.
+/// de carpeta y etiquetas del idioma pedido. `caps`: `None` si no hay ffmpeg/ffprobe (se
+/// deshabilitan, con motivo, las fichas de vídeo y el MP3; el resto sale igual); si hay, los
+/// codificadores que funcionan (sin H.264 no hay vídeo; sin HEVC, Apple Motion omite 3840×3840).
 pub fn resolve_in(
     master: &MasterInfo,
     meta: &ReleaseMeta,
     active_ids: &[&str],
     media: &MediaInputs,
     lang: Lang,
-    sidecar: bool,
+    caps: Option<MediaCaps>,
 ) -> Vec<Resolved> {
     let mut cx = Ctx {
         media,
         cover: media.cover.clone().or_else(|| meta.cover.clone()),
-        sidecar,
+        caps,
         cover_check: None,
     };
     presets::all()

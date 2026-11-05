@@ -5,12 +5,14 @@ pub mod mp3;
 pub mod probe;
 pub mod video;
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 /// Plataforma de destino de los codificadores de vídeo. `Linux` existe SOLO para
 /// pruebas locales y de CI con un ffmpeg del sistema (`libx264`): nunca se distribuye.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Platform {
     MacOS,
     Windows,
@@ -27,6 +29,77 @@ impl Platform {
             Platform::Linux
         }
     }
+}
+
+/// Codificadores de vídeo que funcionan de verdad en este equipo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MediaCaps {
+    pub h264: bool,
+    pub hevc: bool,
+}
+
+impl MediaCaps {
+    /// Todo disponible (para planes sin sonda).
+    pub const ALL: MediaCaps = MediaCaps {
+        h264: true,
+        hevc: true,
+    };
+}
+
+type CapsCache = Mutex<HashMap<(PathBuf, Platform), MediaCaps>>;
+
+/// Lado de la imagen de la prueba (algunos codificadores de hardware rechazan tamaños mínimos).
+const PROBE_SIDE: u32 = 256;
+
+fn try_encode(sidecar: &SidecarPaths, platform: Platform, hevc: bool) -> bool {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "masterout-caps-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    if std::fs::create_dir_all(&dir).is_err() {
+        return false;
+    }
+    let (png, out) = (dir.join("in.png"), dir.join("out.mp4"));
+    let ok = ::image::RgbImage::from_pixel(PROBE_SIDE, PROBE_SIDE, ::image::Rgb([90, 90, 90]))
+        .save(&png)
+        .is_ok()
+        && {
+            let mut args: Vec<String> =
+                ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"]
+                    .map(String::from)
+                    .to_vec();
+            args.push(png.to_string_lossy().into_owned());
+            args.extend(["-frames:v", "1", "-vf", "format=yuv420p"].map(String::from));
+            args.extend(video::probe_encoder_args(platform, hevc));
+            args.push(out.to_string_lossy().into_owned());
+            video::run_ffmpeg(sidecar, &args, &|| false).is_ok()
+        };
+    let _ = std::fs::remove_dir_all(&dir);
+    ok
+}
+
+/// Qué codificadores H.264 y HEVC funcionan en este equipo: una codificación mínima de un
+/// fotograma por códec. Se hace una vez por sidecar y plataforma (se guarda el resultado).
+pub fn capabilities(sidecar: &SidecarPaths, platform: Platform) -> MediaCaps {
+    static CACHE: OnceLock<CapsCache> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key = (sidecar.ffmpeg.clone(), platform);
+    if let Some(c) = cache.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
+        return *c;
+    }
+    let h264 = try_encode(sidecar, platform, false);
+    // sin H.264 no se prueba HEVC: no habría vídeo de ningún modo
+    let caps = MediaCaps {
+        h264,
+        hevc: h264 && try_encode(sidecar, platform, true),
+    };
+    cache
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(key, caps);
+    caps
 }
 
 /// Rutas de los ejecutables del sidecar.

@@ -170,3 +170,34 @@ fn english_documents_are_fully_localized() {
     let es = loudness_report(Lang::Es, &sm);
     assert!(es.contains("Distribuidora estándar"), "{es}");
 }
+
+#[test]
+fn readme_lists_the_skipped_hevc_size() {
+    use masterout_core::media::MediaCaps;
+    use masterout_core::plan::MediaInputs;
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    image::RgbImage::from_pixel(3000, 3000, image::Rgb([9, 9, 9]))
+        .save(&cover)
+        .unwrap();
+    let media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    let (m, ms) = (meta(), master(44100, 24));
+    let jobs = plan::resolve_in(
+        &ms,
+        &m,
+        &["apple_motion"],
+        &media,
+        Lang::Es,
+        Some(MediaCaps {
+            h264: true,
+            hevc: false,
+        }),
+    );
+    let rd = readme(Lang::Es, &summary(&m, &ms, &jobs));
+    assert!(rd.contains("2048x2732.mp4"), "{rd}");
+    assert!(!rd.contains("3840x3840"), "{rd}");
+    assert!(rd.contains("no tiene codificador HEVC"), "{rd}");
+}

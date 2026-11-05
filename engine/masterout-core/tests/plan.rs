@@ -1,5 +1,6 @@
 use masterout_core::i18n::Lang;
 use masterout_core::loudness::{LoudnessReport, Verdict};
+use masterout_core::media::MediaCaps;
 use masterout_core::naming;
 use masterout_core::plan::*;
 use masterout_core::presets::{self, Container};
@@ -207,7 +208,14 @@ fn resolve_media(
     media: &MediaInputs,
     sidecar: bool,
 ) -> Vec<Resolved> {
-    resolve_in(m, &meta(), ids, media, Lang::Es, sidecar)
+    resolve_in(
+        m,
+        &meta(),
+        ids,
+        media,
+        Lang::Es,
+        sidecar.then_some(MediaCaps::ALL),
+    )
 }
 
 fn reason(r: &Resolved) -> &str {
@@ -277,7 +285,7 @@ fn plan_media_presets_enabled_with_cover_and_sidecar() {
         &["cover"],
         &media,
         Lang::En,
-        true,
+        Some(MediaCaps::ALL),
     );
     assert_eq!(
         job(&en[0]).file_name,
@@ -348,6 +356,78 @@ fn missing_sidecar_disables_media_jobs_only() {
                 assert!(matches!(x, Resolved::Job(_)), "{id}: {x:?}")
             }
             _ => assert_eq!(reason(x), "reason.no_sidecar", "{id}"),
+        }
+    }
+}
+
+fn cover_media(d: &std::path::Path) -> MediaInputs {
+    let cover = d.join("c.png");
+    write_png(&cover, 3000, 3000);
+    MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn without_hevc_apple_motion_keeps_only_the_h264_size_and_says_why() {
+    let d = tempfile::tempdir().unwrap();
+    let media = cover_media(d.path());
+    let caps = Some(MediaCaps {
+        h264: true,
+        hevc: false,
+    });
+    let r = resolve_in(
+        &master(44100, 24),
+        &meta(),
+        &["apple_motion", "canvas"],
+        &media,
+        Lang::Es,
+        caps,
+    );
+    let j = job(&r[1]);
+    assert_eq!(j.preset_id, "apple_motion");
+    assert_eq!(
+        j.file_name,
+        "Vera Alcón - Luz de Noviembre [Apple Motion] 2048x2732.mp4"
+    );
+    assert!(j.extra_files.is_empty() && j.hevc_skipped);
+    assert_eq!(j.warnings, vec!["reason.hevc_unavailable"]);
+    // el resto del vídeo sigue disponible
+    assert!(matches!(&r[0], Resolved::Job(_)));
+    // con HEVC, los dos tamaños
+    let r = resolve_in(
+        &master(44100, 24),
+        &meta(),
+        &["apple_motion"],
+        &media,
+        Lang::Es,
+        Some(MediaCaps::ALL),
+    );
+    assert!(!job(&r[0]).hevc_skipped && job(&r[0]).extra_files.len() == 1);
+}
+
+#[test]
+fn without_h264_all_video_chips_are_disabled_but_cover_and_audio_stay() {
+    let d = tempfile::tempdir().unwrap();
+    let media = cover_media(d.path());
+    let caps = Some(MediaCaps {
+        h264: false,
+        hevc: false,
+    });
+    let ids = [
+        "spotify",
+        "youtube_video",
+        "mp3_promo",
+        "cover",
+        "canvas",
+        "apple_motion",
+    ];
+    let r = resolve_in(&master(44100, 24), &meta(), &ids, &media, Lang::Es, caps);
+    for (x, id) in r.iter().zip(ids) {
+        match id {
+            "spotify" | "mp3_promo" | "cover" => assert!(matches!(x, Resolved::Job(_)), "{id}"),
+            _ => assert_eq!(reason(x), "reason.encoder_unavailable", "{id}"),
         }
     }
 }

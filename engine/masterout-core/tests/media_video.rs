@@ -872,3 +872,54 @@ fn probe_unreadable_file_is_media_unreadable() {
         "err.media_unreadable"
     );
 }
+
+#[cfg(unix)]
+fn script_sidecar(dir: &Path, body: &str) -> SidecarPaths {
+    use std::os::unix::fs::PermissionsExt;
+    let p = dir.join("ffmpeg");
+    std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    SidecarPaths {
+        ffmpeg: p.clone(),
+        ffprobe: p,
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn capabilities_detect_missing_hevc_and_missing_h264() {
+    use masterout_core::media::capabilities;
+    let d = tempfile::tempdir().unwrap();
+    // un "ffmpeg" que rechaza hevc_videotoolbox (como un Windows sin extensión HEVC)
+    let no_hevc = script_sidecar(
+        d.path(),
+        "case \"$*\" in *hevc*) echo 'no MFT' >&2; exit 1;; esac\nlast=\"\"; for a; do last=\"$a\"; done\n: > \"$last\"; exit 0",
+    );
+    let c = capabilities(&no_hevc, Platform::MacOS);
+    assert!(c.h264 && !c.hevc, "{c:?}");
+    // sin ningún codificador
+    let d2 = tempfile::tempdir().unwrap();
+    let none = script_sidecar(d2.path(), "exit 1");
+    let c = capabilities(&none, Platform::Windows);
+    assert!(!c.h264 && !c.hevc, "{c:?}");
+}
+
+#[test]
+fn capabilities_with_the_real_ffmpeg_and_cached() {
+    let Some(sc) = sidecar() else { return };
+    use masterout_core::media::capabilities;
+    let a = capabilities(&sc, Platform::current());
+    assert!(a.h264, "{a:?}");
+    assert_eq!(a, capabilities(&sc, Platform::current()));
+    // sin archivos temporales residuales
+    let left = std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with(&format!("masterout-caps-{}-", std::process::id()))
+        })
+        .count();
+    assert_eq!(left, 0);
+}

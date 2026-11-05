@@ -559,12 +559,17 @@ impl Ctx<'_> {
                 let sc = self.sidecar()?;
                 let src = self.video_source(job)?;
                 std::fs::create_dir_all(dir)?;
-                let second = dir.join(&job.extra_files[0]);
+                // (cuadrado?, ruta): sin HEVC solo el vertical, en `file_name`
+                let targets: Vec<(bool, PathBuf)> = if job.hevc_skipped {
+                    vec![(false, path.clone())]
+                } else {
+                    vec![(true, path.clone()), (false, dir.join(&job.extra_files[0]))]
+                };
                 let mut out: Vec<(PathBuf, u64)> = Vec::new();
-                for (square, to) in [(true, &path), (false, &second)] {
-                    step(if square { 0.1 } else { 0.55 });
+                for (i, (square, to)) in targets.iter().enumerate() {
+                    step(if i == 0 { 0.1 } else { 0.55 });
                     let spec = AppleMotionSpec {
-                        square,
+                        square: *square,
                         ..AppleMotionSpec::default()
                     };
                     let args = video::build_apple_motion_args(&src, &spec, to, self.platform);
@@ -844,7 +849,9 @@ pub fn run(
         &ids,
         &req.media,
         req.lang,
-        req.sidecar.is_some(),
+        req.sidecar
+            .as_ref()
+            .map(|sc| media::capabilities(sc, req.platform)),
     );
     emit(Progress::Planned(plan.clone()));
 

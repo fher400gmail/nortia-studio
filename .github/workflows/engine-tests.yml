@@ -1,0 +1,83 @@
+name: engine
+
+on:
+  push:
+    paths:
+      - "engine/**"
+      - ".github/workflows/engine-tests.yml"
+  pull_request:
+    paths:
+      - "engine/**"
+      - ".github/workflows/engine-tests.yml"
+
+concurrency:
+  group: engine-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Instalar lame y ffmpeg
+        timeout-minutes: 8
+        continue-on-error: true
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y lame ffmpeg
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features
+
+  macos:
+    name: macos-15
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    # 05/11/2026: macos-latest (arm64) sin capacidad, jobs sin adquirir; se usa macos-15 hasta que se recupere.
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Instalar lame y ffmpeg
+        timeout-minutes: 8
+        continue-on-error: true
+        run: brew install lame ffmpeg
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features
+
+  windows:
+    name: windows-latest
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Instalar lame y ffmpeg
+        timeout-minutes: 8
+        continue-on-error: true
+        shell: bash
+        run: choco install lame ffmpeg -y
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features

@@ -82,6 +82,17 @@ jobs:
           test -x "$APP/Contents/MacOS/$EXE"
           lipo -archs "$APP/Contents/MacOS/$EXE"
           du -sh "$APP" out/*
+      - name: Humo headless (analizar + planificar + exportar con el binario real)
+        run: |
+          app/scripts/smoke-mac.sh "$PWD/app/src-tauri/target/universal-apple-darwin/release/bundle/macos/master check.app" "$RUNNER_TEMP/humo"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: master-check-humo
+          path: |
+            ${{ runner.temp }}/humo/listado.txt
+            ${{ runner.temp }}/humo/salida humo/smoke-result.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: master-check-macos

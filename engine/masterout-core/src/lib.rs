@@ -7,6 +7,7 @@ pub mod export;
 pub mod flac;
 pub mod i18n;
 pub mod loudness;
+pub mod media;
 pub mod mp3;
 pub mod naming;
 pub mod plan;

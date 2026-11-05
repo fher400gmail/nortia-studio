@@ -1,5 +1,6 @@
 //! MP3 por ffmpeg: argumentos golden (puros) y ejecución contra el ffmpeg del entorno.
 
+#[cfg(unix)]
 use masterout_core::i18n::Lang;
 use masterout_core::media::mp3::{build_mp3_args, encode, Id3Tags};
 use masterout_core::media::probe::probe;

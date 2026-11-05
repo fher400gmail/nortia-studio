@@ -29,7 +29,7 @@ Las licencias completas de las dependencias de Rust se regeneran en cada release
 5. **Sustituibilidad** (diseño): el sidecar es un ejecutable independiente que el motor invoca como proceso. Quien quiera reemplazarlo por su propia compilación podrá hacerlo (ruta del sidecar junto a la app); el EULA no prohibirá la ingeniería inversa para depurar esa modificación. Pendiente de confirmar con el asesor (enlace estático de LAME).
 6. **Marca y atribución**: se escribe "FFmpeg"; no se afirma propiedad de FFmpeg ni de LAME; no se usa el logo de FFmpeg.
 7. **Aviso visible** (hecho en «Acerca de»; pendiente web de descargas y EULA): la pantalla «Acerca de» de la app muestra la versión, el release del sidecar empaquetado, el aviso de licencias (texto de abajo, resumido y por i18n es/en) y el enlace a este documento. La web de descargas y el EULA lo incluirán cuando existan.
-8. **Verificación en el build**: el CI descarga el sidecar por etiqueta (`app/scripts/sidecar-tag.txt`, hoy `ffmpeg-sidecar-v7.1.5-3a21763`) y comprueba cada fichero contra el `SHA256SUMS` del release antes de usarlo; cambia la etiqueta en un solo sitio (y en `SIDECAR_RELEASE` de `mastercheck-bridge`; `check-wiring.py` y una prueba lo vigilan).
+8. **Verificación en el build**: el CI descarga el sidecar por etiqueta (`app/scripts/sidecar-tag.txt`, hoy `ffmpeg-sidecar-v7.1.5-3a21763`) y comprueba cada fichero contra el `SHA256SUMS` del release **y contra `app/scripts/sidecar-sha256.txt`** (fijado en el repositorio; falla si difieren) antes de usarlo; cambia la etiqueta en un solo sitio (y en `SIDECAR_RELEASE` de `mastercheck-bridge`; `check-wiring.py` y una prueba lo vigilan).
 
 ## Texto para "Acerca de"
 

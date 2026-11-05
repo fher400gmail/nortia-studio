@@ -7,7 +7,7 @@ Qué ya comprueba el CI y no hace falta repetir: el sidecar descargado coincide 
 ## Antes de empezar
 
 1. Descarga el artefacto `master-check-macos` de la última ejecución verde de «app» en GitHub (Actions, rama `hito3-media`) y abre `master check` con clic derecho → **Abrir** (la app no está firmada).
-2. Mira en el resumen de esa ejecución si hay avisos amarillos. Si hay uno que dice **«Apple Digital Masters Tools NO instaladas»**, la prueba 9 es obligatoria. Si no, el CI ya la hizo y puedes saltarla.
+2. Mira en el resumen de esa ejecución si hay avisos amarillos. Si hay uno que dice **«afclip no está en este runner»**, la prueba 9 es obligatoria. Si no, el CI ya la hizo (afclip viene de serie en macOS) y puedes saltarla.
 
 Responde con una línea por prueba: **funciona** o **falla: qué viste** (con captura si puedes).
 
@@ -29,7 +29,7 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 - Esperado: menos de 3 segundos de espera añadida; nunca más de 8. Anota los segundos.
 
 ### 4. Portada cuadrada y no cuadrada
-- Haz: arrastra la portada cuadrada. Luego cámbiala por la no cuadrada. Crea la carpeta con Portada activa.
+- Haz: arrastra la portada cuadrada sobre el recuadro **«Arrastrar portada»** (a la izquierda del nombre de la canción). Luego cámbiala por la no cuadrada, soltándola en el mismo recuadro. Crea la carpeta con Portada activa.
 - Esperado: la cuadrada no da avisos; la no cuadrada avisa «se ha recortado desde el centro». En `09 Imagen/` hay un JPG y un PNG de 3000×3000 (Información → Más info en Finder). El JPG se ve nítido, sin bandas.
 
 ### 5. Canvas
@@ -37,7 +37,7 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 - Esperado: vídeo vertical de unos 8 s sin audio, movimiento suave de la portada, sin parpadeos ni saltos al repetirse.
 
 ### 5b. Material propio en Canvas
-- Haz: suelta un vídeo tuyo (MP4/MOV) sobre la ficha Canvas y crea la carpeta.
+- Haz: suelta un vídeo tuyo (MP4/MOV) sobre la ficha **«Canvas»** (en Extras) y crea la carpeta.
 - Esperado: la ficha muestra su miniatura y una ×; el Canvas resultante es tu vídeo recodificado a 1080×1920.
 
 ### 6. Vídeo de YouTube
@@ -52,11 +52,11 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 - Haz: abre `08 Promo/… [MP3 320].mp3` en Música o VLC.
 - Esperado: suena igual que el máster, 320 kbps (Cmd + I → Más información), y muestra artista, título y la portada incrustada.
 
-### 9. Apple Digital Masters con las herramientas de Apple (solo si el CI avisó)
-`afconvert` ya viene con macOS; `afclip` viene en «Apple Digital Masters Tools» (https://www.apple.com/apple-music/apple-digital-masters/). El CI no pudo instalarlas, así que este caso lo hace tu Mac.
-- Haz: instala las herramientas desde esa página. En Terminal, `afclip` debe responder (aunque sea con el uso). Con Apple Music activo, crea la carpeta con tu máster y abre `informe-loudness.txt`.
+### 9. Apple Digital Masters (obligatoria solo si el CI avisó de que falta afclip)
+`afconvert` y `afclip` vienen con macOS (`/usr/bin`; el CI los encontró en macos-15 y el flujo real pasó). Si el CI no avisó, esta prueba es opcional y solo sirve para ver el informe con tu máster.
+- Haz: en Terminal, `which afclip`. Si responde una ruta (lo normal), sigue; si no responde nada, anótalo como «falla: no hay afclip» y salta el resto (instalar herramientas de Apple no entra en esta prueba). Con Apple Music activo, crea la carpeta con tu máster y abre `informe-loudness.txt`.
 - Esperado: una línea «Apple Digital Masters: N muestras con clipping en el AAC». Con un máster que supere −1 dBTP, N > 0; con uno limpio, 0.
-- **Primera ejecución real del flujo**: si ves «Apple Digital Masters: no disponible: no se entendió la respuesta de afclip», el formato de salida no es el que esperamos. Entonces pega en Terminal esto con tu máster (cámbiale la ruta) y envíame la salida completa:
+- Si ves «Apple Digital Masters: no disponible: no se entendió la respuesta de afclip», el formato de salida no es el que esperamos. Entonces pega en Terminal esto con tu máster (cámbiale la ruta) y envíame la salida completa:
   ```
   cd "$(mktemp -d)" && afconvert "/ruta/máster.wav" i.caf -d 0 -f caff --soundcheck-generate && afconvert i.caf f.m4a -d aac -f m4af -u pgcm 2 --soundcheck-read -b 256000 -q 127 -s 2 && afconvert f.m4a d.wav -d LEF32 -f WAVE && afclip d.wav
   ```

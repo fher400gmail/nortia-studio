@@ -9,6 +9,7 @@
   "win.max": "Maximizar",
   "win.close": "Cerrar",
   "drop.title": "Suelta tu canción",
+  "drop.need_song": "Suelta primero la canción.",
   "play": "Escuchar",
   "pause": "Pausar",
   "song.change": "Cambiar canción",

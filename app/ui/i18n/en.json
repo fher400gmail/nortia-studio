@@ -9,6 +9,7 @@
   "win.max": "Maximize",
   "win.close": "Close",
   "drop.title": "Drop your song",
+  "drop.need_song": "Drop the song first.",
   "play": "Play",
   "pause": "Pause",
   "song.change": "Change song",

@@ -1,6 +1,6 @@
 //! Comandos Tauri: capa finísima sobre `mastercheck-bridge`.
 
-use mastercheck_bridge::app_support::{self, AppInfo};
+use mastercheck_bridge::app_support::{self, busy_error, is_image_path, AppInfo};
 use mastercheck_bridge::dto::{
     DeliveryDto, ExportRequestDto, MasterDto, PlanDto, ReleaseMetaDto, WaveformDto,
 };
@@ -42,17 +42,21 @@ fn internal(lang: Lang, detail: String) -> BridgeError {
 
 #[tauri::command]
 pub async fn analyze(
+    app: AppHandle,
     lang: State<'_, LangState>,
     path: String,
     bins: u32,
 ) -> Result<AnalyzeResponse, BridgeError> {
     let lang = current_lang(&lang);
-    tauri::async_runtime::spawn_blocking(move || {
+    let res = tauri::async_runtime::spawn_blocking(move || {
         analysis::analyze(std::path::Path::new(&path), lang, bins as usize)
             .map(|(master, waveform)| AnalyzeResponse { master, waveform })
     })
     .await
-    .map_err(|e| internal(lang, e.to_string()))?
+    .map_err(|e| internal(lang, e.to_string()))??;
+    // El máster analizado se puede reproducir (asset protocol); el ámbito empieza vacío.
+    let _ = app.asset_protocol_scope().allow_file(&res.master.path);
+    Ok(res)
 }
 
 #[tauri::command]
@@ -74,7 +78,14 @@ pub async fn export(
 ) -> Result<DeliveryDto, BridgeError> {
     let lang = current_lang(&lang);
     let cancel = Arc::new(AtomicBool::new(false));
-    *state.cancel.lock().unwrap_or_else(|e| e.into_inner()) = Some(cancel.clone());
+    {
+        // Una sola exportación a la vez: comprobar y reservar bajo el mismo cerrojo.
+        let mut slot = state.cancel.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_some() {
+            return Err(busy_error(lang));
+        }
+        *slot = Some(cancel.clone());
+    }
     let result = tauri::async_runtime::spawn_blocking(move || {
         exporting::export(
             &req,
@@ -121,11 +132,35 @@ pub async fn pick_folder(app: AppHandle) -> Option<String> {
 #[tauri::command]
 pub async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
     let dialog = app.dialog().file();
-    let dialog = match kind.as_str() {
-        "image" => dialog.add_filter("image", &["jpg", "jpeg", "png"]),
-        _ => dialog.add_filter("audio", &["wav", "wave"]),
+    let image = kind == "image";
+    let dialog = if image {
+        dialog.add_filter("image", &["jpg", "jpeg", "png"])
+    } else {
+        dialog.add_filter("audio", &["wav", "wave"])
     };
-    dialog.blocking_pick_file().and_then(to_string_path)
+    let path = dialog.blocking_pick_file().and_then(to_string_path)?;
+    // Lo elegido en el selector se puede mostrar o reproducir; el resto del disco, no.
+    let _ = app.asset_protocol_scope().allow_file(&path);
+    Some(path)
+}
+
+/// Autoriza ver una imagen arrastrada (portada). Solo `.png`, `.jpg` y `.jpeg`.
+#[tauri::command]
+pub fn allow_asset(
+    app: AppHandle,
+    lang: State<'_, LangState>,
+    path: String,
+) -> Result<(), BridgeError> {
+    if !is_image_path(&path) {
+        return Err(BridgeError::from_key(
+            "err.generic",
+            current_lang(&lang),
+            Some(format!("tipo de archivo no permitido: {path}")),
+        ));
+    }
+    app.asset_protocol_scope()
+        .allow_file(&path)
+        .map_err(|e| BridgeError::from_key("err.io", current_lang(&lang), Some(e.to_string())))
 }
 
 /// Revela la carpeta (o archivo) en el explorador del sistema.
@@ -204,6 +239,7 @@ pub fn run_app() {
             cancel_export,
             pick_folder,
             pick_file,
+            allow_asset,
             open_path,
             system_lang,
             set_lang,

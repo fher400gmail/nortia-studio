@@ -1,5 +1,5 @@
 // Recorre vacío → soltar → crear → listo con el mock, en es y en en, sin errores de página.
-// Uso: node scripts/ui-check.mjs   (necesita Playwright + Chromium)
+// Uso: node ui-tests/scripts/ui-check.mjs   (necesita Playwright + Chromium)
 import assert from 'node:assert/strict';
 import { serve, loadPlaywright } from './serve.mjs';
 
@@ -32,6 +32,16 @@ async function run(lang) {
   await page.setInputFiles('#fsong', { name: 'cancion.mp3', mimeType: 'audio/mpeg', buffer: Buffer.from('x') });
   await page.waitForSelector('.dzone small.er');
   assert.match(await page.textContent('.dzone small.er'), tx.notWav, `${lang}: error no-WAV`);
+
+  // una imagen sin canción cargada se ignora con una pista breve
+  await page.setInputFiles('#fcov', []).catch(() => {});
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(8)], 'portada.png', { type: 'image/png' }));
+    document.querySelector('#hero').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  });
+  await page.waitForSelector('.dzone small.er');
+  assert.match(await page.textContent('.dzone small.er'), lang === 'es' ? /Suelta primero la canción/ : /Drop the song first/);
 
   // soltar un WAV (HTML5 drop sobre la zona)
   await page.waitForSelector('.dzone b');

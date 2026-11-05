@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMock, detect, suggestFromName } from '../backend.js';
-import { fmtLufs, fmtDbtp, fmtDuration, fmtRate, fmtSpec, fmtBytes, fmtNumber, shortPath } from '../format.js';
-import { setDict, t, tn } from '../i18n.js';
+import { createMock, detect, suggestFromName } from '../../ui/backend.js';
+import { fmtLufs, fmtDbtp, fmtDuration, fmtRate, fmtSpec, fmtBytes, fmtNumber, shortPath } from '../../ui/format.js';
+import { setDict, t, tn } from '../../ui/i18n.js';
+import { isCancelled } from '../../ui/flow.js';
 import { readFileSync } from 'node:fs';
 
 const SAMPLE = '/m/Vera Alcón - Luz de Noviembre (master v3).wav';
@@ -136,11 +137,41 @@ test('suggest_from_name', () => {
 });
 
 test('i18n_files_have_same_keys_and_plurals', () => {
-  const es = JSON.parse(readFileSync(new URL('../i18n/es.json', import.meta.url)));
-  const en = JSON.parse(readFileSync(new URL('../i18n/en.json', import.meta.url)));
+  const es = JSON.parse(readFileSync(new URL('../../ui/i18n/es.json', import.meta.url)));
+  const en = JSON.parse(readFileSync(new URL('../../ui/i18n/en.json', import.meta.url)));
   assert.deepEqual(Object.keys(es).sort(), Object.keys(en).sort());
   setDict('es', es);
   assert.equal(tn('loud.over', 1), '1 vez');
   assert.equal(tn('loud.over', 3), '3 veces');
   assert.equal(t('sum', { n: 8, size: '1 MB' }), '8 archivos · 1 MB');
+});
+
+test('cancel_race_delivery_flag_wins_when_event_never_arrives', async () => {
+  // la promesa se resuelve sin que la interfaz haya visto el evento `cancelled`
+  const be = createMock({ fast: true, dropCancelEvent: true });
+  let flag = false;
+  const kinds = [];
+  const d = await be.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['spotify', 'amazon'] }, e => { kinds.push(e.kind); if (e.kind === 'cancelled') flag = true; if (e.kind === 'job_done') be.cancelExport(); });
+  assert.ok(!kinds.includes('cancelled'));
+  assert.equal(flag, false);
+  assert.equal(d.cancelled, true);
+  assert.equal(isCancelled(flag, d), true, 'nunca se dibuja "Listo" para una entrega cancelada');
+  assert.equal(isCancelled(true, { cancelled: false }), true);
+  assert.equal(isCancelled(false, { cancelled: false }), false);
+  assert.equal(isCancelled(false, undefined), false);
+});
+
+test('mock_delivery_has_full_dto_shape', async () => {
+  const be = createMock({ fast: true });
+  const d = await be.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['spotify'] }, () => {});
+  assert.equal(d.cancelled, false);
+  assert.deepEqual(d.failed_keys, []);
+  assert.deepEqual(d.failed_details, []);
+});
+
+test('tauri_allow_asset_command', async () => {
+  const calls = [];
+  const be = detect({ location: { search: '' }, __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke: async (c, a) => { calls.push([c, a]); } } } });
+  await be.allowAsset('/x/cover.png');
+  assert.deepEqual(calls, [['allow_asset', { path: '/x/cover.png' }]]);
 });

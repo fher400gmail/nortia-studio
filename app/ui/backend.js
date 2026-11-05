@@ -96,7 +96,7 @@ function bridgeError(lang, key, detail = null) {
  * Backend simulado. Opciones: `fast` (progreso casi instantáneo), `lang` inicial,
  * `lame` (false simula que no hay lame), `os`.
  */
-export function createMock({ fast = false, lang = 'es', lame = true, os = 'mac', version = '0.1.0-mock' } = {}) {
+export function createMock({ fast = false, lang = 'es', lame = true, os = 'mac', version = '0.1.0-mock', dropCancelEvent = false } = {}) {
   let curLang = lang;
   let cancelled = false;
   let folderIx = 0;
@@ -171,7 +171,10 @@ export function createMock({ fast = false, lang = 'es', lame = true, os = 'mac',
       onProgress({ kind: 'analyzed' });
       onProgress({ kind: 'planned' });
       for (const j of jobs) {
-        if (cancelled) { onProgress({ kind: 'cancelled' }); return { folder: root, files, failed: [], elapsed_ms: 0, cancelled: true }; }
+        if (cancelled) {
+          if (!dropCancelEvent) onProgress({ kind: 'cancelled' });
+          return { folder: root, cancelled: true, files, failed: [], failed_keys: [], failed_details: [], elapsed_ms: 0 };
+        }
         onProgress({ kind: 'job_started', preset_id: j.preset_id });
         const ms = 280 + Math.min(j.estimated_bytes / 1e6, 140) / 140 * 500;
         for (let f = .25; f < 1; f += .25 * step) { await wait(ms / 4); onProgress({ kind: 'job_progress', preset_id: j.preset_id, fraction: Math.min(.99, f) }); }
@@ -181,7 +184,7 @@ export function createMock({ fast = false, lang = 'es', lame = true, os = 'mac',
         onProgress({ kind: 'job_done', preset_id: j.preset_id, path, bytes: j.estimated_bytes });
       }
       DOCS[curLang].forEach((d, i) => files.push([`${root}/${d}`, [3000, 4000, 1000, 2000][i]]));
-      const delivery = { folder: root, files, failed: [], elapsed_ms: 1200 };
+      const delivery = { folder: root, cancelled: false, files, failed: [], failed_keys: [], failed_details: [], elapsed_ms: 1200 };
       onProgress({ kind: 'finished', delivery });
       return delivery;
     },
@@ -190,6 +193,7 @@ export function createMock({ fast = false, lang = 'es', lame = true, os = 'mac',
     async pickFolder() { folderIx = (folderIx + 1) % MOCK_FOLDERS[curLang].length; return MOCK_FOLDERS[curLang][folderIx]; },
     async pickFile() { return null; },
     async openPath() {},
+    async allowAsset() {},
     async ready() {},
     convertFileSrc(p) { return p; },
     async onFileDrop() { return () => {}; }
@@ -217,6 +221,8 @@ export function createTauri(g = globalThis) {
     pickFolder: () => invoke('pick_folder'),
     pickFile: kind => invoke('pick_file', { kind }),
     openPath: path => invoke('open_path', { path }),
+    /** Autoriza una imagen arrastrada para verla (asset protocol, ámbito vacío por defecto). */
+    allowAsset: path => invoke('allow_asset', { path }),
     ready: () => invoke('frontend_ready'),
     convertFileSrc: p => T().core.convertFileSrc(p),
     /** Soltar archivos del sistema: `cb({type:'enter'|'over'|'drop'|'leave', paths, position})`. */

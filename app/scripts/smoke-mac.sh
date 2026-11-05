@@ -30,11 +30,13 @@ ls -la "$WAV" "$COVER"
 set +e
 LANG=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 MASTERCHECK_SMOKE_COVER="$COVER" MASTERCHECK_SMOKE="$WAV;$OUT" "$EXE" &
 PID=$!
-( sleep 900; kill -9 "$PID" 2>/dev/null ) &
+# Vigilante de 15 minutos que termina solo cuando la app acaba (sin kill: así no hay
+# «Terminated» en el log ni un sleep huérfano).
+( for _ in $(seq 900); do kill -0 "$PID" 2>/dev/null || exit 0; sleep 1; done; echo "::error::el humo superó los 15 minutos"; kill -9 "$PID" 2>/dev/null ) &
 WATCHDOG=$!
 wait "$PID"
 CODE=$?
-kill "$WATCHDOG" 2>/dev/null
+wait "$WATCHDOG" 2>/dev/null
 set -e
 echo "código de salida: $CODE"
 test "$CODE" -eq 0

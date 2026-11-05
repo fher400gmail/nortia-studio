@@ -3,9 +3,11 @@
 
 pub mod audio;
 pub mod dither;
+pub mod i18n;
 pub mod loudness;
 pub mod naming;
 pub mod plan;
 pub mod presets;
+pub mod reports;
 pub mod resample;
 pub mod wav;

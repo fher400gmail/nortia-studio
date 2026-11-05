@@ -307,7 +307,7 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 @keyframes rowin{0%{opacity:0;transform:translateX(-8px)}100%{opacity:1;transform:none}}
 .donebox{flex:1.15 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:clamp(12px,2.4vh,22px);min-height:0}
 .donebox h1{font-size:clamp(18px,2.4vh,21px);font-weight:600;letter-spacing:-.014em;line-height:1.3;max-width:560px}
-.markdone{width:28px;height:56px;filter:drop-shadow(0 10px 16px rgba(255,90,0,.24))}
+.markdone{width:28px;height:56px}
 .markdone .t{animation:tN .7s var(--spring) both}.markdone .b{animation:tS .7s var(--spring) both}
 @keyframes tN{from{transform:translateY(-26px);opacity:0}}@keyframes tS{from{transform:translateY(26px);opacity:0}}
 .acts{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}

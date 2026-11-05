@@ -1,0 +1,3 @@
+[workspace]
+members = ["masterout-core"]
+resolver = "2"

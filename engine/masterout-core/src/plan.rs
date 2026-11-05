@@ -1,5 +1,6 @@
 //! Resolución del plan de entrega: qué archivo se produce para cada destino activo.
 
+use crate::i18n::Lang;
 use crate::loudness::{self, LoudnessReport, Verdict};
 use crate::naming;
 use crate::presets::{self, BitsPolicy, Container, Preset, RatePolicy};
@@ -61,7 +62,7 @@ fn disabled(preset: &Preset, key: &str) -> Resolved {
     }
 }
 
-fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset) -> Resolved {
+fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset, lang: Lang) -> Resolved {
     if matches!(p.id.as_str(), "cover" | "canvas" | "youtube_video") {
         return disabled(p, "not_in_this_build");
     }
@@ -95,17 +96,21 @@ fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset) -> Resolved 
     // Regla de dither: bits destino < bits origen, origen float, o remuestreo a <= 24 bit.
     // Dither si baja de bits, si el máster es float, o si se remuestrea a <= 24 bit
     // (el audio remuestreado tiene más precisión que un entero).
+    // El MP3 parte de la versión de 16 bit / 44,1 kHz con dither, igual que un PCM de 16 bit,
+    // y comparte con ellos la misma entrada de caché.
+    let dithers = is_audio_pcm || container == Container::Mp3;
     let needs_dither =
-        is_audio_pcm && (bits < master_bits || master.is_float || (needs_resample && bits <= 24));
+        dithers && (bits < master_bits || master.is_float || (needs_resample && bits <= 24));
     let is_upsampling = sample_rate > master.sample_rate || (is_audio_pcm && bits > master_bits);
 
+    let tag = naming::preset_tag(p, lang);
     let file_name = if container == Container::Mp3 {
         naming::media_file_name(&meta.artist, &meta.title, &p.tag, "", container.extension())
     } else {
         naming::audio_file_name(
             &meta.artist,
             &meta.title,
-            &p.tag,
+            &tag,
             bits,
             sample_rate,
             container.extension(),
@@ -118,7 +123,7 @@ fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset) -> Resolved 
     );
     Resolved::Job(Job {
         preset_id: p.id.clone(),
-        subfolder: p.subfolder.clone(),
+        subfolder: naming::subfolder(&p.subfolder_key, lang),
         file_name,
         container,
         bits,
@@ -131,12 +136,23 @@ fn resolve_one(master: &MasterInfo, meta: &ReleaseMeta, p: &Preset) -> Resolved 
     })
 }
 
-/// Resuelve los destinos activos, en el orden de las subcarpetas.
+/// Resuelve los destinos activos con los nombres del contrato en español.
 pub fn resolve(master: &MasterInfo, meta: &ReleaseMeta, active_ids: &[&str]) -> Vec<Resolved> {
+    resolve_in(master, meta, active_ids, Lang::Es)
+}
+
+/// Resuelve los destinos activos, en el orden de las subcarpetas, con los nombres
+/// de carpeta y etiquetas del idioma pedido.
+pub fn resolve_in(
+    master: &MasterInfo,
+    meta: &ReleaseMeta,
+    active_ids: &[&str],
+    lang: Lang,
+) -> Vec<Resolved> {
     presets::all()
         .iter()
         .filter(|p| active_ids.contains(&p.id.as_str()))
-        .map(|p| resolve_one(master, meta, p))
+        .map(|p| resolve_one(master, meta, p, lang))
         .collect()
 }
 

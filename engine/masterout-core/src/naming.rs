@@ -1,5 +1,6 @@
 //! Contrato de nombres de carpeta y archivos de entrega.
 
+use crate::i18n::{t, Lang};
 use std::path::Path;
 
 const MAX_BYTES: usize = 200;
@@ -150,4 +151,36 @@ pub fn fallback_title(title: &str, path: &Path) -> String {
         break;
     }
     stem.trim().to_string()
+}
+
+/// Nombre de subcarpeta de un destino según el idioma: `"distributor"` ->
+/// `"07 Distribuidora"` / `"07 Distributor"`.
+pub fn subfolder(preset_subfolder_key: &str, lang: Lang) -> String {
+    t(lang, &format!("folder.{preset_subfolder_key}"))
+}
+
+/// Etiqueta entre corchetes de un destino según el idioma (las de plataforma no cambian).
+pub fn preset_tag(preset: &crate::presets::Preset, lang: Lang) -> String {
+    match &preset.tag_key {
+        Some(k) => t(lang, k),
+        None => preset.tag.clone(),
+    }
+}
+
+/// Nombres de los cuatro documentos de la entrega.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentNames {
+    pub readme: String,
+    pub loudness_report: String,
+    pub sheet_csv: String,
+    pub sheet_txt: String,
+}
+
+pub fn document_names(lang: Lang) -> DocumentNames {
+    DocumentNames {
+        readme: t(lang, "doc.readme"),
+        loudness_report: t(lang, "doc.loudness_report"),
+        sheet_csv: t(lang, "doc.sheet_csv"),
+        sheet_txt: t(lang, "doc.sheet_txt"),
+    }
 }

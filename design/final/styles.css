@@ -184,7 +184,7 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .dzone{flex:1;min-height:0;border:1.5px dashed var(--ctl);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;cursor:pointer;text-align:center;color:var(--ink);position:relative;animation:breathe 4s ease-in-out infinite;transition:border-color var(--t-base) var(--ease),background var(--t-base) var(--ease),transform var(--t-spring) var(--spring)}
 .dzone b{font-size:17px;font-weight:600;letter-spacing:-.012em}
 .dzone small{font-size:12.5px;color:var(--ink-3)}.dzone small.er{color:var(--err);font-weight:500}
-.dzone .mk{display:flex;animation:mkb 4s ease-in-out infinite;filter:drop-shadow(0 8px 14px rgba(255,90,0,.20))}
+.dzone .mk{display:flex}
 .dzone .mk svg{width:auto;height:clamp(40px,8vh,68px)}
 @keyframes breathe{0%,100%{box-shadow:0 0 0 0 transparent,inset 0 0 0 0 transparent;border-color:var(--ctl)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--brand) 9%,transparent),inset 0 0 34px color-mix(in srgb,var(--brand) 8%,transparent);border-color:color-mix(in srgb,var(--brand) 65%,var(--ctl))}}
 @keyframes mkb{50%{transform:translateY(-4px)}}

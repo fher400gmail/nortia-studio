@@ -17,6 +17,16 @@ fn map_err(e: impl std::fmt::Display) -> AudioError {
 /// descarta la latencia del filtro y ajusta la longitud a `round(frames * target / source)`.
 /// No aplica ganancia: el nivel se conserva.
 pub fn resample(buf: &AudioBuffer, target_rate: u32) -> Result<AudioBuffer, AudioError> {
+    resample_cancellable(buf, target_rate, &|| false)
+}
+
+/// Como `resample`, comprobando `should_cancel` en cada bloque; si devuelve `true`
+/// termina con `AudioError::Cancelled`.
+pub fn resample_cancellable(
+    buf: &AudioBuffer,
+    target_rate: u32,
+    should_cancel: &dyn Fn() -> bool,
+) -> Result<AudioBuffer, AudioError> {
     if target_rate == buf.sample_rate {
         return Ok(buf.clone());
     }
@@ -44,6 +54,9 @@ pub fn resample(buf: &AudioBuffer, target_rate: u32) -> Result<AudioBuffer, Audi
     let mut out: Vec<Vec<f32>> = vec![Vec::with_capacity(want + CHUNK * 2); nch];
     let mut pos = 0;
     while frames - pos >= rs.input_frames_next() {
+        if should_cancel() {
+            return Err(AudioError::Cancelled);
+        }
         let n = rs.input_frames_next();
         let chunk: Vec<&[f32]> = buf.channels.iter().map(|c| &c[pos..pos + n]).collect();
         let res = rs.process(&chunk, None).map_err(map_err)?;
@@ -56,6 +69,9 @@ pub fn resample(buf: &AudioBuffer, target_rate: u32) -> Result<AudioBuffer, Audi
     let mut tail: Option<Vec<&[f32]>> =
         (pos < frames).then(|| buf.channels.iter().map(|c| &c[pos..]).collect());
     while out[0].len() < want {
+        if should_cancel() {
+            return Err(AudioError::Cancelled);
+        }
         let res = rs.process_partial(tail.as_deref(), None).map_err(map_err)?;
         tail = None;
         for (o, r) in out.iter_mut().zip(&res) {

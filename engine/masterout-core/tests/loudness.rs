@@ -83,7 +83,11 @@ fn true_peak_of_full_scale_sine_between_samples_is_positive() {
         "SP = {}",
         r.sample_peak_dbfs
     );
-    assert!(r.true_peak_dbtp > 0.5, "TP = {}", r.true_peak_dbtp);
+    assert!(
+        (r.true_peak_dbtp - 3.0).abs() <= 0.5,
+        "TP = {}",
+        r.true_peak_dbtp
+    );
     assert!(r.overs_count > 0);
 }
 

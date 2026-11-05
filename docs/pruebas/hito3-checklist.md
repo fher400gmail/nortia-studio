@@ -22,7 +22,7 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 
 ### 2. Los vídeos y el MP3 están disponibles
 - Haz: suelta tu máster. Mira las fichas de Extras.
-- Esperado: MP3 habilitada; Portada, Canvas, YouTube vídeo y Apple motion deshabilitadas con el aviso «Falta la portada…». Ninguna dice «falta ffmpeg».
+- Esperado: MP3 habilitada; Portada, Canvas, YouTube vídeo y Apple motion deshabilitadas con el aviso «Falta la portada…» y con borde discontinuo y la pista «Arrastra la portada» (también en oscuro). Ninguna dice «falta ffmpeg».
 
 ### 3. Primer plan: tiempo de arranque
 - Haz: cierra la app, ábrela y cronometra desde que sueltas el máster hasta que aparece el resumen («N archivos · tamaño»). Es la primera vez que se sondean los codificadores de vídeo.
@@ -62,10 +62,15 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
   ```
   (Para másters de más de 48 kHz, en el primer paso usa `-d LEF32@44100 -f caff --soundcheck-generate --src-complexity bats -r 127`, o `@48000` si tu máster es de la familia 48.)
 - Anota también si `afclip` termina con código distinto de 0 cuando hay clips (`echo $?` justo después).
+- Con un máster que dé N > 0, al terminar la pantalla «Listo» muestra una línea con aviso ámbar (no roja): «Revisa: Apple Music: pasa de 0 dB al codificar». No debe salir como fallo ni cambiar el recuento de archivos.
 
 ### 10. Cancelar durante un vídeo
 - Haz: con todo activo y un máster largo, pulsa **Cancelar** mientras se crea el vídeo de YouTube.
 - Esperado: se detiene en pocos segundos, sin ficheros `.part` ni vídeos a medias en la carpeta, y la app sigue respondiendo.
+
+### 10b. Preparando y «Abrir carpeta»
+- Haz: con un máster de 4 minutos o más a 96 kHz, pulsa **Crear carpeta de entrega** y mira el botón de progreso.
+- Esperado: primero «Preparando… N %» subiendo (no se queda en 0 %), luego «Creando carpeta…». Al terminar, **Abrir carpeta** muestra la entrega en el Finder.
 
 ### 11. Una instalación sin sidecar (opcional, 2 minutos)
 - Haz: borra `master check.app/Contents/MacOS/ffmpeg` en una copia de la app y ábrela.

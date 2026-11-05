@@ -9,6 +9,12 @@ fn strs(v: &[&str]) -> Vec<std::ffi::OsString> {
     v.iter().map(std::ffi::OsString::from).collect()
 }
 
+/// Ruta esperada dentro del directorio de trabajo `/w`, construida como lo hace el motor
+/// (`Path::join`): en Windows el separador es `\`, y el golden conserva su cobertura allí.
+fn w(name: &str) -> String {
+    Path::new("/w").join(name).to_string_lossy().into_owned()
+}
+
 #[test]
 fn golden_commands_44k_and_48k_have_no_rate_conversion() {
     for rate in [44_100, 48_000] {
@@ -19,7 +25,7 @@ fn golden_commands_44k_and_48k_have_no_rate_conversion() {
             strs(&[
                 "afconvert",
                 "/m/master.wav",
-                "/w/intermediate.caf",
+                &w("intermediate.caf"),
                 "-d",
                 "0",
                 "-f",
@@ -31,8 +37,8 @@ fn golden_commands_44k_and_48k_have_no_rate_conversion() {
             c[1],
             strs(&[
                 "afconvert",
-                "/w/intermediate.caf",
-                "/w/final.m4a",
+                &w("intermediate.caf"),
+                &w("final.m4a"),
                 "-d",
                 "aac",
                 "-f",
@@ -53,8 +59,8 @@ fn golden_commands_44k_and_48k_have_no_rate_conversion() {
             c[2],
             strs(&[
                 "afconvert",
-                "/w/final.m4a",
-                "/w/decode.wav",
+                &w("final.m4a"),
+                &w("decode.wav"),
                 "-d",
                 "LEF32",
                 "-f",
@@ -62,7 +68,7 @@ fn golden_commands_44k_and_48k_have_no_rate_conversion() {
             ])
         );
         // afclip mide el WAV decodificado (float: el exceso entre muestras no se recorta)
-        assert_eq!(c[3], strs(&["afclip", "/w/decode.wav"]));
+        assert_eq!(c[3], strs(&["afclip", &w("decode.wav")]));
     }
 }
 
@@ -74,7 +80,7 @@ fn golden_commands_high_rates_use_bats_and_target_rate_family() {
         strs(&[
             "afconvert",
             "/m/a.wav",
-            "/w/intermediate.caf",
+            &w("intermediate.caf"),
             "-d",
             "LEF32@48000",
             "-f",

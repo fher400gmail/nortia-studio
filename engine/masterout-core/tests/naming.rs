@@ -1,3 +1,4 @@
+use masterout_core::naming;
 use masterout_core::naming::*;
 use std::path::Path;
 
@@ -106,4 +107,40 @@ fn long_version_tag_and_suffix_never_panic_or_exceed_200() {
     assert!(f.len() <= 200 && f.ends_with(" 24bit-96kHz.flac"));
     let m = media_file_name(&long, &long, &long, &long, "jpg");
     assert!(m.len() <= 200 && m.ends_with(".jpg"));
+}
+
+#[test]
+fn english_contract_folder_and_document_names() {
+    use masterout_core::i18n::Lang;
+    assert_eq!(naming::subfolder("distributor", Lang::En), "07 Distributor");
+    assert_eq!(naming::subfolder("artwork", Lang::En), "09 Artwork");
+    assert_eq!(naming::subfolder("spotify", Lang::En), "01 Spotify");
+    assert_eq!(naming::subfolder("youtube", Lang::En), "06 YouTube");
+    let d = naming::document_names(Lang::En);
+    assert_eq!(d.readme, "README.txt");
+    assert_eq!(d.loudness_report, "loudness-report.txt");
+    assert_eq!(d.sheet_csv, "release-sheet.csv");
+    assert_eq!(d.sheet_txt, "release-sheet.txt");
+    let cover = masterout_core::presets::all()
+        .into_iter()
+        .find(|p| p.id == "cover")
+        .unwrap();
+    assert_eq!(naming::preset_tag(&cover, Lang::En), "Cover");
+    assert_eq!(naming::preset_tag(&cover, Lang::Es), "Portada");
+}
+
+#[test]
+fn spanish_contract_unchanged() {
+    use masterout_core::i18n::Lang;
+    assert_eq!(
+        naming::subfolder("distributor", Lang::Es),
+        "07 Distribuidora"
+    );
+    assert_eq!(naming::subfolder("artwork", Lang::Es), "09 Imagen");
+    assert_eq!(naming::subfolder("promo", Lang::Es), "08 Promo");
+    let d = naming::document_names(Lang::Es);
+    assert_eq!(d.readme, "README.txt");
+    assert_eq!(d.loudness_report, "informe-loudness.txt");
+    assert_eq!(d.sheet_csv, "ficha-lanzamiento.csv");
+    assert_eq!(d.sheet_txt, "ficha-lanzamiento.txt");
 }

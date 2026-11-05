@@ -1,5 +1,5 @@
 [workspace]
-members = ["masterout-core"]
+members = ["masterout-core", "mastercheck-bridge"]
 resolver = "2"
 
 [profile.dev]

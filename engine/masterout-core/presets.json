@@ -2,7 +2,7 @@
   {
     "id": "spotify",
     "name": "Spotify",
-    "subfolder": "01 Spotify",
+    "subfolder_key": "spotify",
     "tag": "Spotify",
     "container": "flac",
     "bits": "native",
@@ -19,7 +19,7 @@
   {
     "id": "apple_adm",
     "name": "Apple Music (Digital Masters)",
-    "subfolder": "02 Apple Music",
+    "subfolder_key": "apple",
     "tag": "Apple Digital Masters",
     "container": "wav",
     "bits": "native",
@@ -38,7 +38,7 @@
   {
     "id": "amazon",
     "name": "Amazon Music",
-    "subfolder": "03 Amazon Music",
+    "subfolder_key": "amazon",
     "tag": "Amazon Music",
     "container": "flac",
     "bits": "native",
@@ -55,7 +55,7 @@
   {
     "id": "tidal",
     "name": "Tidal",
-    "subfolder": "04 Tidal",
+    "subfolder_key": "tidal",
     "tag": "Tidal",
     "container": "flac",
     "bits": "native",
@@ -72,7 +72,7 @@
   {
     "id": "deezer",
     "name": "Deezer",
-    "subfolder": "05 Deezer",
+    "subfolder_key": "deezer",
     "tag": "Deezer",
     "container": "wav",
     "bits": 16,
@@ -89,7 +89,7 @@
   {
     "id": "youtube_music",
     "name": "YouTube Music",
-    "subfolder": "06 YouTube",
+    "subfolder_key": "youtube",
     "tag": "YouTube Music",
     "container": "wav",
     "bits": "native",
@@ -108,7 +108,7 @@
   {
     "id": "youtube_video",
     "name": "Vídeo YouTube",
-    "subfolder": "06 YouTube",
+    "subfolder_key": "youtube",
     "tag": "YouTube",
     "container": "mp4",
     "bits": null,
@@ -125,8 +125,9 @@
   {
     "id": "distributor_std",
     "name": "Distribuidora estándar (16 bit / 44,1 kHz)",
-    "subfolder": "07 Distribuidora",
+    "subfolder_key": "distributor",
     "tag": "Distribuidora",
+    "tag_key": "tag.distributor",
     "container": "wav",
     "bits": 16,
     "rate": 44100,
@@ -142,8 +143,9 @@
   {
     "id": "distributor_hires",
     "name": "Distribuidora alta resolución",
-    "subfolder": "07 Distribuidora",
+    "subfolder_key": "distributor",
     "tag": "Distribuidora Hi-Res",
+    "tag_key": "tag.distributor_hires",
     "container": "wav",
     "bits": "native",
     "rate": "native",
@@ -159,7 +161,7 @@
   {
     "id": "tunecore",
     "name": "TuneCore (24 bit)",
-    "subfolder": "07 Distribuidora",
+    "subfolder_key": "distributor",
     "tag": "TuneCore",
     "container": "wav",
     "bits": 24,
@@ -176,7 +178,7 @@
   {
     "id": "mp3_promo",
     "name": "MP3 promo 320 kbps",
-    "subfolder": "08 Promo",
+    "subfolder_key": "promo",
     "tag": "MP3 320",
     "container": "mp3",
     "bits": null,
@@ -193,8 +195,9 @@
   {
     "id": "cover",
     "name": "Portada",
-    "subfolder": "09 Imagen",
+    "subfolder_key": "artwork",
     "tag": "Portada",
+    "tag_key": "tag.cover",
     "container": "jpg",
     "bits": null,
     "rate": null,
@@ -210,7 +213,7 @@
   {
     "id": "canvas",
     "name": "Canvas",
-    "subfolder": "09 Imagen",
+    "subfolder_key": "artwork",
     "tag": "Canvas",
     "container": "mp4",
     "bits": null,

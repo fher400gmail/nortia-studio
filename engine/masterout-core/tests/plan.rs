@@ -1,4 +1,6 @@
+use masterout_core::i18n::Lang;
 use masterout_core::loudness::{LoudnessReport, Verdict};
+use masterout_core::naming;
 use masterout_core::plan::*;
 use masterout_core::presets::{self, Container};
 
@@ -118,7 +120,11 @@ fn preset_contract_table_id_subfolder_tag() {
     assert_eq!(all.len(), expected.len());
     for (p, (id, sub, tag)) in all.iter().zip(expected) {
         assert_eq!(
-            (p.id.as_str(), p.subfolder.as_str(), p.tag.as_str()),
+            (
+                p.id.as_str(),
+                naming::subfolder(&p.subfolder_key, Lang::Es).as_str(),
+                p.tag.as_str(),
+            ),
             (id, sub, tag)
         );
     }
@@ -214,7 +220,10 @@ fn estimate_bytes_wav_exact() {
 #[test]
 fn subfolder_contract() {
     let all = presets::all();
-    let sub = |id: &str| all.iter().find(|p| p.id == id).unwrap().subfolder.clone();
+    let sub = |id: &str| {
+        let p = all.iter().find(|p| p.id == id).unwrap();
+        naming::subfolder(&p.subfolder_key, Lang::Es)
+    };
     assert_eq!(sub("spotify"), "01 Spotify");
     assert_eq!(sub("deezer"), "05 Deezer");
     assert_eq!(sub("youtube_music"), "06 YouTube");

@@ -38,6 +38,11 @@ pub fn run() {
     if let Some(code) = smoke_hook() {
         std::process::exit(code);
     }
+    // Solo la app real (no el humo, que quiere ver el panic en la salida del CI): los panics se
+    // apuntan en el registro del usuario y no ensucian stderr.
+    if let Some(dir) = mastercheck_bridge::app_support::panic_log::log_dir() {
+        mastercheck_bridge::app_support::panic_log::install(dir);
+    }
     #[cfg(feature = "app")]
     commands::run_app();
     #[cfg(not(feature = "app"))]

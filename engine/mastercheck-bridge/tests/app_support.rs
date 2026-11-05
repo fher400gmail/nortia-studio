@@ -309,3 +309,141 @@ fn app_info_announces_the_sidecar_release_only_when_it_is_there() {
         SIDECAR_RELEASE
     );
 }
+
+// ---------------------------------------------------------------- tarea 7 (hito 3)
+
+mod reveal {
+    use mastercheck_bridge::app_support::{check_reveal, last_delivery};
+    use mastercheck_bridge::dto::DeliveryDto;
+    use masterout_core::i18n::Lang;
+    use std::path::{Path, PathBuf};
+
+    /// `entrega/{a.wav, sub/b.wav}` y `entrega-2/x.wav` y `otra/y.wav`.
+    fn tree() -> (tempfile::TempDir, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let d = tmp.path().join("entrega");
+        for f in [
+            "entrega/a.wav",
+            "entrega/sub/b.wav",
+            "entrega-2/x.wav",
+            "otra/y.wav",
+        ] {
+            let p = tmp.path().join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, b"x").unwrap();
+        }
+        (tmp, d)
+    }
+
+    fn allowed(p: &Path, last: Option<&Path>) -> bool {
+        check_reveal(&p.to_string_lossy(), last, Lang::Es).is_ok()
+    }
+
+    #[test]
+    fn only_the_last_delivery_and_what_is_inside_it_can_be_revealed() {
+        let (tmp, d) = tree();
+        assert!(allowed(&d, Some(&d)));
+        assert!(allowed(&d.join("a.wav"), Some(&d)));
+        assert!(allowed(&d.join("sub").join("b.wav"), Some(&d)));
+        assert!(!allowed(&tmp.path().join("otra"), Some(&d)));
+        assert!(!allowed(&tmp.path().join("otra/y.wav"), Some(&d)));
+        // mismo prefijo de texto, otra carpeta
+        assert!(!allowed(&tmp.path().join("entrega-2"), Some(&d)));
+        // el padre y la raíz tampoco
+        assert!(!allowed(tmp.path(), Some(&d)));
+        assert!(!allowed(Path::new("/"), Some(&d)));
+        // salir con `..`
+        assert!(!allowed(&d.join("..").join("otra"), Some(&d)));
+        // sin entrega conocida, nada; ruta vacía o inexistente, nada
+        assert!(!allowed(&d, None));
+        assert!(!allowed(Path::new(""), Some(&d)));
+        assert!(!allowed(&d.join("no-existe.wav"), Some(&d)));
+        assert!(!allowed(&d, Some(Path::new(""))));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_inside_the_delivery_cannot_point_outside() {
+        let (tmp, d) = tree();
+        std::os::unix::fs::symlink(tmp.path().join("otra"), d.join("enlace")).unwrap();
+        assert!(!allowed(&d.join("enlace"), Some(&d)));
+        assert!(!allowed(&d.join("enlace").join("y.wav"), Some(&d)));
+    }
+
+    #[test]
+    fn a_refusal_is_err_internal_in_the_requested_language() {
+        let (tmp, d) = tree();
+        let e = check_reveal(
+            &tmp.path().join("otra").to_string_lossy(),
+            Some(&d),
+            Lang::En,
+        )
+        .unwrap_err();
+        assert_eq!(e.key, "err.internal");
+        assert!(e.message.contains("nexpected"), "{}", e.message);
+        assert!(
+            e.detail
+                .is_some_and(|x| !x.contains(&*tmp.path().to_string_lossy())),
+            "el detalle no repite la ruta pedida"
+        );
+    }
+
+    #[test]
+    fn the_last_delivery_is_remembered_from_the_dto_unless_it_was_cancelled_empty() {
+        let mk = |folder: &str| DeliveryDto {
+            folder: folder.into(),
+            cancelled: folder.is_empty(),
+            files: vec![],
+            failed: vec![],
+            failed_keys: vec![],
+            failed_details: vec![],
+            verdicts: vec![],
+            elapsed_ms: 0,
+        };
+        assert_eq!(
+            last_delivery(&mk("/x/entrega")),
+            Some(PathBuf::from("/x/entrega"))
+        );
+        assert_eq!(last_delivery(&mk("")), None);
+    }
+}
+
+mod panic_log {
+    use mastercheck_bridge::app_support::panic_log::{format_entry, log_dir_for};
+
+    #[test]
+    fn log_dir_per_platform_uses_the_user_log_locations() {
+        let env = |k: &str| match k {
+            "HOME" => Some("/Users/ana".to_string()),
+            "LOCALAPPDATA" => Some("C:\\Users\\ana\\AppData\\Local".to_string()),
+            "XDG_STATE_HOME" => Some("/home/ana/.state".to_string()),
+            _ => None,
+        };
+        assert_eq!(
+            log_dir_for("mac", &env).unwrap(),
+            std::path::PathBuf::from("/Users/ana/Library/Logs/master check")
+        );
+        let win = log_dir_for("win", &env).unwrap();
+        assert!(
+            win.starts_with("C:\\Users\\ana\\AppData\\Local") && win.ends_with("logs"),
+            "{win:?}"
+        );
+        assert_eq!(
+            log_dir_for("linux", &env).unwrap(),
+            std::path::PathBuf::from("/home/ana/.state/master check")
+        );
+        let no_xdg = |k: &str| (k == "HOME").then(|| "/home/ana".to_string());
+        assert_eq!(
+            log_dir_for("linux", &no_xdg).unwrap(),
+            std::path::PathBuf::from("/home/ana/.local/state/master check")
+        );
+        assert!(log_dir_for("mac", &|_| None).is_none());
+    }
+
+    #[test]
+    fn an_entry_has_time_place_and_message_on_one_line() {
+        let e = format_entry(1_762_300_800, Some(("src/export.rs", 42)), "algo\nfalló");
+        assert_eq!(e, "1762300800 src/export.rs:42 algo falló\n");
+        assert_eq!(format_entry(1, None, "x"), "1 ? x\n");
+    }
+}

@@ -1,6 +1,8 @@
 //! Comandos Tauri: capa finísima sobre `mastercheck-bridge`.
 
-use mastercheck_bridge::app_support::{self, busy_error, is_media_path, AppInfo};
+use mastercheck_bridge::app_support::{
+    self, busy_error, check_reveal, is_media_path, last_delivery, AppInfo,
+};
 use mastercheck_bridge::dto::{
     DeliveryDto, ExportRequestDto, MasterDto, PlanDto, ReleaseMetaDto, WaveformDto,
 };
@@ -9,6 +11,7 @@ use mastercheck_bridge::{analysis, exporting, planning, thumbnail};
 use masterout_core::i18n::Lang;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -25,6 +28,9 @@ pub struct LangState(pub Mutex<Lang>);
 #[derive(Default)]
 pub struct ExportState {
     pub cancel: Mutex<Option<Arc<AtomicBool>>>,
+    /// Carpeta de la última entrega que conoce el backend: `open_path` solo revela esa carpeta o
+    /// algo dentro de ella.
+    pub last_delivery: Mutex<Option<PathBuf>>,
 }
 
 #[derive(Serialize)]
@@ -114,6 +120,14 @@ pub async fn export(
     .await
     .map_err(|e| internal(lang, e.to_string()))
     .and_then(|r| r);
+    if let Ok(d) = &result {
+        if let Some(folder) = last_delivery(d) {
+            *state
+                .last_delivery
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(folder);
+        }
+    }
     *state.cancel.lock().unwrap_or_else(|e| e.into_inner()) = None;
     result
 }
@@ -193,13 +207,21 @@ pub async fn media_thumbnail(
         .map_err(|e| internal(lang, e.to_string()))?
 }
 
-/// Revela la carpeta (o archivo) en el explorador del sistema.
+/// Revela la carpeta (o un archivo) de la última entrega en el explorador del sistema. Cualquier
+/// otra ruta se rechaza con `err.internal`: la interfaz no puede pedir que se revele cualquier cosa.
 #[tauri::command]
 pub fn open_path(
     app: AppHandle,
     lang: State<'_, LangState>,
+    state: State<'_, ExportState>,
     path: String,
 ) -> Result<(), BridgeError> {
+    let last = state
+        .last_delivery
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    check_reveal(&path, last.as_deref(), current_lang(&lang))?;
     app.opener()
         .reveal_item_in_dir(&path)
         .map_err(|e| BridgeError::from_key("err.io", current_lang(&lang), Some(e.to_string())))

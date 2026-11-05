@@ -132,3 +132,7 @@ Sustituye a "Master Check" (15:50) y a "Master Out". Crate interno pasará a `ma
 ## Adenda 05/11/2026 15:52 — nombre definitivo: **master check** (en minúsculas, Fer)
 
 Sustituye a las adendas de 15:50 y 15:51. Se escribe siempre en minúsculas, como la marca ("nortia. studio · master check"). Crate interno pasará a `mastercheck-core` al cerrar el hito 1. Pendiente: dominio y conflictos de marca.
+
+## Adenda 05/11/2026 17:50 — límite de 96 kHz (Fer)
+
+master check **no admite másters por encima de 96 kHz**: la app los rechaza al analizar con el mensaje "master check admite másters de hasta 96 kHz" (clave `err.rate_over_96k`). Desaparece cualquier ruta de 192 kHz: el preset TuneCore pasa a 24 bit a la frecuencia nativa del máster (sin metadatos incrustados). Sin notas en el README al respecto. La regla de resolución de §4 se completa: los destinos "nativa" nunca superan 96 kHz porque la entrada no puede superarlos.

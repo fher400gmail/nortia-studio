@@ -23,6 +23,16 @@ fn cover() -> VideoSource {
 }
 
 const PRE: [&str; 5] = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y"];
+const TAGS: [&str; 6] = [
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+    "-colorspace",
+    "bt709",
+];
+const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p";
+const ALL: [Platform; 3] = [Platform::MacOS, Platform::Windows, Platform::Linux];
 
 fn enc(p: Platform) -> Vec<String> {
     match p {
@@ -39,6 +49,24 @@ fn enc(p: Platform) -> Vec<String> {
     }
 }
 
+fn enc_hevc(p: Platform) -> Vec<String> {
+    match p {
+        Platform::MacOS => v(&[
+            "-c:v",
+            "hevc_videotoolbox",
+            "-allow_sw",
+            "1",
+            "-profile:v",
+            "main",
+            "-tag:v",
+            "hvc1",
+        ]),
+        Platform::Windows => v(&["-c:v", "hevc_mf", "-profile:v", "1", "-tag:v", "hvc1"]),
+        // sin HEVC libre de GPL: el Linux de pruebas usa libx264
+        Platform::Linux => v(&["-c:v", "libx264", "-profile:v", "high"]),
+    }
+}
+
 fn user_video_info(duration: f64) -> MediaInfo {
     MediaInfo {
         duration,
@@ -47,6 +75,7 @@ fn user_video_info(duration: f64) -> MediaInfo {
         fps: 30.0,
         video_codec: Some("h264".into()),
         video_profile: None,
+        color_space: None,
         audio_codec: Some("aac".into()),
         audio_sample_rate: Some(48000),
         audio_bitrate: None,
@@ -60,11 +89,13 @@ fn user_video_info(duration: f64) -> MediaInfo {
 
 // ------------------------------------------------------------------ golden
 
-const CANVAS_COVER_VF: &str = "scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,setsar=1,zoompan=z='1+0.08*on/179':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=180:s=1080x1920:fps=30";
+fn canvas_cover_vf() -> String {
+    format!("scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,setsar=1,zoompan=z='1+0.08*on/179':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=180:s=1080x1920:fps=30,{BT709}")
+}
 
 #[test]
 fn canvas_args_from_cover_golden() {
-    for p in [Platform::MacOS, Platform::Windows, Platform::Linux] {
+    for p in ALL {
         let got = build_canvas_args(
             &cover(),
             None,
@@ -78,7 +109,7 @@ fn canvas_args_from_cover_golden() {
                 "-i",
                 "cover.png",
                 "-vf",
-                CANVAS_COVER_VF,
+                &canvas_cover_vf(),
                 "-an",
                 "-r",
                 "30",
@@ -86,15 +117,9 @@ fn canvas_args_from_cover_golden() {
                 "6",
             ]),
             enc(p),
-            v(&[
-                "-b:v",
-                "5M",
-                "-pix_fmt",
-                "yuv420p",
-                "-movflags",
-                "+faststart",
-                "o.mp4",
-            ]),
+            v(&["-b:v", "5M", "-pix_fmt", "yuv420p"]),
+            v(&TAGS),
+            v(&["-movflags", "+faststart", "o.mp4"]),
         ]);
         assert_eq!(got, want, "{p:?}");
     }
@@ -104,44 +129,33 @@ fn canvas_args_from_cover_golden() {
 fn canvas_args_from_user_video_trims_to_8s() {
     let src = VideoSource::UserMedia(PathBuf::from("in.mp4"));
     let info = user_video_info(20.0);
-    let got = build_canvas_args(
-        &src,
-        Some(&info),
-        &CanvasSpec::default(),
-        Path::new("o.mp4"),
-        Platform::Linux,
-    );
+    let spec = CanvasSpec::default();
+    let out = Path::new("o.mp4");
+    let got = build_canvas_args(&src, Some(&info), &spec, out, Platform::Linux);
+    let vf = format!("crop='trunc(min(iw,ih*1080/1920)/2)*2':'trunc(min(ih,iw*1920/1080)/2)*2',scale=1080:1920,setsar=1,{BT709}");
     let want = cat(&[
         v(&PRE),
-        v(&[
-            "-i",
-            "in.mp4",
-            "-vf",
-            "crop='trunc(min(iw,ih*1080/1920)/2)*2':'trunc(min(ih,iw*1920/1080)/2)*2',scale=1080:1920,setsar=1",
-            "-an",
-            "-r",
-            "30",
-            "-t",
-            "8",
-        ]),
+        v(&["-i", "in.mp4", "-vf", &vf, "-an", "-r", "30", "-t", "8"]),
         enc(Platform::Linux),
-        v(&["-b:v", "5M", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "o.mp4"]),
+        v(&["-b:v", "5M", "-pix_fmt", "yuv420p"]),
+        v(&TAGS),
+        v(&["-movflags", "+faststart", "o.mp4"]),
     ]);
     assert_eq!(got, want);
     // 3..=8 s: sin recorte ni bucle; < 3 s: bucle hasta 3 s
     let mid = build_canvas_args(
         &src,
         Some(&user_video_info(5.0)),
-        &CanvasSpec::default(),
-        Path::new("o.mp4"),
+        &spec,
+        out,
         Platform::Linux,
     );
     assert!(!mid.contains(&"-t".to_string()) && !mid.contains(&"-stream_loop".to_string()));
     let short = build_canvas_args(
         &src,
         Some(&user_video_info(1.5)),
-        &CanvasSpec::default(),
-        Path::new("o.mp4"),
+        &spec,
+        out,
         Platform::Linux,
     );
     assert_eq!(&short[5..7], &v(&["-stream_loop", "-1"])[..]);
@@ -149,7 +163,9 @@ fn canvas_args_from_user_video_trims_to_8s() {
     assert_eq!(short[t + 1], "3");
 }
 
-const YT_FILTER: &str = "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,gblur=sigma=40[bg];[1:v]scale=1000:1000:force_original_aspect_ratio=increase,crop=1000:1000,setsar=1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]";
+fn yt_filter() -> String {
+    format!("[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,{BT709},gblur=sigma=40[bg];[1:v]scale=1000:1000:force_original_aspect_ratio=increase,crop=1000:1000,setsar=1,{BT709}[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]")
+}
 
 fn youtube_golden(p: Platform) -> Vec<String> {
     cat(&[
@@ -172,7 +188,7 @@ fn youtube_golden(p: Platform) -> Vec<String> {
         ]),
         v(&[
             "-filter_complex",
-            YT_FILTER,
+            &yt_filter(),
             "-map",
             "[v]",
             "-map",
@@ -185,22 +201,35 @@ fn youtube_golden(p: Platform) -> Vec<String> {
             "2",
         ]),
         enc(p),
+        v(&["-pix_fmt", "yuv420p"]),
+        v(&TAGS),
         v(&[
-            "-pix_fmt", "yuv420p", "-b:v", "8000k", "-c:a", "aac", "-b:a", "384k", "-ar", "48000",
+            "-b:v", "8000k", "-c:a", "aac", "-b:a", "384k", "-ar", "48000",
         ]),
-        v(&["-movflags", "+faststart", "-shortest", "o.mp4"]),
+        v(&[
+            "-use_editlist",
+            "0",
+            "-movflags",
+            "+faststart+negative_cts_offsets",
+            "-shortest",
+            "o.mp4",
+        ]),
     ])
 }
 
-#[test]
-fn youtube_args_golden_mac() {
-    let got = build_youtube_args(
+fn yt(p: Platform) -> Vec<String> {
+    build_youtube_args(
         &cover(),
         Path::new("m.wav"),
         &YoutubeSpec::default(),
         Path::new("o.mp4"),
-        Platform::MacOS,
-    );
+        p,
+    )
+}
+
+#[test]
+fn youtube_args_golden_mac() {
+    let got = yt(Platform::MacOS);
     assert_eq!(got, youtube_golden(Platform::MacOS));
     assert!(got
         .join(" ")
@@ -209,13 +238,7 @@ fn youtube_args_golden_mac() {
 
 #[test]
 fn youtube_args_golden_win() {
-    let got = build_youtube_args(
-        &cover(),
-        Path::new("m.wav"),
-        &YoutubeSpec::default(),
-        Path::new("o.mp4"),
-        Platform::Windows,
-    );
+    let got = yt(Platform::Windows);
     assert_eq!(got, youtube_golden(Platform::Windows));
     // h264_mf no conoce "high": perfil numérico
     assert!(got.join(" ").contains("-c:v h264_mf -profile:v 100"));
@@ -223,22 +246,17 @@ fn youtube_args_golden_win() {
 
 #[test]
 fn youtube_args_golden_linux() {
-    let got = build_youtube_args(
-        &cover(),
-        Path::new("m.wav"),
-        &YoutubeSpec::default(),
-        Path::new("o.mp4"),
-        Platform::Linux,
-    );
-    assert_eq!(got, youtube_golden(Platform::Linux));
+    assert_eq!(yt(Platform::Linux), youtube_golden(Platform::Linux));
 }
 
 #[test]
 fn apple_motion_args_golden() {
-    let vf_sq = "scale=3840:3840:force_original_aspect_ratio=increase,crop=3840:3840,setsar=1,zoompan=z='1+0.08*on/299':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=300:s=3840x3840:fps=30";
-    let vf_pt = "scale=2048:2732:force_original_aspect_ratio=increase,crop=2048:2732,setsar=1,zoompan=z='1+0.08*on/299':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=300:s=2048x2732:fps=30";
-    for p in [Platform::MacOS, Platform::Windows, Platform::Linux] {
-        for (square, vf) in [(true, vf_sq), (false, vf_pt)] {
+    let vf_sq = format!("scale=3840:3840:force_original_aspect_ratio=increase,crop=3840:3840,setsar=1,zoompan=z='1+0.08*on/299':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=300:s=3840x3840:fps=30,{BT709}");
+    // vertical: prescale 2×
+    let vf_pt = format!("scale=4096:5464:force_original_aspect_ratio=increase,crop=4096:5464,setsar=1,zoompan=z='1+0.08*on/299':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=300:s=2048x2732:fps=30,{BT709}");
+    for p in ALL {
+        // cuadrado 3840×3840: HEVC; vertical 2048×2732: H.264
+        for (square, vf, codec) in [(true, &vf_sq, enc_hevc(p)), (false, &vf_pt, enc(p))] {
             let spec = AppleMotionSpec {
                 square,
                 ..AppleMotionSpec::default()
@@ -247,19 +265,9 @@ fn apple_motion_args_golden() {
             let want = cat(&[
                 v(&PRE),
                 v(&["-i", "cover.png", "-vf", vf, "-an", "-r", "30", "-t", "10"]),
-                enc(p),
-                v(&[
-                    "-b:v",
-                    "60M",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-color_primaries",
-                    "bt709",
-                    "-color_trc",
-                    "bt709",
-                    "-colorspace",
-                    "bt709",
-                ]),
+                codec,
+                v(&["-b:v", "60M", "-pix_fmt", "yuv420p"]),
+                v(&TAGS),
                 v(&["-movflags", "+faststart", "o.mp4"]),
             ]);
             assert_eq!(got, want, "{p:?} square={square}");
@@ -272,6 +280,15 @@ fn user_image_uses_the_still_path_and_user_video_does_not_zoom() {
     let img = VideoSource::UserMedia(PathBuf::from("a.JPG"));
     let a = build_canvas_args(
         &img,
+        None,
+        &CanvasSpec::default(),
+        Path::new("o.mp4"),
+        Platform::Linux,
+    );
+    assert!(a.iter().any(|x| x.contains("zoompan")));
+    let tif = VideoSource::UserMedia(PathBuf::from("a.tiff"));
+    let a = build_canvas_args(
+        &tif,
         None,
         &CanvasSpec::default(),
         Path::new("o.mp4"),
@@ -305,10 +322,25 @@ fn failure_classification() {
         "err.encoder_unavailable"
     );
     assert_eq!(
+        key(classify_failure("Encoder not found")),
+        "err.encoder_unavailable"
+    );
+    assert_eq!(
+        key(classify_failure(
+            "hevc_mf: codec not supported by this device"
+        )),
+        "err.encoder_unavailable"
+    );
+    // fallos al abrir el codificador por parámetros: ffmpeg_failed con detalle
+    let (k, d) = classify_failure("[vost#0:0] Error while opening encoder for output stream #0:0")
+        .key_and_detail();
+    assert_eq!(k, "err.ffmpeg_failed");
+    assert!(d.unwrap().contains("Error while opening encoder"));
+    assert_eq!(
         key(classify_failure(
             "[h264_videotoolbox @ 0x1] cannot create compression session"
         )),
-        "err.encoder_unavailable"
+        "err.ffmpeg_failed"
     );
     assert_eq!(
         key(classify_failure(
@@ -328,6 +360,28 @@ fn missing_sidecar_is_err_sidecar_missing() {
     assert_eq!(e.key_and_detail().0, "err.sidecar_missing");
     let e = probe(&sc, Path::new("x.mp4")).unwrap_err();
     assert_eq!(e.key_and_detail().0, "err.sidecar_missing");
+}
+
+#[test]
+fn i18n_es_en_have_the_same_keys() {
+    let load = |s: &str| -> std::collections::BTreeSet<String> {
+        let m: std::collections::BTreeMap<String, String> = serde_json::from_str(s).unwrap();
+        m.keys().cloned().collect()
+    };
+    let es = load(include_str!("../i18n/es.json"));
+    let en = load(include_str!("../i18n/en.json"));
+    assert_eq!(
+        es.symmetric_difference(&en).collect::<Vec<_>>(),
+        Vec::<&String>::new()
+    );
+    for k in [
+        "err.encoder_unavailable",
+        "err.ffmpeg_failed",
+        "err.sidecar_missing",
+        "err.media_unreadable",
+    ] {
+        assert!(es.contains(k), "{k}");
+    }
 }
 
 // ------------------------------------------------------------------ ejecución
@@ -369,6 +423,10 @@ fn write_wav(path: &Path, secs: u32) {
 
 /// Imagen PNG 1600×900 (con ffmpeg: fuente `color`, un fotograma).
 fn make_png(sc: &SidecarPaths, path: &Path, size: &str) {
+    make_png_color(sc, path, size, "0x3060c0");
+}
+
+fn make_png_color(sc: &SidecarPaths, path: &Path, size: &str, color: &str) {
     run_ffmpeg(
         sc,
         &v(&[
@@ -379,7 +437,7 @@ fn make_png(sc: &SidecarPaths, path: &Path, size: &str) {
             "-f",
             "lavfi",
             "-i",
-            &format!("color=c=0x3060c0:s={size}"),
+            &format!("color=c={color}:s={size}"),
             "-frames:v",
             "1",
             path.to_str().unwrap(),
@@ -524,6 +582,116 @@ fn youtube_output_matches_spec() {
     assert_eq!(o.nb_streams, 2);
     assert!((o.duration - 4.0).abs() < 0.2, "duración {}", o.duration);
     assert_eq!(o.moov_first, Some(true));
+    assert_eq!(o.color_space.as_deref(), Some("bt709"));
+    let boxes = box_types(&out);
+    assert!(boxes.iter().any(|b| b == "stbl"), "{boxes:?}");
+    assert!(
+        !boxes.iter().any(|b| b == "elst"),
+        "hay edit list: {boxes:?}"
+    );
+}
+
+/// Tipos de todas las cajas MP4 (recorre los contenedores moov/trak/edts/mdia/minf/stbl).
+fn box_types(path: &Path) -> Vec<String> {
+    fn walk(d: &[u8], out: &mut Vec<String>) {
+        let mut pos = 0;
+        while pos + 8 <= d.len() {
+            let size = u32::from_be_bytes(d[pos..pos + 4].try_into().unwrap()) as usize;
+            let typ = String::from_utf8_lossy(&d[pos + 4..pos + 8]).into_owned();
+            let size = if size == 0 { d.len() - pos } else { size };
+            if size < 8 || pos + size > d.len() {
+                break;
+            }
+            if ["moov", "trak", "edts", "mdia", "minf", "stbl"].contains(&typ.as_str()) {
+                walk(&d[pos + 8..pos + size], out);
+            }
+            out.push(typ);
+            pos += size;
+        }
+    }
+    let data = std::fs::read(path).unwrap();
+    let mut out = Vec::new();
+    walk(&data, &mut out);
+    out
+}
+
+#[test]
+fn output_is_real_bt709_limited_range() {
+    let Some(sc) = sidecar() else { return };
+    let d = tempfile::tempdir().unwrap();
+    let (png, out, raw) = (
+        d.path().join("c.png"),
+        d.path().join("c.mp4"),
+        d.path().join("f.yuv"),
+    );
+    // RGB (192,48,32): Y' Rec.709 limitado = 16 + 219*(0.2126*192+0.7152*48+0.0722*32)/255 = 82,5
+    make_png_color(&sc, &png, "1600x1600", "0xc03020");
+    let spec = CanvasSpec {
+        seconds: 1.0,
+        ..CanvasSpec::default()
+    };
+    let args = build_canvas_args(
+        &VideoSource::FromCover(png),
+        None,
+        &spec,
+        &out,
+        Platform::current(),
+    );
+    run_ffmpeg(&sc, &args, &|| false).unwrap();
+    assert_eq!(
+        probe(&sc, &out).unwrap().color_space.as_deref(),
+        Some("bt709")
+    );
+    run_ffmpeg(
+        &sc,
+        &v(&[
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            out.to_str().unwrap(),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "yuv420p",
+            raw.to_str().unwrap(),
+        ]),
+        &|| false,
+    )
+    .unwrap();
+    let y = std::fs::read(&raw).unwrap()[0] as i32;
+    assert!((y - 82).abs() <= 3, "Y = {y} (Rec.601 daría ~88)");
+}
+
+#[test]
+fn apple_motion_square_hevc_runs_where_available() {
+    let Some(sc) = sidecar() else { return };
+    if Platform::current() == Platform::Linux {
+        eprintln!(
+            "SKIP: no hay codificador HEVC libre de GPL en Linux (el cuadrado es HEVC en mac/win)"
+        );
+        return;
+    }
+    let d = tempfile::tempdir().unwrap();
+    let (png, out) = (d.path().join("c.png"), d.path().join("a.mp4"));
+    make_png(&sc, &png, "3000x3000");
+    let spec = AppleMotionSpec {
+        seconds: 2.0,
+        ..AppleMotionSpec::default()
+    };
+    let args = build_apple_motion_args(
+        &VideoSource::FromCover(png),
+        &spec,
+        &out,
+        Platform::current(),
+    );
+    run_ffmpeg(&sc, &args, &|| false).unwrap();
+    let o = probe(&sc, &out).unwrap();
+    assert_eq!((o.width, o.height), (3840, 3840));
+    assert_eq!(o.video_codec.as_deref(), Some("hevc"));
 }
 
 #[test]
@@ -547,6 +715,7 @@ fn apple_motion_output_matches_spec_portrait() {
     let o = probe(&sc, &out).unwrap();
     assert_eq!((o.width, o.height), (2048, 2732));
     assert!(!o.has_audio && (o.duration - 2.0).abs() < 0.2, "{o:?}");
+    assert_eq!(o.color_space.as_deref(), Some("bt709"));
 }
 
 #[test]
@@ -571,6 +740,8 @@ fn encoder_failure_is_per_job() {
     args[i + 1] = "encoder_que_no_existe".into();
     let e = run_ffmpeg(&sc, &args, &|| false).unwrap_err();
     assert_eq!(e.key_and_detail().0, "err.encoder_unavailable", "{e}");
+    // un fallo no deja ni la salida ni el .part
+    assert!(!out.exists() && !d.path().join("yt.mp4.part").exists());
 }
 
 #[test]
@@ -612,6 +783,8 @@ fn cancel_kills_ffmpeg() {
         "tardó {:?}",
         t0.elapsed()
     );
+    // cancelar no deja archivo a medias
+    assert!(!out.exists() && !d.path().join("long.mp4.part").exists());
 }
 
 #[test]

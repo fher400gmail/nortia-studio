@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMock, detect, suggestFromName } from '../../ui/backend.js';
+import { createMock, detect, suggestFromName, MOCK_THUMB } from '../../ui/backend.js';
 import { fmtLufs, fmtDbtp, fmtDuration, fmtRate, fmtSpec, fmtBytes, fmtNumber, shortPath } from '../../ui/format.js';
 import { setDict, t, tn } from '../../ui/i18n.js';
 import { isCancelled } from '../../ui/flow.js';
 import { readFileSync } from 'node:fs';
 
 const SAMPLE = '/m/Vera Alcón - Luz de Noviembre (master v3).wav';
-const ALL = ['spotify', 'apple_adm', 'amazon', 'tidal', 'deezer', 'youtube_music', 'distributor_std', 'mp3_promo', 'cover', 'canvas'];
+const ALL = ['spotify', 'apple_adm', 'amazon', 'tidal', 'deezer', 'youtube_music', 'distributor_std', 'mp3_promo', 'cover', 'canvas', 'youtube_video', 'apple_motion'];
+const MEDIA = ['cover', 'canvas', 'youtube_video', 'apple_motion'];
 const meta = { artist: 'Vera Alcón', title: 'Luz de Noviembre' };
 
 test('mock_analyze_returns_bins_and_master', async () => {
@@ -105,7 +106,7 @@ test('tauri_backend_calls_commands_with_exact_names', async () => {
   await be.cancelExport(); await be.pickFolder(); await be.openPath('/x'); await be.systemLang(); await be.appInfo();
   assert.deepEqual(calls.map(c => c[0]), ['analyze', 'plan', 'export', 'cancel_export', 'pick_folder', 'open_path', 'system_lang', 'app_info']);
   assert.deepEqual(calls[0][1], { path: '/a.wav', bins: 600 });
-  assert.deepEqual(calls[1][1], { master: { x: 1 }, meta: { artist: 'a' }, activeIds: ['spotify'] });
+  assert.deepEqual(calls[1][1], { master: { x: 1 }, meta: { artist: 'a' }, activeIds: ['spotify'], mediaInputs: {} });
   assert.deepEqual(calls[2][1], { req: { master_path: '/a.wav' } });
   assert.deepEqual(seen, ['finished']);
   assert.equal(Object.keys(listeners).length, 0, 'se desuscribe al terminar');
@@ -174,4 +175,80 @@ test('tauri_allow_asset_command', async () => {
   const be = detect({ location: { search: '' }, __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke: async (c, a) => { calls.push([c, a]); } } } });
   await be.allowAsset('/x/cover.png');
   assert.deepEqual(calls, [['allow_asset', { path: '/x/cover.png' }]]);
+});
+
+const byId = plan => Object.fromEntries(plan.jobs.map(j => [j.preset_id, j]));
+
+test('mock_plan_media_chips_need_a_cover_or_their_own_file', async () => {
+  const be = createMock({ lang: 'es' });
+  const { master } = await be.analyze(SAMPLE, 10);
+  // sin portada ni material: las cuatro fichas, deshabilitadas con el motivo del motor
+  let j = byId(await be.plan(master, meta, ALL));
+  for (const id of MEDIA) { assert.equal(j[id].enabled, false, id); assert.match(j[id].disabled_reason, /Falta la portada/); }
+  // con portada: todas habilitadas; la portada trae su PNG y Apple Motion sus dos tamaños
+  j = byId(await be.plan(master, { ...meta, cover_path: '/m/portada.jpg' }, ALL));
+  for (const id of MEDIA) assert.equal(j[id].enabled, true, id);
+  assert.match(j.cover.file_name, /\[Portada\] 3000x3000\.jpg$/);
+  assert.match(j.cover.extra_files[0], /\.png$/);
+  assert.match(j.canvas.file_name, /\[Canvas\] 1080x1920\.mp4$/);
+  assert.match(j.youtube_video.file_name, /\[YouTube\] 1080p\.mp4$/);
+  assert.match(j.apple_motion.extra_files[0], /\[Apple Motion\] 2048x2732\.mp4$/);
+  assert.equal(j.apple_motion.subfolder, '02 Apple Music');
+  // un vídeo propio habilita Canvas aunque no haya portada
+  j = byId(await be.plan(master, meta, ALL, { canvas: '/v/mio.mp4' }));
+  assert.equal(j.canvas.enabled, true);
+  assert.equal(j.cover.enabled, false);
+  assert.equal(j.youtube_video.enabled, false);
+});
+
+test('mock_plan_cover_warnings_and_totals', async () => {
+  const be = createMock({ lang: 'en' });
+  const { master } = await be.analyze(SAMPLE, 10);
+  const plan = await be.plan(master, { ...meta, cover_path: '/m/portada-rect.jpg' }, ['cover', 'canvas']);
+  const j = byId(plan);
+  assert.equal(j.cover.warnings.length, 2);
+  assert.match(j.cover.warnings[0], /cropped/);
+  assert.match(j.cover.file_name, /\[Cover\] 3000x3000/);
+  assert.equal(j.canvas.warnings.length, 0);
+  assert.equal(plan.total_files, 3 + 4, 'JPG + PNG + Canvas + 4 documentos');
+});
+
+test('mock_without_sidecar_disables_mp3_and_video_only', async () => {
+  const be = createMock({ sidecar: false });
+  assert.equal((await be.appInfo()).sidecar_available, false);
+  const { master } = await be.analyze(SAMPLE, 10);
+  const j = byId(await be.plan(master, { ...meta, cover_path: '/m/p.jpg' }, ALL));
+  for (const id of ['mp3_promo', 'canvas', 'youtube_video', 'apple_motion']) { assert.equal(j[id].enabled, false, id); assert.match(j[id].disabled_reason, /ffmpeg/); }
+  for (const id of ['spotify', 'cover']) assert.equal(j[id].enabled, true, id);
+});
+
+test('mock_export_lists_extra_files_and_thumbnail_is_a_tiny_png', async () => {
+  const be = createMock({ fast: true });
+  const d = await be.export({ master_path: SAMPLE, out_root: '/out', meta: { ...meta, cover_path: '/m/p.jpg' }, active_ids: ['cover', 'apple_motion'], media_inputs: {} });
+  assert.equal(d.files.length, 2 + 2 + 4);
+  assert.ok(d.files.some(([p]) => p.endsWith('2048x2732.mp4')));
+  const th = await be.mediaThumbnail('/x/video.mp4');
+  assert.equal(th, MOCK_THUMB);
+  assert.match(th, /^data:image\/png;base64,/);
+  assert.ok(th.length < 6000);
+});
+
+test('fmt_spec_for_media_presets', () => {
+  assert.equal(fmtSpec({ preset_id: 'cover', container: 'jpg' }, 'es'), 'JPG + PNG · 3000×3000');
+  assert.equal(fmtSpec({ preset_id: 'canvas', container: 'mp4' }, 'en'), 'MP4 · 1080×1920');
+  assert.equal(fmtSpec({ preset_id: 'apple_motion', container: 'mp4' }, 'en'), 'MP4 · 3840×3840 + 2048×2732');
+});
+
+test('tauri_backend_passes_media_inputs_and_thumbnail_command', async () => {
+  const calls = [];
+  const g = { location: { search: '' }, __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke: async (c, a) => { calls.push([c, a]); return null; }, convertFileSrc: p => p }, event: { listen: async () => () => {} } } };
+  const be = detect(g);
+  await be.plan({ x: 1 }, { artist: 'a' }, ['canvas'], { canvas: '/v/mio.mp4' });
+  await be.mediaThumbnail('/v/mio.mp4');
+  await be.pickFile('media');
+  assert.deepEqual(calls, [
+    ['plan', { master: { x: 1 }, meta: { artist: 'a' }, activeIds: ['canvas'], mediaInputs: { canvas: '/v/mio.mp4' } }],
+    ['media_thumbnail', { path: '/v/mio.mp4' }],
+    ['pick_file', { kind: 'media' }]
+  ]);
 });

@@ -230,7 +230,7 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .gh .sp{flex:1}
 .tiles{display:grid;gap:var(--tgap);grid-template-columns:repeat(6,1fr)}
 .row2{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--tgap)}
-.row2>.d1{grid-column:1}.row2>.d3{grid-column:3/span 3}
+.row2>.d1{grid-column:1}.row2>.d3{grid-column:2/span 5}
 .row2 .tiles{grid-template-columns:repeat(var(--n,1),1fr)}
 .chip{height:var(--chip-h);border-radius:var(--r-chip);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:var(--ink-3);min-width:0;padding:0 4px;
   transition:transform var(--t-spring) var(--spring),background var(--t-base) var(--ease),box-shadow var(--t-base) var(--ease),color var(--t-base) var(--ease)}
@@ -379,3 +379,27 @@ body.still *,body.still *::before,body.still *::after{animation:none!important}
 .banner{flex:none;margin:0;font-size:12.5px;line-height:1.4;font-weight:500;color:var(--err);text-align:center}
 .warnline{margin:0;font-size:12.5px;line-height:1.45;color:var(--err);max-width:560px}
 .warnline b{font-weight:600}
+
+/* ───────────── hito 3: fichas con material propio ───────────── */
+/* la ficha que acepta soltar va en un envoltorio (los controles no pueden anidarse en el botón) */
+.chipw{position:relative;display:block;min-width:0}
+.chipw>.chip{width:100%}
+.chip .mthumb{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.chip.has-media .mono,.chip.on.has-media .mono{background:var(--fill);padding:0;overflow:hidden;box-shadow:inset 0 0 0 1px var(--g-line)}
+.chip.has-media:not(.on) .mthumb{filter:grayscale(1)}
+.chipw .mx,.chipw .mp{position:absolute;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;z-index:3;cursor:pointer;background:var(--card);color:var(--ink-2);box-shadow:0 0 0 1px var(--line),var(--g-shadow);transition:opacity var(--t-base) var(--ease),transform var(--t-spring) var(--spring),background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.chipw .mx .ic,.chipw .mp .ic{width:11px;height:11px}
+.chipw .mx{top:7px;left:7px}
+.chipw .mp{right:7px;bottom:7px;opacity:0;transform:scale(.8)}
+.chipw:hover .mp,.chipw:focus-within .mp,.chipw .mp:focus-visible{opacity:1;transform:none}
+.chipw .mx:hover,.chipw .mp:hover{background:var(--ink);color:var(--bg)}
+.chipw .mx:focus-visible,.chipw .mp:focus-visible{outline:2px solid var(--brand-ink);outline-offset:2px}
+/* sin material ni portada: el hueco del icono invita a soltar */
+.chipw .chip.dis:not(.has-media) .mono{outline:1.5px dashed var(--ctl);outline-offset:-1.5px}
+/* arrastrando encima: halo de acento y la ficha se despierta aunque esté deshabilitada */
+.chipw.over .chip{transform:scale(1.045);background:var(--card);box-shadow:var(--g-shadow-lift),0 0 0 3px var(--brand),0 0 26px 2px color-mix(in srgb,var(--brand) 28%,transparent)}
+.chipw.over .chip.dis>:not(.ck){opacity:1!important}
+.chipw.over .chip .mono{transform:scale(1.08)}
+/* avisos del motor en el estado listo (calma: ámbar, nunca el acento) */
+.noteline{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-2);max-width:560px}
+.noteline b{font-weight:600;color:var(--amber-ink)}

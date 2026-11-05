@@ -8,8 +8,8 @@ const { server, base } = await serve();
 const browser = await chromium.launch();
 
 const T = {
-  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, lame: /falta lame/i, dist: 'Distribuidora' },
-  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, lame: /lame is missing/i, dist: 'Distributor' }
+  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, sidecar: /falta ffmpeg/i, dist: 'Distribuidora' },
+  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, sidecar: /ffmpeg is missing/i, dist: 'Distributor' }
 };
 
 let failures = 0;
@@ -56,18 +56,34 @@ async function run(lang) {
   assert.equal(await page.inputValue('input[data-f=title]'), 'Luz de Noviembre');
   assert.match((await page.textContent('.lpill')).trim(), tx.lufs, `${lang}: pastilla de loudness`);
 
-  // el motor (mock) deshabilita Portada y Canvas: tooltip con el motivo
-  for (const id of ['portada', 'canvas']) {
+  // el motor (mock) deshabilita las 4 fichas de material sin portada: tooltip con el motivo
+  for (const id of ['portada', 'canvas', 'ytv', 'motion']) {
     const chip = page.locator(`.chip[data-id=${id}]`);
     assert.equal(await chip.getAttribute('aria-disabled'), 'true');
     assert.equal(await chip.getAttribute('aria-checked'), 'false');
     assert.ok((await chip.getAttribute('title') || '').length > 5, `${lang}: tooltip de ${id}`);
   }
-  assert.match(await page.locator('.chip[data-id=canvas]').getAttribute('title'), lang === 'es' ? /Aún no disponible/ : /Not yet available/);
+  assert.match(await page.locator('.chip[data-id=canvas]').getAttribute('title'), lang === 'es' ? /Falta la portada/ : /The cover is missing/);
   const before = await page.locator('.chip.on').count();
   await page.click('.chip[data-id=canvas]', { force: true });
   assert.equal(await page.locator('.chip.on').count(), before, `${lang}: la ficha deshabilitada no se activa`);
   assert.equal((await page.textContent('.row2 .d1 .gh')).trim(), tx.dist);
+
+  // soltar un vídeo propio sobre Canvas: la ficha se habilita, muestra miniatura y × para quitarlo
+  const dropOn = (sel, name, type) => page.evaluate(([s, n, ty]) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(8)], n, { type: ty }));
+    document.querySelector(s).dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }, [sel, name, type]);
+  await dropOn('.chipw[data-drop=canvas]', 'bucle.mp4', 'video/mp4');
+  await page.waitForSelector('.chip[data-id=canvas].has-media');
+  assert.equal(await page.locator('.chip[data-id=canvas]').getAttribute('aria-disabled'), null, `${lang}: Canvas habilitado con material propio`);
+  assert.equal(await page.locator('.chip[data-id=canvas] .mthumb').count(), 1);
+  assert.match(await page.locator('.chip[data-id=canvas]').getAttribute('title'), /bucle\.mp4/);
+  assert.equal(await page.locator('.chip[data-id=ytv]').getAttribute('aria-disabled'), 'true', `${lang}: el resto sigue sin portada`);
+  await page.click('[data-act=media-clear][data-mid=canvas]');
+  await page.waitForSelector('.chip[data-id=canvas]:not(.has-media)');
+  assert.equal(await page.locator('.chip[data-id=canvas]').getAttribute('aria-disabled'), 'true');
 
   // alternar una ficha cambia el resumen
   const sum0 = (await page.textContent('[data-sum]')).trim();
@@ -89,10 +105,11 @@ async function run(lang) {
   await page.waitForSelector('.dzone b');
   assert.equal((await page.textContent('.dzone b')).trim(), tx.drop);
 
-  // mp3 sin lame: ficha deshabilitada con aviso
-  await page.goto(q('&lame=0&state=normal'));
+  // sin ffmpeg: ficha deshabilitada con aviso
+  await page.goto(q('&sidecar=0&state=normal'));
   await page.waitForSelector('html[data-ready]');
-  assert.match(await page.locator('.chip[data-id=mp3]').getAttribute('title'), tx.lame);
+  assert.match(await page.locator('.chip[data-id=mp3]').getAttribute('title'), tx.sidecar);
+  assert.equal(await page.locator('.chip[data-id=ytv]').getAttribute('aria-disabled'), 'true');
 
   // un WAV de 16 bit desactiva Apple Music con el motivo del motor
   await page.goto(q('&state=empty'));

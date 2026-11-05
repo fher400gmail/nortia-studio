@@ -3,7 +3,8 @@
    Tauri en la app) y los textos de i18n/{es,en}.json. Para abrirla en un navegador sirve la carpeta
    por http (p. ej. `python3 -m http.server`): los módulos ES y fetch no funcionan con file://.
    Querystring: ?backend=mock|tauri &lang=es|en &theme=light|dark &state=empty|normal|creating|done
-                &os=mac|win &still=1 &fast=1 &pop=adv|more|tree|detail &drag=1 &lame=0 */
+                &os=mac|win &still=1 &fast=1 &pop=adv|more|tree|detail &drag=1 &sidecar=0
+                (mock) &cover=1|rect &own=canvas,ytv,motion  → portada y material propio de ejemplo */
 import { backend } from './backend.js';
 import { loadLang, t, tn, getLang } from './i18n.js';
 import { isCancelled } from './flow.js';
@@ -11,13 +12,20 @@ import { fmtLufs, fmtDbtp, fmtDuration, fmtMB, fmtRate, fmtSpec, shortPath } fro
 
 /* ───────────── Data: tabla de fichas de la interfaz ↔ destinos del motor ───────────── */
 const Data = (() => {
-  const ids = ['spotify', 'apple', 'amazon', 'tidal', 'deezer', 'ytm', 'dist', 'mp3', 'portada', 'canvas'];
+  const ids = ['spotify', 'apple', 'amazon', 'tidal', 'deezer', 'ytm', 'dist', 'mp3', 'portada', 'canvas', 'ytv', 'motion'];
   /* ficha → preset del motor (presets.json) */
-  const preset = { spotify: 'spotify', apple: 'apple_adm', amazon: 'amazon', tidal: 'tidal', deezer: 'deezer', ytm: 'youtube_music', dist: 'distributor_std', mp3: 'mp3_promo', portada: 'cover', canvas: 'canvas' };
+  const preset = { spotify: 'spotify', apple: 'apple_adm', amazon: 'amazon', tidal: 'tidal', deezer: 'deezer', ytm: 'youtube_music', dist: 'distributor_std', mp3: 'mp3_promo', portada: 'cover', canvas: 'canvas', ytv: 'youtube_video', motion: 'apple_motion' };
+  /* fichas que aceptan material propio (imagen o vídeo arrastrado); la de portada es la portada de la entrega */
+  const media = new Set(['portada', 'canvas', 'ytv', 'motion']);
+  /* fichas que necesitan el sidecar de ffmpeg (MP3 y vídeo) */
+  const needsSidecar = new Set(['mp3', 'canvas', 'ytv', 'motion']);
+  /* Apple Motion pesa y tarda: empieza apagada (default_on: false en presets.json) */
+  const defaultOn = id => id !== 'motion';
+  const defaults = () => new Set(ids.filter(defaultOn));
   const byPreset = Object.fromEntries(Object.entries(preset).map(([k, v]) => [v, k]));
   const ext = { flac: '.flac', wav: '.wav', mp3: '.mp3', mp4: '.mp4', jpg: '.jpg', png: '.png' };
   const SAMPLE = 'Vera Alcón - Luz de Noviembre (master v3).wav';
-  return { ids, preset, byPreset, ext, SAMPLE };
+  return { ids, preset, byPreset, ext, SAMPLE, media, needsSidecar, defaultOn, defaults };
 })();
 
 /* ───────────── Icons ───────────── */
@@ -36,7 +44,9 @@ const Icons = (() => {
     dist: g('<path d="M4 12l16-8-6 16-3-7z"/>'),
     mp3: g('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
     portada: g('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/>'),
-    canvas: g('<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M10 8.5v7l5.5-3.5z"/>')
+    canvas: g('<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M10 8.5v7l5.5-3.5z"/>'),
+    ytv: g('<rect x="3" y="4.5" width="18" height="11.5" rx="2"/><path d="M10.2 7.6v5.3l4.3-2.65z" fill="currentColor"/><path d="M6.5 19.5h11"/>'),
+    motion: g('<rect x="8" y="8" width="12.5" height="12.5" rx="2"/><path d="M16 4H6.5A2.5 2.5 0 0 0 4 6.5V16"/>')
   };
   return {
     gly,
@@ -50,6 +60,7 @@ const Icons = (() => {
     img: s('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/>'),
     down: s('<path d="M6 9l6 6 6-6"/>', 'stroke-width="2"'),
     plus: s('<path d="M12 5v14M5 12h14"/>', 'stroke-width="2"'),
+    x: s('<path d="M7 7l10 10M17 7L7 17"/>', 'stroke-width="2.4"'),
     moon: s('<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>'),
     sun: s('<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>'),
     checkDraw: '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5.5 12.5l4.2 4.2L18.5 8"/></svg>',
@@ -161,8 +172,9 @@ const Store = (() => {
   const st = {
     mode: 'idle', loaded: false, busy: false, artist: '', title: '', m: {}, cover: null, coverPath: null,
     err: '', banner: '', pp: 0, pt: 0, fresh: true, flash: 0, over: false,
-    master: null, waveform: [], plan: null, planSeq: 0, outRoot: '', info: { lame_available: true, os: 'mac' },
-    on: new Set(Data.ids), rows: [], delivery: null, cancelled: false, canceling: false
+    master: null, waveform: [], plan: null, planSeq: 0, outRoot: '', info: { sidecar_available: true, os: 'mac' },
+    media: {}, notes: [],
+    on: Data.defaults(), rows: [], delivery: null, cancelled: false, canceling: false
   };
   if (Q.has('drag')) st.over = true;
 
@@ -171,14 +183,19 @@ const Store = (() => {
   const disabledReason = id => {
     const j = job(id);
     if (j && !j.enabled) return j.disabled_reason || t('err.generic');
-    if (id === 'mp3' && st.info && st.info.lame_available === false) return t('lame.missing');
+    if (Data.needsSidecar.has(id) && st.info && st.info.sidecar_available === false) return t('sidecar.missing');
     return null;
   };
+  /* material propio de una ficha: { name, thumb } o null. La portada es la de la entrega. */
+  const own = id => id === 'portada' ? (st.cover ? { name: baseName(st.coverPath) || t('cover.alt'), thumb: st.cover } : null) : (st.media[id] || null);
+  /* motor: ruta del material propio por destino (la portada viaja en `meta.cover_path`) */
+  const mediaInputs = () => Object.fromEntries(Object.entries(st.media).map(([id, m]) => [Data.preset[id], m.path]));
+  const notesOf = jobs => [...new Set(jobs.flatMap(j => j.warnings || []))];
   const selected = () => Data.ids.filter(id => st.on.has(id) && !disabledReason(id));
   const selectedJobs = () => selected().map(id => job(id)).filter(j => j && j.enabled);
-  const allOn = () => Data.ids.every(id => disabledReason(id) || st.on.has(id));
+  const allOn = () => Data.ids.every(id => disabledReason(id) || st.on.has(id) === Data.defaultOn(id));
   const docs = () => [t('doc.readme'), t('doc.loudness_report'), t('doc.sheet_csv'), t('doc.sheet_txt')];
-  const stats = () => { const js = selectedJobs(); return { n: js.length + 4, bytes: js.reduce((a, j) => a + j.estimated_bytes, 0) + 10000 }; };
+  const stats = () => { const js = selectedJobs(); return { n: js.reduce((a, j) => a + 1 + (j.extra_files || []).length, 4), bytes: js.reduce((a, j) => a + j.estimated_bytes, 0) + 10000 }; };
   const meta = () => {
     const nz = v => { v = (v || '').trim(); return v ? v : null; };
     return {
@@ -186,15 +203,28 @@ const Store = (() => {
       year: nz(st.m.year), isrc: nz(st.m.isrc), composer: nz(st.m.comp), label: nz(st.m.label), copyright: null, cover_path: st.coverPath
     };
   };
-  return { st, job, disabledReason, selected, selectedJobs, allOn, docs, stats, meta };
+  return { st, job, disabledReason, own, mediaInputs, notesOf, selected, selectedJobs, allOn, docs, stats, meta };
 })();
 const S = Store.st;
 
 /* ───────────── Views ───────────── */
 const Views = (() => {
+  /* tooltip de una ficha: el motivo si está deshabilitada; si no, el material propio o la pista de soltar */
+  const chipTitle = id => {
+    const why = Store.disabledReason(id), own = Store.own(id);
+    if (why) return why;
+    const j = Store.job(id), notes = j && j.warnings && j.warnings.length ? ' ' + j.warnings.join(' ') : '';
+    if (own) return t('media.own', { name: own.name }) + notes;
+    return (Data.media.has(id) ? t('media.hint.' + id) : '') + notes;
+  };
   const dest = id => {
-    const why = Store.disabledReason(id), on = S.on.has(id) && !why;
-    return `<button class="chip glass ${on ? 'on' : ''} ${why ? 'dis' : ''}" role="switch" aria-checked="${on}" ${why ? `aria-disabled="true" title="${esc(why)}"` : ''} data-act="toggle" data-id="${id}"><span class="mono">${Icons.gly[id]}</span><span class="cn">${esc(t('chip.' + id))}</span><i class="ck">${Icons.checkDraw}</i></button>`;
+    const why = Store.disabledReason(id), on = S.on.has(id) && !why, own = Store.own(id), title = chipTitle(id);
+    const mono = own && own.thumb ? `<img class="mthumb" src="${esc(own.thumb)}" alt="">` : Icons.gly[id];
+    const btn = `<button class="chip glass ${on ? 'on' : ''} ${why ? 'dis' : ''} ${own ? 'has-media' : ''}" role="switch" aria-checked="${on}" ${why ? 'aria-disabled="true"' : ''} ${title ? `title="${esc(title)}"` : ''} data-act="toggle" data-id="${id}"><span class="mono">${mono}</span><span class="cn">${esc(t('chip.' + id))}</span><i class="ck">${Icons.checkDraw}</i></button>`;
+    if (!Data.media.has(id)) return btn;
+    const clear = own ? `<span class="mx" role="button" tabindex="0" data-act="media-clear" data-mid="${id}" aria-label="${esc(t('media.clear', { name: own.name }))}" title="${esc(t('media.clear', { name: own.name }))}">${Icons.x}</span>` : '';
+    const pick = `<span class="mp" role="button" tabindex="0" data-act="media-pick" data-mid="${id}" aria-label="${esc(t('media.pick'))}" title="${esc(t('media.pick'))}">${Icons.plus}</span>`;
+    return `<div class="chipw" data-drop="${id}">${btn}${clear}${pick}</div>`;
   };
   const dur = () => (S.master ? S.master.duration_secs : 0);
   const timeTxt = () => S.pp > 0 ? fmtDuration(S.pp * dur()) + ' / ' + fmtDuration(dur()) : fmtDuration(dur());
@@ -228,6 +258,7 @@ const Views = (() => {
       const f = S.delivery ? S.delivery.failed : [];
       return `${hero()}<div class="donebox">${Icons.doneMark}<h1>${t('done.title', { n: '<span data-n></span>', name: '<span data-fname></span>' })}</h1>
       ${f.length ? `<p class="warnline" role="alert"><b>${t('done.failed')}</b> ${f.map(([id, msg]) => esc((Data.byPreset[id] ? t('chip.long.' + Data.byPreset[id]) : id) + ': ' + msg)).join(' · ')}</p>` : ''}
+      ${S.notes.length ? `<p class="noteline"><b>${t('done.notes')}</b> ${S.notes.map(esc).join(' ')}</p>` : ''}
       <div class="acts"><button class="bb pri" data-act="open">${Icons.folder}<span>${t('open')}</span></button><button class="bb glass" data-act="again">${Icons.plus}<span>${t('again')}</span></button></div>${sum()}</div>`;
     }
     return `${hero()}
@@ -236,11 +267,11 @@ const Views = (() => {
       <div class="dests"><div><div class="gh"><span>${t('group.platforms')}</span><span class="sp"></span>${preset()}${sum()}</div>
         <div class="tiles">${['spotify', 'apple', 'amazon', 'tidal', 'deezer', 'ytm'].map(dest).join('')}</div></div>
         <div class="row2"><div class="d1"><div class="gh">${t('group.dist')}</div><div class="tiles" style="--n:1">${dest('dist')}</div></div>
-        <div class="d3"><div class="gh">${t('group.extras')}</div><div class="tiles" style="--n:3">${['mp3', 'portada', 'canvas'].map(dest).join('')}</div></div></div></div>
+        <div class="d3"><div class="gh">${t('group.extras')}</div><div class="tiles" style="--n:5">${['mp3', 'portada', 'canvas', 'ytv', 'motion'].map(dest).join('')}</div></div></div></div>
       ${S.banner ? `<p class="banner" role="alert">${esc(S.banner)}</p>` : ''}
       <button class="go" data-act="create">${Icons.folderPlus}${t('create')}</button>${folderLine()}`;
   }
-  return { html, row, timeTxt, dest };
+  return { html, row, timeTxt, dest, chipTitle };
 })();
 
 /* ───────────── Plan: el motor decide qué destinos hay, nombres y tamaños ───────────── */
@@ -251,7 +282,7 @@ const Plan = (() => {
     if (!S.loaded || !S.master) return;
     const seq = ++S.planSeq;
     try {
-      const plan = await backend.plan(S.master, Store.meta(), presetIds());
+      const plan = await backend.plan(S.master, Store.meta(), presetIds(), Store.mediaInputs());
       if (seq !== S.planSeq) return;
       S.plan = plan;
     } catch (e) { console.warn('plan', e); }
@@ -272,7 +303,7 @@ const App = (() => {
         return { fo: parts.length > 1 ? parts.slice(0, -1).join('/') : '', name: parts[parts.length - 1], bytes };
       });
     }
-    const f = Store.selectedJobs().map(j => ({ fo: j.subfolder, name: j.file_name, bytes: j.estimated_bytes }));
+    const f = Store.selectedJobs().flatMap(j => [{ fo: j.subfolder, name: j.file_name, bytes: j.estimated_bytes }, ...(j.extra_files || []).map(name => ({ fo: j.subfolder, name, bytes: 0 }))]);
     Store.docs().forEach(d => f.push({ fo: '', name: d, bytes: 0 }));
     return f;
   }
@@ -290,7 +321,8 @@ const App = (() => {
     if (tr) {
       let last = null;
       let h = `<div class="tr dir">${Icons.folder}<div class="nm">${esc(folderName())}/</div></div>`;
-      entries.filter(x => x.fo).forEach(x => { if (x.fo !== last) { last = x.fo; h += `<div class="tr dir" style="padding-left:16px">${Icons.folder}<div class="nm">${esc(x.fo)}/</div></div>`; } h += `<div class="tr" style="padding-left:32px">${Icons.file}<div class="nm">${esc(x.name)}</div><span class="sz">${fmtMB(x.bytes, lg())}</span></div>`; });
+      /* agrupadas por carpeta (varios destinos comparten carpeta) */
+      entries.filter(x => x.fo).sort((a, b) => (a.fo < b.fo ? -1 : a.fo > b.fo ? 1 : 0)).forEach(x => { if (x.fo !== last) { last = x.fo; h += `<div class="tr dir" style="padding-left:16px">${Icons.folder}<div class="nm">${esc(x.fo)}/</div></div>`; } h += `<div class="tr" style="padding-left:32px">${Icons.file}<div class="nm">${esc(x.name)}</div><span class="sz">${fmtMB(x.bytes, lg())}</span></div>`; });
       entries.filter(x => !x.fo).forEach(x => h += `<div class="tr" style="padding-left:18px">${Icons.file}<div class="nm">${esc(x.name)}</div><span class="sz">${x.bytes < 1e4 ? '&lt;1 KB' : fmtMB(x.bytes, lg())}</span></div>`);
       tr.innerHTML = h;
     }
@@ -302,7 +334,9 @@ const App = (() => {
     $$(`[data-id="${id}"]`).forEach(b => {
       const why = Store.disabledReason(id), on = S.on.has(id) && !why;
       b.classList.toggle('on', on); b.classList.toggle('dis', !!why); b.setAttribute('aria-checked', on);
-      if (why) { b.setAttribute('aria-disabled', 'true'); b.title = why; } else { b.removeAttribute('aria-disabled'); b.removeAttribute('title'); }
+      const tt = Views.chipTitle(id);
+      if (why) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
+      if (tt) b.title = tt; else b.removeAttribute('title');
       if (bump && on) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
     });
   }
@@ -394,9 +428,10 @@ const Create = (() => {
     const jobs = Store.selectedJobs();
     Player.stop();
     S.rows = jobRows(jobs); S.mode = 'creating'; S.delivery = null; S.cancelled = false; S.canceling = false; S.banner = '';
+    S.notes = Store.notesOf(jobs);
     App.render();
     if (STILL) return still();
-    const req = { master_path: S.master.path, out_root: S.outRoot, meta: Store.meta(), active_ids: jobs.map(j => j.preset_id) };
+    const req = { master_path: S.master.path, out_root: S.outRoot, meta: Store.meta(), active_ids: jobs.map(j => j.preset_id), media_inputs: Store.mediaInputs() };
     try {
       const d = await backend.export(req, onEvent);
       if (isCancelled(S.cancelled, d)) { S.mode = 'idle'; S.rows = []; App.render(); return; }
@@ -427,7 +462,7 @@ const Events = (() => {
       S.master = master; S.waveform = waveform.bins; S.plan = null;
       S.err = ''; S.banner = ''; S.loaded = true; S.fresh = true; S.flash = 1; S.over = false;
       S.artist = master.suggested_artist || S.artist; S.title = master.suggested_title || '';
-      S.on = new Set(Data.ids);
+      S.on = Data.defaults();
       await Plan.run();
     } catch (e) {
       const msg = errText(e);
@@ -449,9 +484,37 @@ const Events = (() => {
   async function loadCover(src) {
     if (!src) return;
     if (!S.loaded) return hint(t('drop.need_song'));
-    if (typeof src === 'string') { await backend.allowAsset(src); S.coverPath = src; S.cover = backend.convertFileSrc(src); }
-    else { if (!src.type.startsWith('image/')) return; S.coverPath = src.name; S.cover = URL.createObjectURL(src); }
-    App.render(); Plan.schedule();
+    if (typeof src === 'string') {
+      if (!/\.(png|jpe?g)$/i.test(src)) return hint(t('cover.bad_type'));
+      await backend.allowAsset(src); S.coverPath = src; S.cover = backend.convertFileSrc(src);
+    } else { if (!/^image\/(png|jpeg)$/.test(src.type)) return hint(t('cover.bad_type')); S.coverPath = src.name; S.cover = URL.createObjectURL(src); }
+    await Plan.run(); App.render();
+  }
+  /* material propio de una ficha (imagen o vídeo): ruta (app) o File (navegador). La ficha de portada es la portada de la entrega. */
+  const MEDIA_RE = /\.(jpe?g|png|webp|mp4|mov|m4v|mkv|webm)$/i;
+  async function loadMedia(id, src) {
+    if (!src || !Data.media.has(id)) return;
+    if (!S.loaded) return hint(t('drop.need_song'));
+    if (id === 'portada') return loadCover(src);
+    const file = typeof src !== 'string';
+    const name = file ? src.name : baseName(src);
+    if (!(MEDIA_RE.test(name) || (file && /^(image|video)\//.test(src.type)))) return hint(t('media.bad_type'));
+    let thumb;
+    try {
+      if (file) thumb = src.type.startsWith('image/') ? URL.createObjectURL(src) : await backend.mediaThumbnail(name);
+      else { await backend.allowAsset(src); thumb = await backend.mediaThumbnail(src); }
+    } catch (e) { return hint(errText(e)); }
+    S.media[id] = { path: file ? name : src, name, thumb };
+    await Plan.run(); App.render();
+  }
+  async function clearMedia(id) {
+    if (id === 'portada') { S.cover = null; S.coverPath = null; } else delete S.media[id];
+    await Plan.run(); App.render();
+  }
+  let pickId = null;
+  async function pickMedia(id) {
+    if (backend.kind === 'tauri') { const p = await backend.pickFile(id === 'portada' ? 'image' : 'media'); if (p) await loadMedia(id, p); }
+    else { pickId = id; const f = $('#fmedia'); f.accept = id === 'portada' ? 'image/png,image/jpeg' : 'image/*,video/*'; f.click(); }
   }
   const missing = () => !S.loaded ? 'song' : !S.artist.trim() ? 'artist' : !S.title.trim() ? 'title' : !Store.selected().length ? 'dest' : null;
   function nudge(k) {
@@ -481,8 +544,8 @@ const Events = (() => {
   }
   function again() {
     Player.stop();
-    Object.assign(S, { mode: 'idle', loaded: false, cover: null, coverPath: null, artist: '', title: '', m: {}, master: null, waveform: [], plan: null, delivery: null, rows: [], banner: '', err: '' });
-    S.on = new Set(Data.ids);
+    Object.assign(S, { mode: 'idle', loaded: false, cover: null, coverPath: null, artist: '', title: '', m: {}, master: null, waveform: [], plan: null, delivery: null, rows: [], banner: '', err: '', media: {}, notes: [] });
+    S.on = Data.defaults();
     App.render();
   }
   function tauriDrop(p) {
@@ -490,11 +553,12 @@ const Events = (() => {
     const clear = () => $$('.over').forEach(z => z.classList.remove('over'));
     if (p.type === 'leave') return clear();
     if (S.mode !== 'idle') return;
-    if (p.type === 'enter' || p.type === 'over') { clear(); const z = at && at.closest('.dz,.cov'); if (z) z.classList.add('over'); return; }
+    if (p.type === 'enter' || p.type === 'over') { clear(); const z = at && at.closest('.dz,.cov,[data-drop]'); if (z) z.classList.add('over'); return; }
     if (p.type === 'drop') {
       clear();
       const f = p.paths && p.paths[0]; if (!f) return;
-      const run = /\.(png|jpe?g)$/i.test(f) ? loadCover(f) : (at && at.closest('.cov')) ? null : loadSong(f);
+      const chip = at && at.closest('[data-drop]');
+      const run = chip ? loadMedia(chip.dataset.drop, f) : /\.(png|jpe?g)$/i.test(f) ? loadCover(f) : (at && at.closest('.cov')) ? null : loadSong(f);
       Promise.resolve(run).catch(e => console.warn('drop', e));
     }
   }
@@ -506,9 +570,11 @@ const Events = (() => {
       if (!a) return; const act = a.dataset.act;
       if (act === 'pop') return App.togglePop(a.dataset.p);
       if (act === 'toggle') { if (S.mode !== 'idle' || Store.disabledReason(a.dataset.id)) return; S.on.has(a.dataset.id) ? S.on.delete(a.dataset.id) : S.on.add(a.dataset.id); App.setDest(a.dataset.id, 1); App.live(); }
-      else if (act === 'preset') { Data.ids.forEach(id => { S.on.add(id); App.setDest(id, !Store.disabledReason(id)); }); App.live(); }
+      else if (act === 'preset') { Data.ids.forEach(id => { if (Data.defaultOn(id)) S.on.add(id); else S.on.delete(id); App.setDest(id, Data.defaultOn(id) && !Store.disabledReason(id)); }); App.live(); }
       else if (act === 'song') pickSong();
       else if (act === 'cover') pickCover();
+      else if (act === 'media-pick') pickMedia(a.dataset.mid);
+      else if (act === 'media-clear') clearMedia(a.dataset.mid);
       else if (act === 'play') Player.toggle();
       else if (act === 'folder') backend.pickFolder().then(p => { if (p) { S.outRoot = p; App.live(); } });
       else if (act === 'create') create();
@@ -516,18 +582,18 @@ const Events = (() => {
       else if (act === 'again') again();
       else if (act === 'open') open();
     });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') { const o = $('.pop.open'); const tr = o && $(`[aria-controls="${o.id}"]`); App.closePops(); if (tr) tr.focus(); } if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.cov')) { e.preventDefault(); e.target.click(); } });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { const o = $('.pop.open'); const tr = o && $(`[aria-controls="${o.id}"]`); App.closePops(); if (tr) tr.focus(); } if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.cov,.mx,.mp')) { e.preventDefault(); e.target.click(); } });
     document.addEventListener('input', e => {
       const i = e.target.closest('input[data-f]'); if (i) { S[i.dataset.f] = i.value; App.live(); Plan.schedule(); }
       const m = e.target.closest('input[data-m]'); if (m) { S.m[m.dataset.m] = m.value; if (m.dataset.m === 'ver') Plan.schedule(); }
     });
-    document.addEventListener('change', e => { if (e.target.id === 'fsong') { const f = e.target.files[0]; if (f) loadSong(f.name); e.target.value = ''; } if (e.target.id === 'fcov') { loadCover(e.target.files[0]).catch(err => console.warn(err)); e.target.value = ''; } });
-    ['dragenter', 'dragover'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); const z = e.target.closest('.dz,.cov'); if (z) z.classList.add('over'); }));
+    document.addEventListener('change', e => { if (e.target.id === 'fsong') { const f = e.target.files[0]; if (f) loadSong(f.name); e.target.value = ''; } if (e.target.id === 'fcov') { loadCover(e.target.files[0]).catch(err => console.warn(err)); e.target.value = ''; } if (e.target.id === 'fmedia') { const f = e.target.files[0], id = pickId; e.target.value = ''; if (f && id) loadMedia(id, f).catch(err => console.warn(err)); } });
+    ['dragenter', 'dragover'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); const z = e.target.closest('.dz,.cov,[data-drop]'); if (z) z.classList.add('over'); }));
     ['dragleave', 'drop'].forEach(n => document.addEventListener(n, e => { e.preventDefault(); $$('.over').forEach(z => z.classList.remove('over')); }));
-    document.addEventListener('drop', e => { if (S.mode !== 'idle') return; const f = e.dataTransfer.files[0]; if (!f) return; const run = e.target.closest('.cov') ? loadCover(f) : e.target.closest('.dz') ? (f.type.startsWith('image/') ? loadCover(f) : loadSong(f.name)) : null; Promise.resolve(run).catch(err => console.warn('drop', err)); });
+    document.addEventListener('drop', e => { if (S.mode !== 'idle') return; const f = e.dataTransfer.files[0]; if (!f) return; const chip = e.target.closest('[data-drop]'); const run = chip ? loadMedia(chip.dataset.drop, f) : e.target.closest('.cov') ? loadCover(f) : e.target.closest('.dz') ? (f.type.startsWith('image/') ? loadCover(f) : loadSong(f.name)) : null; Promise.resolve(run).catch(err => console.warn('drop', err)); });
     if (backend.kind === 'tauri') backend.onFileDrop(tauriDrop);
   }
-  return { init, loadSong };
+  return { init, loadSong, loadMedia };
 })();
 
 /* ───────────── Boot ───────────── */
@@ -536,6 +602,18 @@ function applyStaticText() {
   $$('[data-i18n]').forEach(e => e.textContent = t(e.dataset.i18n));
   $$('[data-i18n-aria]').forEach(e => e.setAttribute('aria-label', t(e.dataset.i18nAria)));
   $$('[data-i18n-title]').forEach(e => e.title = t(e.dataset.i18nTitle));
+}
+
+/* mock/capturas: ?cover=1|rect pone una portada de ejemplo y ?own=canvas,ytv,motion material propio en esas fichas */
+async function mockMedia() {
+  const cover = Q.get('cover'), own = (Q.get('own') || '').split(',').filter(id => Data.media.has(id) && id !== 'portada');
+  const names = { canvas: 'canvas-bucle.mp4', ytv: 'video-letra.mp4', motion: 'animacion-portada.mov' };
+  if (cover) {
+    S.coverPath = cover === 'rect' ? '/mock/portada-rect.jpg' : '/mock/portada.jpg';
+    S.cover = await backend.mediaThumbnail(S.coverPath);
+  }
+  for (const id of own) S.media[id] = { path: '/mock/' + names[id], name: names[id], thumb: await backend.mediaThumbnail(names[id]) };
+  if (cover || own.length) { await Plan.run(); App.render(); }
 }
 
 async function boot() {
@@ -559,10 +637,12 @@ async function boot() {
   if (state === 'empty') App.render();
   else {
     await Events.loadSong(Data.SAMPLE);
+    if (backend.kind === 'mock') await mockMedia();
     if (state === 'creating') await Create.start();
     else if (state === 'done') {
       const jobs = Store.selectedJobs();
-      S.delivery = await backend.export({ master_path: S.master.path, out_root: S.outRoot, meta: Store.meta(), active_ids: jobs.map(j => j.preset_id) }, () => {});
+      S.delivery = await backend.export({ master_path: S.master.path, out_root: S.outRoot, meta: Store.meta(), active_ids: jobs.map(j => j.preset_id), media_inputs: Store.mediaInputs() }, () => {});
+      S.notes = Store.notesOf(jobs);
       S.mode = 'done'; App.render();
     }
   }

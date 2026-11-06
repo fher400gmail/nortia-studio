@@ -156,9 +156,11 @@ fn embedded_cover_is_capped_at_1400_px() {
     assert_eq!(APIC_MAX_SIDE, 1400);
     let d = tempfile::tempdir().unwrap();
     let big = d.path().join("big.png");
-    image::RgbImage::from_fn(3000, 3000, |x, y| image::Rgb([(x / 12) as u8, (y / 12) as u8, 90]))
-        .save(&big)
-        .unwrap();
+    image::RgbImage::from_fn(3000, 3000, |x, y| {
+        image::Rgb([(x / 12) as u8, (y / 12) as u8, 90])
+    })
+    .save(&big)
+    .unwrap();
     let (mime, bytes) = embedded_cover(&big).unwrap();
     assert_eq!(mime, "image/jpeg");
     let img = image::load_from_memory(&bytes).unwrap();
@@ -174,7 +176,9 @@ fn embedded_cover_is_capped_at_1400_px() {
     assert_eq!(bytes, std::fs::read(&small).unwrap());
 
     let png = d.path().join("small.png");
-    image::RgbImage::from_pixel(1400, 900, image::Rgb([1, 2, 3])).save(&png).unwrap();
+    image::RgbImage::from_pixel(1400, 900, image::Rgb([1, 2, 3]))
+        .save(&png)
+        .unwrap();
     let (mime, bytes) = embedded_cover(&png).unwrap();
     assert_eq!(mime, "image/png");
     assert_eq!(bytes, std::fs::read(&png).unwrap());

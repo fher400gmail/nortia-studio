@@ -60,32 +60,81 @@ fn all_command_lines(p: Platform) -> Vec<(String, Vec<String>)> {
     let mut add = |n: &str, a: Vec<String>| v.push((format!("{n} [{p:?}]"), a));
 
     // Canvas: portada, imagen propia, vídeo propio corto/medio/largo/sin sonda
-    add("canvas portada", build_canvas_args(&cover, None, &canvas, out, p));
+    add(
+        "canvas portada",
+        build_canvas_args(&cover, None, &canvas, out, p),
+    );
     for (n, s) in [("webp", &img), ("png", &png)] {
-        add(&format!("canvas imagen {n}"), build_canvas_args(s, Some(&info(0.0, true)), &canvas, out, p));
+        add(
+            &format!("canvas imagen {n}"),
+            build_canvas_args(s, Some(&info(0.0, true)), &canvas, out, p),
+        );
     }
     for (n, d) in [("corto", 2.0), ("medio", 5.0), ("largo", 30.0)] {
-        add(&format!("canvas vídeo {n}"), build_canvas_args(&mp4, Some(&info(d, false)), &canvas, out, p));
+        add(
+            &format!("canvas vídeo {n}"),
+            build_canvas_args(&mp4, Some(&info(d, false)), &canvas, out, p),
+        );
     }
-    add("canvas vídeo mov", build_canvas_args(&mov, Some(&info(5.0, false)), &canvas, out, p));
-    add("canvas vídeo sin sonda", build_canvas_args(&mp4, None, &canvas, out, p));
+    add(
+        "canvas vídeo mov",
+        build_canvas_args(&mov, Some(&info(5.0, false)), &canvas, out, p),
+    );
+    add(
+        "canvas vídeo sin sonda",
+        build_canvas_args(&mp4, None, &canvas, out, p),
+    );
 
     // YouTube: portada con y sin fondo prerenderizado, imagen propia, vídeo propio
     let bg = Path::new("/t/bg.png");
-    add("youtube portada con fondo", build_youtube_args(&cover, Some(bg), wav, &yt, out, p));
-    add("youtube portada sin fondo", build_youtube_args(&cover, None, wav, &yt, out, p));
-    add("youtube imagen propia", build_youtube_args(&img, Some(bg), wav, &yt, out, p));
-    add("youtube vídeo propio", build_youtube_args(&mp4, None, wav, &yt, out, p));
-    add("youtube vídeo propio mov", build_youtube_args(&mov, None, wav, &yt, out, p));
-    add("youtube fondo (png)", build_youtube_bg_args(&cover, &yt, bg));
+    add(
+        "youtube portada con fondo",
+        build_youtube_args(&cover, Some(bg), wav, &yt, out, p),
+    );
+    add(
+        "youtube portada sin fondo",
+        build_youtube_args(&cover, None, wav, &yt, out, p),
+    );
+    add(
+        "youtube imagen propia",
+        build_youtube_args(&img, Some(bg), wav, &yt, out, p),
+    );
+    add(
+        "youtube vídeo propio",
+        build_youtube_args(&mp4, None, wav, &yt, out, p),
+    );
+    add(
+        "youtube vídeo propio mov",
+        build_youtube_args(&mov, None, wav, &yt, out, p),
+    );
+    add(
+        "youtube fondo (png)",
+        build_youtube_bg_args(&cover, &yt, bg),
+    );
 
     // Portada animada: cuadrada (HEVC) y vertical (H.264), de portada y de vídeo propio
     for square in [true, false] {
-        let spec = AppleMotionSpec { square, ..Default::default() };
-        let tag = if square { "3840 HEVC" } else { "2048x2732 H.264" };
-        add(&format!("portada animada {tag} portada"), build_apple_motion_args(&cover, &spec, out, p));
-        add(&format!("portada animada {tag} vídeo"), build_apple_motion_args(&mp4, &spec, out, p));
-        add(&format!("portada animada {tag} mov"), build_apple_motion_args(&mov, &spec, out, p));
+        let spec = AppleMotionSpec {
+            square,
+            ..Default::default()
+        };
+        let tag = if square {
+            "3840 HEVC"
+        } else {
+            "2048x2732 H.264"
+        };
+        add(
+            &format!("portada animada {tag} portada"),
+            build_apple_motion_args(&cover, &spec, out, p),
+        );
+        add(
+            &format!("portada animada {tag} vídeo"),
+            build_apple_motion_args(&mp4, &spec, out, p),
+        );
+        add(
+            &format!("portada animada {tag} mov"),
+            build_apple_motion_args(&mov, &spec, out, p),
+        );
     }
 
     // Sonda de capacidades (H.264 y HEVC)
@@ -128,16 +177,26 @@ fn mp3_args_only_use_components_in_the_sidecar_allowlist() {
 #[test]
 fn allowlist_is_loaded_from_the_shell_scripts() {
     let a = load();
-    for f in ["scale", "zoompan", "gblur", "overlay", "format", "abuffer", "hflip"] {
-        assert!(a.filters.contains(f), "filtro {f} no leído de common.sh/accept.sh");
+    for f in [
+        "scale", "zoompan", "gblur", "overlay", "format", "abuffer", "hflip",
+    ] {
+        assert!(
+            a.filters.contains(f),
+            "filtro {f} no leído de common.sh/accept.sh"
+        );
     }
     assert!(a.decoders.contains("h264") && a.decoders.contains("vp8"));
     assert!(a.muxers.contains("mp4") && a.muxers.contains("mp3"));
     assert!(a.bsfs.contains("aac_adtstoasc"));
     for e in ["aac", "libmp3lame", "png", "mjpeg"] {
-        assert!(a.encoders_macos.contains(e) && a.encoders_windows.contains(e), "{e}");
+        assert!(
+            a.encoders_macos.contains(e) && a.encoders_windows.contains(e),
+            "{e}"
+        );
     }
-    assert!(a.encoders_macos.contains("hevc_videotoolbox") && !a.encoders_macos.contains("h264_mf"));
+    assert!(
+        a.encoders_macos.contains("hevc_videotoolbox") && !a.encoders_macos.contains("h264_mf")
+    );
     assert!(a.encoders_windows.contains("hevc_mf") && !a.encoders_windows.contains("libx264"));
 }
 
@@ -156,7 +215,10 @@ fn accepted_user_media_extensions_have_decoders() {
             other => panic!("extensión de vídeo sin decodificadores declarados: {other}"),
         };
         for d in need {
-            assert!(a.decoders.contains(*d), ".{ext} necesita el decodificador {d}");
+            assert!(
+                a.decoders.contains(*d),
+                ".{ext} necesita el decodificador {d}"
+            );
         }
     }
     for ext in IMAGE_EXTS {
@@ -166,7 +228,10 @@ fn accepted_user_media_extensions_have_decoders() {
             "webp" => "webp",
             other => panic!("extensión de imagen sin decodificador declarado: {other}"),
         };
-        assert!(a.decoders.contains(d), ".{ext} necesita el decodificador {d}");
+        assert!(
+            a.decoders.contains(d),
+            ".{ext} necesita el decodificador {d}"
+        );
     }
 }
 
@@ -189,9 +254,19 @@ fn filter_name_extraction_handles_labels_quotes_and_nesting() {
 #[test]
 fn violations_flag_unknown_components() {
     let a = load();
-    let args: Vec<String> = ["-vf", "scale=1:2,nope=1", "-c:v", "libx264", "-bsf:v", "x", "-f", "avi", "o.avi"]
-        .map(String::from)
-        .to_vec();
+    let args: Vec<String> = [
+        "-vf",
+        "scale=1:2,nope=1",
+        "-c:v",
+        "libx264",
+        "-bsf:v",
+        "x",
+        "-f",
+        "avi",
+        "o.avi",
+    ]
+    .map(String::from)
+    .to_vec();
     let bad = violations("t", &args, &a, &a.encoders_macos);
     assert_eq!(bad.len(), 4, "{bad:?}");
 }

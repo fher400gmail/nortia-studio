@@ -303,9 +303,15 @@ mod tests {
         let mut i = parse_probe_json(MP4).unwrap();
         assert!(check_size(&i).is_ok());
         (i.width, i.height) = (16_385, 16);
-        assert_eq!(check_size(&i).unwrap_err().key_and_detail().0, "err.media_too_large");
+        assert_eq!(
+            check_size(&i).unwrap_err().key_and_detail().0,
+            "err.media_too_large"
+        );
         (i.width, i.height) = (12_000, 12_000); // 144 MP
-        assert_eq!(check_size(&i).unwrap_err().key_and_detail().0, "err.media_too_large");
+        assert_eq!(
+            check_size(&i).unwrap_err().key_and_detail().0,
+            "err.media_too_large"
+        );
         (i.width, i.height) = (10_000, 12_000); // 120 MP exactos
         assert!(check_size(&i).is_ok());
     }

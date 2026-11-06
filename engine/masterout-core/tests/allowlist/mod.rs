@@ -52,7 +52,11 @@ fn py_set(text: &str, name: &str) -> Set {
         .unwrap_or_else(|| panic!("falta {name} en accept.sh"))
         + key.len();
     let body = &text[start..start + text[start..].find('}').unwrap()];
-    body.split('"').skip(1).step_by(2).map(String::from).collect()
+    body.split('"')
+        .skip(1)
+        .step_by(2)
+        .map(String::from)
+        .collect()
 }
 
 /// Codificadores extra de `--enable-encoder="$FFMPEG_ENCODERS_BASE,x,y"` de un `build-*.sh`.
@@ -160,14 +164,19 @@ pub fn violations(what: &str, args: &[String], allow: &Allow, encoders: &Set) ->
             ("-vf" | "-af" | "-filter_complex" | "-lavfi" | "-filter:v" | "-filter:a", Some(g)) => {
                 for n in filter_names(g) {
                     if !allow.filters.contains(&n) {
-                        bad.push(format!("{what}: filtro «{n}» fuera de la lista blanca (en `{g}`)"));
+                        bad.push(format!(
+                            "{what}: filtro «{n}» fuera de la lista blanca (en `{g}`)"
+                        ));
                     }
                 }
             }
-            ("-c:v" | "-c:a" | "-c" | "-codec" | "-codec:v" | "-codec:a" | "-vcodec" | "-acodec", Some(c))
-                if c != "copy" && !encoders.contains(c) =>
-            {
-                bad.push(format!("{what}: codificador «{c}» fuera de la lista blanca"));
+            (
+                "-c:v" | "-c:a" | "-c" | "-codec" | "-codec:v" | "-codec:a" | "-vcodec" | "-acodec",
+                Some(c),
+            ) if c != "copy" && !encoders.contains(c) => {
+                bad.push(format!(
+                    "{what}: codificador «{c}» fuera de la lista blanca"
+                ));
             }
             ("-f", Some(m)) => {
                 explicit_f = true;
@@ -178,7 +187,9 @@ pub fn violations(what: &str, args: &[String], allow: &Allow, encoders: &Set) ->
             ("-bsf" | "-bsf:v" | "-bsf:a", Some(b)) => {
                 for n in b.split(',').map(|x| x.split('=').next().unwrap_or("")) {
                     if !allow.bsfs.contains(n) {
-                        bad.push(format!("{what}: bitstream filter «{n}» fuera de la lista blanca"));
+                        bad.push(format!(
+                            "{what}: bitstream filter «{n}» fuera de la lista blanca"
+                        ));
                     }
                 }
             }
@@ -189,7 +200,9 @@ pub fn violations(what: &str, args: &[String], allow: &Allow, encoders: &Set) ->
     if !explicit_f {
         if let Some(m) = args.last().and_then(|o| muxer_of_extension(o)) {
             if !allow.muxers.contains(m) {
-                bad.push(format!("{what}: muxer «{m}» (por la extensión de salida) fuera de la lista blanca"));
+                bad.push(format!(
+                    "{what}: muxer «{m}» (por la extensión de salida) fuera de la lista blanca"
+                ));
             }
         }
     }

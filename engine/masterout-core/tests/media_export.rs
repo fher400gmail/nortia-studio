@@ -286,7 +286,15 @@ fn oversized_own_media_is_rejected_before_encoding() {
     // 16 400 × 16: pasa el tope de píxeles pero no el de lado (16 384)
     let big = tmp.path().join("enorme.png");
     let st = Command::new(&sc.ffmpeg)
-        .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+        ])
         .arg("color=c=red:s=16400x16:d=1")
         .args(["-frames:v", "1"])
         .arg(&big)
@@ -316,5 +324,8 @@ fn oversized_own_media_is_rejected_before_encoding() {
         "{:?}",
         d.failed
     );
-    assert!(d.failed_details.iter().all(|(_, det)| det.as_deref() == Some("16400x16")));
+    assert!(d
+        .failed_details
+        .iter()
+        .all(|(_, det)| det.as_deref() == Some("16400x16")));
 }

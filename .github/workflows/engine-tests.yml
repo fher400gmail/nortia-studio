@@ -88,37 +88,6 @@ jobs:
         continue-on-error: true
         shell: bash
         run: choco install ffmpeg -y
-      # DIAG-TEMP (se quita antes del commit final)
-      - name: Diagnóstico ffmpeg/color
-        shell: bash
-        continue-on-error: true
-        run: |
-          set +e
-          which -a ffmpeg ffprobe
-          ls -la /c/ProgramData/chocolatey/bin | grep -i ffmpeg
-          ls -R /c/ProgramData/chocolatey/lib/ffmpeg | head -30
-          ffmpeg -version | head -3
-          ffmpeg -hide_banner -encoders | grep -i "_mf"
-          cd "$RUNNER_TEMP"
-          VF="scale=out_color_matrix=bt709:out_range=tv,format=yuv420p"
-          TAGS="-color_primaries bt709 -color_trc bt709 -colorspace bt709"
-          SRC="-f lavfi -i testsrc=s=640x360:r=30:d=1"
-          probe() { ffprobe -v error -show_streams -select_streams v:0 "$1" | grep -E "^(color_|pix_fmt|profile)"; ffprobe -v trace "$1" 2>&1 | grep -ci "colr" ; }
-          SP="scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv"
-          echo "== F: setparams sin write_colr"
-          ffmpeg -hide_banner -y $SRC -vf "$SP" $TAGS -c:v h264_mf -profile:v 100 -f mp4 f.mp4 2>&1 | grep -E "Stream #0:0: Video: h264"; probe f.mp4
-          echo "== G: setparams + write_colr (lo que lleva el motor)"
-          ffmpeg -hide_banner -y $SRC -vf "$SP" $TAGS -c:v h264_mf -profile:v 100 -movflags +faststart+write_colr -f mp4 g.mp4 2>&1 | grep -E "Stream #0:0: Video: h264"; probe g.mp4
-          echo "== H: setparams + write_colr + bsf h264_metadata"
-          ffmpeg -hide_banner -y $SRC -vf "$SP" $TAGS -c:v h264_mf -profile:v 100 -movflags +write_colr -bsf:v "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0" -f mp4 h.mp4 2>&1 | grep -E "Stream #0:0: Video: h264"; probe h.mp4
-          echo "== I: hevc_mf"
-          ffmpeg -hide_banner -y $SRC -vf "$SP" -c:v hevc_mf -profile:v 1 -tag:v hvc1 -f mp4 i.mp4 2>&1 | tail -4
-      - name: Diagnóstico cancelación (traza)
-        shell: bash
-        continue-on-error: true
-        env:
-          NORTIA_FFMPEG_TRACE: "1"
-        run: cargo test --manifest-path engine/Cargo.toml -p masterout-core --test media_video cancel_kills_ffmpeg -- --nocapture
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features

@@ -10,7 +10,7 @@ export const PROGRESS_EVENT = 'mastercheck://progress';
 /** Destinos del motor (presets.json) con lo justo para simular el plan. */
 const PRESETS = [
   { id: 'spotify', sub: 'spotify', tag: 'Spotify', container: 'flac', bits: 'native', rate: 'native' },
-  { id: 'apple_adm', sub: 'apple', tag: 'Apple Digital Masters', container: 'wav', bits: 'native', rate: 'native', minBits: 24, reason: 'apple_needs_24bit' },
+  { id: 'apple_adm', sub: 'apple', tag: 'Apple Music', container: 'wav', bits: 'native', rate: 'native', minBits: 24, reason: 'apple_needs_24bit' },
   { id: 'amazon', sub: 'amazon', tag: 'Amazon Music', container: 'flac', bits: 'native', rate: 'native' },
   { id: 'tidal', sub: 'tidal', tag: 'Tidal', container: 'flac', bits: 'native', rate: 'native' },
   { id: 'deezer', sub: 'deezer', tag: 'Deezer', container: 'wav', bits: 16, rate: 44100 },
@@ -44,7 +44,7 @@ const TEXT = {
     'warn.cover_upscaled': 'La portada es más pequeña que 3000×3000 y se ha ampliado. Para máxima calidad usa una de 3000×3000 o más.',
     'tag.cover': 'Portada',
     adm_clipping: 'pasa de 0 dB al codificar',
-    apple_needs_24bit: 'Apple Digital Masters exige un máster de 24 bit',
+    apple_needs_24bit: 'Apple Music pide un máster de 24 bit o más',
     youtube_music_needs_16bit: 'Se necesita un máster de al menos 16 bit',
     'tag.distributor': 'Distribuidora'
   },
@@ -60,7 +60,7 @@ const TEXT = {
     'warn.cover_upscaled': 'The cover is smaller than 3000×3000 and was enlarged. For best quality use one of 3000×3000 or more.',
     'tag.cover': 'Cover',
     adm_clipping: 'clips when encoded',
-    apple_needs_24bit: 'Apple Digital Masters requires a 24-bit master',
+    apple_needs_24bit: 'Apple Music asks for a 24-bit master or higher',
     youtube_music_needs_16bit: 'A master of at least 16 bit is required',
     'tag.distributor': 'Distributor'
   }
@@ -110,8 +110,8 @@ function bridgeError(lang, key, detail = null) {
 /**
  * Backend simulado. Opciones: `fast` (progreso casi instantáneo), `lang` inicial,
  * `sidecar` (false simula que no hay ffmpeg: sin MP3 ni vídeo), `defaultOff` (ids de preset con
- * `default_on: false`, como presets.json), `os`, `adm` ('clip' simula que el AAC de Apple Digital
- * Masters pasa de 0 dB al codificar: el veredicto final de la ficha de Apple es un aviso), `fail`
+ * `default_on: false`, como presets.json), `os`, `adm` ('clip' simula que el AAC de la comprobación con las
+ * herramientas de Apple pasa de 0 dB al codificar: el veredicto final de la ficha de Apple es un aviso), `fail`
  * (lista separada por comas: `legal`, `open` hacen que open_legal / open_path rechacen;
  * `cancel_early` ignora un cancel anterior al primer evento).
  */

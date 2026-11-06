@@ -8,8 +8,8 @@ const { server, base } = await serve();
 const browser = await chromium.launch();
 
 const T = {
-  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', preparing: 'Preparando…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, sidecar: /falta ffmpeg/i, noComponent: /no disponible/i, dist: 'Distribuidora', dropHint: 'Arrastra la portada', adm: /Apple Music: pasa de 0 dB al codificar/, openFail: /No se pudo abrir la carpeta/, legalFail: /No se pudo abrir el documento de licencias/ },
-  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', preparing: 'Preparing…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, sidecar: /ffmpeg is missing/i, noComponent: /not available/i, dist: 'Distributor', dropHint: 'Drop the cover', adm: /Apple Music: clips when encoded/, openFail: /folder could not be opened/, legalFail: /licenses document could not be opened/ }
+  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', preparing: 'Preparando…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, sidecar: /falta ffmpeg/i, noComponent: /no disponible/i, dist: 'Distribuidora', dropHint: 'Arrastra la portada', adm: /Apple Music: pasa de 0 dB al codificar/, openFail: /No se pudo abrir la carpeta/, legalFail: /No se pudo abrir el documento de licencias/, trademarks: /son marcas de sus titulares\. master check no está afiliado ni avalado por ellos\./, chips: ['Spotify', 'Apple Music', 'Amazon Music', 'TIDAL', 'Deezer', 'YouTube Music', 'Estándar', 'MP3', 'Portada', 'Canvas', 'YouTube (vídeo)', 'Portada animada'] },
+  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', preparing: 'Preparing…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, sidecar: /ffmpeg is missing/i, noComponent: /not available/i, dist: 'Distributor', dropHint: 'Drop the cover', adm: /Apple Music: clips when encoded/, openFail: /folder could not be opened/, legalFail: /licenses document could not be opened/, trademarks: /are trademarks of their respective owners\. master check is not affiliated with or endorsed by them\./, chips: ['Spotify', 'Apple Music', 'Amazon Music', 'TIDAL', 'Deezer', 'YouTube Music', 'Standard', 'MP3', 'Cover', 'Canvas', 'YouTube (video)', 'Motion artwork'] }
 };
 
 let failures = 0;
@@ -182,6 +182,32 @@ async function run(lang) {
   await page.setInputFiles('#fsong', { name: 'Ana - Canción 16bit.wav', mimeType: 'audio/wav', buffer: Buffer.from('x') });
   await page.waitForSelector('#wave svg rect');
   assert.match(await page.locator('.chip[data-id=apple]').getAttribute('title'), lang === 'es' ? /24 bit/ : /24-bit/);
+
+  // marcas de terceros (D-31): por defecto V1 «solo nombre» (punto de estado, sin glifos); V2 «gesto por grupo» con ?chips=gesto
+  await page.goto(q('&state=normal'));
+  await page.waitForSelector('html[data-ready]');
+  assert.equal(await page.getAttribute('html', 'data-chip-style'), 'nombre', `${lang}: V1 por defecto`);
+  const names = await page.$$eval('.chip .cn', els => els.map(e => e.textContent.trim()));
+  assert.deepEqual(names, tx.chips, `${lang}: nombres oficiales de las fichas`);
+  assert.equal(await page.locator('.chip .mono svg').count(), 0, `${lang}: V1 no lleva glifos`);
+  assert.equal(await page.locator('.chip[data-id=spotify] .mono i.dot').count(), 1, `${lang}: V1 lleva el punto de estado`);
+  assert.equal(await page.locator('.chip svg text').count(), 0, `${lang}: ningún glifo con texto de marca`);
+  await page.goto(q('&state=normal&chips=gesto'));
+  await page.waitForSelector('html[data-ready]');
+  assert.equal(await page.getAttribute('html', 'data-chip-style'), 'gesto');
+  assert.equal(await page.locator('.chip[data-id=spotify] .mono svg').count(), 1, `${lang}: V2 lleva glifo`);
+  assert.equal(await page.locator('.chip svg text').count(), 0);
+  const kinds = await page.$$eval('.chip .mono svg', els => els.map(e => e.dataset.g));
+  assert.deepEqual([...new Set(kinds)].sort(), ['distribuidora', 'extras', 'streaming'], `${lang}: tres gestos por grupo`);
+  const box = await page.locator('.chip[data-id=spotify] .mono svg').boundingBox();
+  assert.ok(Math.abs(box.width - 24) < 1.5 && Math.abs(box.height - 24) < 1.5, `${lang}: glifo de 24 px (${box.width}x${box.height})`);
+
+  // «Acerca de» lleva el aviso de marcas
+  await page.goto(q('&state=normal'));
+  await page.waitForSelector('html[data-ready]');
+  await page.click('#aboutBtn');
+  await page.waitForSelector('#pop-about.open');
+  assert.match(await page.textContent('#pop-about'), tx.trademarks, `${lang}: aviso de marcas`);
 
   assert.deepEqual(errors, [], `${lang}: errores de página`);
   await page.close();

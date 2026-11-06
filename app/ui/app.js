@@ -29,33 +29,29 @@ const Data = (() => {
   const defaultOn = id => onIds.has(preset[id]);
   const defaults = () => new Set(ids.filter(defaultOn));
   const byPreset = Object.fromEntries(Object.entries(preset).map(([k, v]) => [v, k]));
+  /* grupo de la interfaz de cada ficha → gesto propio de la variante «gesto por grupo» */
+  const group = { spotify: 'streaming', apple: 'streaming', amazon: 'streaming', tidal: 'streaming', deezer: 'streaming', ytm: 'streaming', dist: 'distribuidora', mp3: 'extras', portada: 'extras', canvas: 'extras', ytv: 'extras', motion: 'extras' };
   const ext = { flac: '.flac', wav: '.wav', mp3: '.mp3', mp4: '.mp4', jpg: '.jpg', png: '.png' };
   const SAMPLE = 'Vera Alcón - Luz de Noviembre (master v3).wav';
-  return { ids, preset, byPreset, ext, SAMPLE, media, needsSidecar, defaultOn, defaults, setDefaults };
+  return { ids, preset, group, byPreset, ext, SAMPLE, media, needsSidecar, defaultOn, defaults, setDefaults };
 })();
 
 /* ───────────── Icons ───────────── */
 const Icons = (() => {
   const s = (b, x = '') => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ${x}>${b}</svg>`;
-  const g = (b, x = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" ${x}>${b}</svg>`;
-  /* glifos propios y neutros (formas genéricas, sin logos de terceros) */
-  // TODO(brand): antes de la publicación, sustituir por los activos oficiales de cada plataforma, según sus guías de marca.
-  const gly = {
-    spotify: g('<path d="M5 9c4.8-1.5 9.6-1.1 14 1.4"/><path d="M6.2 12.8c4-1.1 7.6-.8 10.8 1"/><path d="M7.4 16.2c3-.8 5.6-.5 8 .9"/>', 'stroke-width="2.1"'),
-    apple: g('<path d="M10 17.2V6.6l8-1.9v10.6"/><circle cx="7.9" cy="17.4" r="2.2" fill="currentColor"/><circle cx="15.9" cy="15.5" r="2.2" fill="currentColor"/>'),
-    amazon: g('<text x="12" y="13" font-size="12.5" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none" font-family="Hanken Grotesk,sans-serif">a</text><path class="ac" d="M5 15.6c4.4 3 9.6 3 14 0" stroke="currentColor" stroke-width="1.8"/><path class="ac" d="M16.6 15.1l2.6.4-.7 2.5" stroke="currentColor" stroke-width="1.8"/>'),
-    tidal: g('<path d="M12 4.5l3 3-3 3-3-3z M6 10.5l3 3-3 3-3-3z M18 10.5l3 3-3 3-3-3z M12 13.5l3 3-3 3-3-3z" fill="currentColor" stroke="none"/>'),
-    deezer: g('<path d="M4 18v-3M8 18v-6M12 18v-9M16 18v-6M20 18V6" stroke-width="3" stroke-linecap="butt"/>'),
-    ytm: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3.6" fill="currentColor"/><path d="M10.2 9.3v5.4l4.6-2.7z" fill="var(--tc)"/></svg>',
-    dist: g('<path d="M4 12l16-8-6 16-3-7z"/>'),
-    mp3: g('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
-    portada: g('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/>'),
-    canvas: g('<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M10 8.5v7l5.5-3.5z"/>'),
-    ytv: g('<rect x="3" y="4.5" width="18" height="11.5" rx="2"/><path d="M10.2 7.6v5.3l4.3-2.65z" fill="currentColor"/><path d="M6.5 19.5h11"/>'),
-    motion: g('<rect x="8" y="8" width="12.5" height="12.5" rx="2"/><path d="M16 4H6.5A2.5 2.5 0 0 0 4 6.5V16"/>')
+  /* Marcas de terceros (D-31, opción B): ningún logo ni glifo que se parezca al de una plataforma.
+     V1 «solo nombre» (por defecto): el nombre en texto y el punto de estado de la marca.
+     V2 «gesto por grupo» (`data-chip-style="gesto"`): un gesto propio por grupo, derivado del punto
+     (streaming = punto; distribuidora = punto estirado a barra; extras = dos puntos), monocromo, 24 px. */
+  const gx = (kind, b) => `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true" data-g="${kind}">${b}</svg>`;
+  const gesture = {
+    streaming: gx('streaming', '<circle cx="12" cy="12" r="6"/>'),
+    distribuidora: gx('distribuidora', '<rect x="3" y="7.5" width="18" height="9" rx="4.5"/>'),
+    extras: gx('extras', '<circle cx="7.5" cy="12" r="4"/><circle cx="16.5" cy="12" r="4"/>')
   };
   return {
-    gly,
+    gesture,
+    dot: '<i class="dot" aria-hidden="true"></i>',
     folder: s('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
     folderPlus: s('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/>'),
     file: '<svg class="ic f" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></svg>',
@@ -232,7 +228,7 @@ const Views = (() => {
   const destName = id => { const k = 'chip.long.' + (Data.byPreset[id] || id), s = t(k); return s === k ? id : s; };
   const dest = id => {
     const why = Store.disabledReason(id), on = S.on.has(id) && !why, own = Store.own(id), title = chipTitle(id), acc = Store.awaiting(id);
-    const mono = own && own.thumb ? `<img class="mthumb" src="${esc(own.thumb)}" alt="">` : Icons.gly[id];
+    const mono = own && own.thumb ? `<img class="mthumb" src="${esc(own.thumb)}" alt="">` : document.documentElement.dataset.chipStyle === 'gesto' ? Icons.gesture[Data.group[id]] : Icons.dot;
     const btn = `<button class="chip glass ${on ? 'on' : ''} ${why ? 'dis' : ''} ${own ? 'has-media' : ''} ${acc ? 'acc' : ''}" role="switch" aria-checked="${on}" ${why ? 'aria-disabled="true"' : ''} ${title ? `title="${esc(title)}"` : ''} data-act="toggle" data-id="${id}"><span class="mono">${mono}</span><span class="cn">${esc(t('chip.' + id))}</span>${acc ? `<small class="dh">${esc(t('accept.drop'))}</small>` : ''}<i class="ck">${Icons.checkDraw}</i></button>`;
     if (!Data.media.has(id)) return btn;
     const clear = own ? `<span class="mx" role="button" tabindex="0" data-act="media-clear" data-mid="${id}" aria-label="${esc(t('media.clear', { name: own.name }))}" title="${esc(t('media.clear', { name: own.name }))}">${Icons.x}</span>` : '';
@@ -351,7 +347,7 @@ const App = (() => {
     el.innerHTML = `<h4>${esc(t('about.heading'))}</h4>
       <div class="kv"><span>${esc(t('about.version'))}</span><b>${esc(i.version || '')}</b></div>
       <div class="kv"><span>${esc(t('about.component'))}</span>${i.sidecar_release ? `<b class="mono">${esc(i.sidecar_release)}</b>` : `<b>${esc(t('about.component.none'))}</b>`}</div>
-      <p>${esc(t('about.licenses'))}</p><p>${esc(t('about.others'))}</p>
+      <p>${esc(t('about.licenses'))}</p><p>${esc(t('about.others'))}</p><p class="abt-tm">${esc(t('about.trademarks'))}</p>
       <button class="lnk link-b" data-act="legal">${esc(t('about.legal'))}</button>
       ${S.aboutErr ? `<p class="warnline" role="alert">${Icons.x} ${esc(t('about.legal_failed'))}</p>` : ''}
       <p class="abt-mk">${esc(t('about.maker'))}</p>`;

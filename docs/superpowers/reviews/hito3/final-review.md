@@ -156,3 +156,91 @@ La CI está parada desde el push 9e5860f (facturación). Último run real de `ap
 - `engine`: ubuntu, macOS y Windows.
 
 I2 es recomendable en la misma ronda (cambio pequeño). I3 y lo demás pueden pasar al hito 4 con las anotaciones de §6.
+
+---
+
+## Re-revisión (8cff49c)
+
+Alcance: los commits `9d4f6fe..8cff49c` (13 de correcciones más el de esta revisión) y el informe `.superpowers/sdd/2026-11-05-hito3-media/final-fix-report.md`. Solo lectura. La única modificación fue la mutación temporal de `common.sh` del punto 1, ya revertida con `git checkout`; el árbol queda limpio.
+
+### Baterías (de una en una)
+
+| Orden | Resultado |
+|---|---|
+| `npm test` | 51/51 |
+| `npm run check` | ok es y en |
+| `check-wiring.py` | RESULTADO OK |
+| `test-fetch-sidecar.sh` | exit 0 |
+| `cargo fmt --check`; clippy nativo y `x86_64-pc-windows-gnu` (`-D warnings`) | ok |
+| `MASTEROUT_FIXTURES=… cargo test --workspace` | **281 passed, 0 failed, 0 ignored** (30 binarios) |
+| `cargo test --release -p masterout-core --lib media::tests` | 4/4 (incluido `external_sidecar_is_disabled_in_production_builds`) |
+| clippy de src-tauri `--no-default-features` | ok |
+
+### 1 · I1, prueba atada a la lista blanca: cerrado y no vacuo
+
+- **Qué lee la lista blanca.** `engine/masterout-core/tests/allowlist/mod.rs:72-97` toma `ALLOW_FILTERS`, `ALLOW_DECODERS`, `ALLOW_MUXERS`, `ALLOW_BSFS` y `ALLOW_ENCODERS_BASE` de `common.sh`, los `IMPLICIT_*` de `accept.sh` y los codificadores extra de `build-macos.sh` y `build-windows.sh`.
+- **Extractor.** Divide fuera de comillas y paréntesis y quita las etiquetas (`:100-141`). Comprueba `-vf`, `-filter_complex`, `-c:*`, `-f`, `-bsf` y el muxer implícito por la extensión (`:157-209`).
+- **Constructores cubiertos.** `tests/sidecar_allowlist.rs:49-147`, en macOS y en Windows:
+  - Canvas: portada, imagen webp/png, vídeo corto/medio/largo/mov y sin sonda.
+  - YouTube: con y sin fondo, imagen, vídeo, mov y el fondo PNG.
+  - Portada animada: 3840 HEVC y 2048×2732 H.264, desde portada, vídeo y mov.
+  - Sonda de capacidades (`build_probe_args`), H.264 y HEVC.
+  - MP3 (`:169-175`) y miniatura, en el puente (`mastercheck-bridge/tests/sidecar_allowlist.rs`, mp4/mov/webp/mkv/webm).
+  - `probe` (ffprobe) no entra porque no usa filtros ni códecs. Es correcto.
+- **Prueba de que no es vacuo.** Quité `setparams` de `common.sh` y `video_args_only_use_components_in_the_sidecar_allowlist` falla, con violaciones «filtro «setparams» fuera de la lista blanca» en Canvas, YouTube, portada animada y sonda, en macOS y Windows. Las demás pasan. Con el archivo restaurado vuelve a verde.
+- **Lagunas (Minor, no bloquean):**
+  - No se comprueban los demuxers de entrada.
+  - No se comprueban los codificadores implícitos por extensión (el PNG del fondo y de la miniatura no lleva `-c:v`). Hoy están todos en la lista.
+
+### 2 · C1, código: cerrado. El release sigue pendiente, como se esperaba
+
+- `common.sh:26` añade `prores` (con comentario de origen) y `common.sh:33` añade `setparams`.
+- `accept.sh:154-162` usa la cadena de color real en sus dos grafos.
+- El inventario exige igualdad exacta (`accept.sh:50`, exporta `ALLOW_FILTERS` y `ALLOW_DECODERS`), así que el próximo build fallará si falta alguno de los dos.
+- El comentario de `video.rs:6-11` ya está corregido.
+- La sonda de capacidades usa `video::BT709` (`media/mod.rs:85-98`, `:122`). Con un sidecar sin el filtro, la sonda da `Tried::No`, luego `h264=false`, y las fichas de vídeo quedan deshabilitadas (`plan.rs`, `reason.encoder_unavailable`) en lugar de fallar al exportar.
+  - **Minor A:** ningún test fija que `build_probe_args` lleve `BT709`. Si volviera a `format=yuv420p`, la prueba de la lista blanca seguiría verde. Añadir `assert!(build_probe_args(..).contains(&video::BT709.into()))`.
+  - **Minor B:** mientras dure el sidecar viejo, el motivo que ve el usuario es «falta el codificador H.264 del sistema», que es falso. Es transitorio y desaparece con el release nuevo.
+- **Bloque PENDIENTE.** El grep de `3a21763` encuentra exactamente los 7 sitios que lista el bloque: `sidecar-tag.txt`, `sidecar-sha256.txt`, `app_support/mod.rs:33`, `app/ui/backend.js:129`, `ui-check.mjs:176`, `terceros.md:34-35` y `hito3-checklist.md:20`. No se olvida ninguno.
+  - **Ojo:** el `sed` sobre `terceros.md` también reescribiría la frase histórica de `:35` («se añadieron después del release …-3a21763») con el tag nuevo. El bloque ya pide borrar esa frase después; hay que hacerlo, no es opcional.
+
+### 3 · I2, discover solo junto al ejecutable: cerrado
+
+- `media/mod.rs:185-191` define `EXTERNAL_SIDECAR = cfg!(any(debug_assertions, feature = "dev-sidecar"))`. `find_one` corta con `None` antes de mirar env y PATH (`:207-209`).
+- Test de política: `production_discover_only_looks_next_to_the_executable` (cubre también el caso «un solo binario junto al exe»).
+- Test en release: `external_sidecar_is_disabled_in_production_builds`, ejecutado en `--release` y verde.
+- La feature `dev-sidecar` (`masterout-core/Cargo.toml:25`) no la activa nadie.
+- Ningún script ni workflow define `MASTERCHECK_FFMPEG`/`MASTERCHECK_FFPROBE` (grep vacío en `app/scripts` y `.github`). El humo usa la app en release con el sidecar junto al exe, así que no depende del entorno.
+
+### 4 · Minors y diferidos
+
+| Punto | Estado | Evidencia |
+|---|---|---|
+| M1 checklist 6 s | ✅ | `hito3-checklist.md:37`; 5b con ProRes y punto de estado |
+| M2 punto de estado con miniatura | ✅ | `app.js:231` (`.sdot`), `styles.css:421-426`; captura `v1-claro-es-con-portada` regenerada: punto naranja en la esquina de la miniatura (encendida), miniatura atenuada si está apagada |
+| M3 webp | ✅ | `media.bad_type` es/en lista los formatos reales; la portada sigue JPG/PNG (`cover.bad_type`, `pick_file("image")`); decisión documentada: sin la feature webp de `image` |
+| M4 tope al exportar | ✅ | `probe.rs:125-139` `check_size` + `err.media_too_large` es/en; aplicado en `export.rs:511` (`video_source`) con test unitario y de integración. Minor: se rechaza al exportar, no en el plan (la ficha se ve habilitada) |
+| M5 probe mata el árbol | ✅ | `probe.rs:233, 241` usan `video::kill` (taskkill /T). No verificable en Windows aquí |
+| M8 carátula 1400 px | ✅ | `mp3.rs:45-70` `embedded_cover`, test 8cff49c. TCON diferido con motivo (no hay campo de género en `ReleaseMeta`) |
+| M9 terceros | ✅ | `terceros.md:16-18` (image/zune-jpeg, moxcms/pxfm, id3) y §9 `:36` con siete marcas |
+| G1 decisiones | ✅ | `docs/decisiones.md:77-90`: D-31 (pendiente de ratificar con Fer), D-32 (macOS bajo demanda + regla de run `[mac]` antes de fusionar), D-33 reservada |
+| M11 capturas | ✅ | regeneradas (en `.superpowers/`, fuera de git) |
+| Diferidos M6, M12, M13, I3, TCON | aceptados | anotados en el informe; I3 sigue bloqueando el primer release firmado (hito 4) |
+
+### Sin confirmar por CI (sigue igual)
+
+- El release nuevo del sidecar no existe.
+- Ninguna cadena con `setparams` ha pasado por el sidecar real.
+- `accept.sh` con `prores` y `setparams` no se ha ejecutado.
+- Siguen pendientes los humos de app en macOS (ADM=required) y Windows, `engine` en las tres plataformas, `hevc_mf`, el texto crudo de afclip y los comandos de Tauri en ejecución (§5).
+
+### Veredicto de la re-revisión
+
+**Fusionar cuando haya: release nuevo + hashes + CI verde.** El código responde a C1, I1, I2 y a los Minors pedidos, y no hay regresiones. Pasos en orden:
+1. Lanzar `ffmpeg-sidecar.yml` y que `accept.sh` salga verde en macOS y Windows, con `setparams` y `prores` en `configure_line-*.txt`.
+2. Aplicar el bloque PENDIENTE (los 7 sitios) y borrar la frase histórica de `terceros.md:35`.
+3. Pasar `check-wiring.py`, `test-fetch-sidecar.sh`, `npm run check` y `cargo test -p mastercheck-bridge --test app_support`.
+4. Run de `app` con `[mac]`: humo de macOS con `ADM=required` y humo de Windows en verde, más `engine` en las tres plataformas.
+5. Escribir D-33.
+
+Los Minor A (test de que la sonda lleva `BT709`) y M4 en el plan pueden ir en el mismo commit del release o al hito 4.

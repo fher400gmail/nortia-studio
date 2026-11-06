@@ -270,3 +270,29 @@ fn violations_flag_unknown_components() {
     let bad = violations("t", &args, &a, &a.encoders_macos);
     assert_eq!(bad.len(), 4, "{bad:?}");
 }
+
+/// La sonda de capacidades debe usar la misma cadena de color que los vídeos reales
+/// (`scale` → `format` → `setparams`): si volviera a un `format=yuv420p` suelto, un sidecar
+/// sin `setparams` pasaría la sonda y fallaría luego en cada exportación (C1 de la revisión final).
+#[test]
+fn probe_uses_the_real_color_chain() {
+    for (p, hevc) in [
+        (Platform::MacOS, false),
+        (Platform::MacOS, true),
+        (Platform::Windows, false),
+        (Platform::Windows, true),
+    ] {
+        let args = build_probe_args(Path::new("/t/in.png"), Path::new("/t/out.mp4"), p, hevc);
+        let i = args
+            .iter()
+            .position(|a| a == "-vf")
+            .expect("-vf en la sonda");
+        let vf = &args[i + 1];
+        for filtro in ["scale=", "format=yuv420p", "setparams="] {
+            assert!(
+                vf.contains(filtro),
+                "{p:?} hevc={hevc}: falta {filtro} en {vf}"
+            );
+        }
+    }
+}

@@ -12,7 +12,9 @@ sha256_of() {
   else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
 
-ncpu() { nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2; }
+# NCPU limita los hilos de compilación (runner en un Mac personal).
+ncpu() { echo "${NCPU:-$(ncpu_all)}"; }
+ncpu_all() { nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2; }
 
 # Versión de ffmpeg fijada (no flota a la última). Se puede sobrescribir con $FFMPEG_VERSION.
 FFMPEG_VERSION_PINNED=7.1.5

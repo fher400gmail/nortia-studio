@@ -22,12 +22,15 @@ resolve_ffmpeg_version() { echo "${FFMPEG_VERSION:-$FFMPEG_VERSION_PINNED}"; }
 ALLOW_PROTOCOLS="file,pipe"
 # Nombres de configure; en tiempo de ejecución image_png_pipe aparece como png_pipe (accept.sh quita "image_").
 ALLOW_DEMUXERS="wav,aiff,flac,mp3,mov,matroska,image2,image_png_pipe,mjpeg,image_webp_pipe"
-ALLOW_DECODERS="pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_s16be,pcm_s24be,pcm_s32be,pcm_f32be,alac,flac,mp3,aac,h264,hevc,vp9,png,mjpeg,webp"
+# prores: decodificador LGPL (libavcodec/proresdec2.c); los vídeos de motion design suelen venir en ProRes (.mov).
+ALLOW_DECODERS="pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_s16be,pcm_s24be,pcm_s32be,pcm_f32be,alac,flac,mp3,aac,h264,hevc,vp9,prores,png,mjpeg,webp"
 ALLOW_PARSERS="aac,h264,hevc,vp9,mjpeg,png,webp,flac,mpegaudio"
 ALLOW_BSFS="aac_adtstoasc,h264_mp4toannexb,hevc_mp4toannexb,extract_extradata,vp9_superframe,vp9_superframe_split"
 ALLOW_MUXERS="mp4,mov,ipod,mp3,image2"
 # boxblur es GPL-only en ffmpeg 7.1 (se desactivaría en silencio): no se incluye.
-ALLOW_FILTERS="scale,crop,zoompan,gblur,overlay,format,fps,setsar,trim,atrim,aresample,aformat,anull,null,color,loop,pad,setpts,split,fade"
+# setparams (LGPL, libavfilter/vf_setparams.c): etiqueta color/rango en los fotogramas; lo usa BT709 de video.rs.
+# Fuente única de lo que el motor puede pedir: engine/masterout-core/tests/sidecar_allowlist.rs lo ata a esta lista.
+ALLOW_FILTERS="scale,crop,zoompan,gblur,overlay,format,fps,setsar,trim,atrim,aresample,aformat,anull,null,color,loop,pad,setpts,split,fade,setparams"
 ALLOW_ENCODERS_BASE="aac,libmp3lame,png,mjpeg"
 
 FFMPEG_BASE_FLAGS=(

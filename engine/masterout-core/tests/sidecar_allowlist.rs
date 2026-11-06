@@ -141,6 +141,35 @@ fn allowlist_is_loaded_from_the_shell_scripts() {
     assert!(a.encoders_windows.contains("hevc_mf") && !a.encoders_windows.contains("libx264"));
 }
 
+/// Cada extensión de vídeo propio que acepta la ficha tiene su decodificador en el sidecar
+/// (un `.mov` de motion design suele ser ProRes) y cada imagen, el suyo.
+#[test]
+fn accepted_user_media_extensions_have_decoders() {
+    use masterout_core::media::{IMAGE_EXTS, VIDEO_EXTS};
+    let a = load();
+    assert!(VIDEO_EXTS.contains(&"mov"), "los .mov (ProRes) se aceptan");
+    for ext in VIDEO_EXTS {
+        let need: &[&str] = match *ext {
+            "mov" => &["prores", "h264", "hevc"],
+            "mp4" | "m4v" => &["h264", "hevc"],
+            "mkv" | "webm" => &["h264", "hevc", "vp9"],
+            other => panic!("extensión de vídeo sin decodificadores declarados: {other}"),
+        };
+        for d in need {
+            assert!(a.decoders.contains(*d), ".{ext} necesita el decodificador {d}");
+        }
+    }
+    for ext in IMAGE_EXTS {
+        let d = match *ext {
+            "jpg" | "jpeg" => "mjpeg",
+            "png" => "png",
+            "webp" => "webp",
+            other => panic!("extensión de imagen sin decodificador declarado: {other}"),
+        };
+        assert!(a.decoders.contains(d), ".{ext} necesita el decodificador {d}");
+    }
+}
+
 #[test]
 fn filter_name_extraction_handles_labels_quotes_and_nesting() {
     assert_eq!(

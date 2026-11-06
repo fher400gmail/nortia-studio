@@ -151,15 +151,15 @@ run -framerate 30 -loop 1 -i in.png -i in.wav -t 8 \
 echo "== mp3 =="
 run -i in.wav -vn -c:a libmp3lame -b:a 320k out.mp3
 
-echo "== canvas con zoompan (grafo real) =="
+echo "== canvas con zoompan + cadena de color real (setparams) =="
 MOV="+faststart+negative_cts_offsets"
 run -framerate 30 -loop 1 -i in.png -t 6 -an \
-  -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.1)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps=30,setsar=1,format=yuv420p" \
+  -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,zoompan=z='min(zoom+0.0008,1.1)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps=30,setsar=1,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv" \
   -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -profile:v "$PROFILE" -b:v 5M -movflags "$MOV" -use_editlist 0 canvas_zoom.mp4
 
 echo "== youtube con split + gblur + overlay (grafo real) =="
 run -framerate 30 -loop 1 -i in.png -i in.wav -t 8 \
-  -filter_complex "[0:v]setpts=PTS-STARTPTS,split=2[bg][fg];[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,gblur=sigma=30[b];[fg]scale=1080:1080[f];[b][f]overlay=(W-w)/2:(H-h)/2,fade=t=in:st=0:d=0.5,setsar=1,format=yuv420p[v]" \
+  -filter_complex "[0:v]setpts=PTS-STARTPTS,split=2[bg][fg];[bg]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,gblur=sigma=30[b];[fg]scale=1080:1080[f];[b][f]overlay=(W-w)/2:(H-h)/2,fade=t=in:st=0:d=0.5,setsar=1,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv[v]" \
   -map "[v]" -map 1:a -r 30 -c:v "$ENC" ${EXTRA[@]+"${EXTRA[@]}"} -g 15 -bf 2 -profile:v "$PROFILE" -b:v 8M \
   -c:a aac -b:a 384k -ar 48000 -movflags "$MOV" -use_editlist 0 youtube_graph.mp4
 

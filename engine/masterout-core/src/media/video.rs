@@ -5,10 +5,13 @@
 //!
 //! Restricciones del sidecar (`tools/ffmpeg/common.sh`, `--disable-everything`): solo
 //! están los filtros `scale,crop,zoompan,gblur,overlay,format,fps,setsar,trim,atrim,
-//! aresample,aformat,anull,null,color,loop,pad` (`boxblur` es solo GPL: no está).
-//! Hoy no hay `split` ni `setpts`: la duración se limita con `-t`, el bucle con
-//! `-stream_loop`/`-loop`, y el fondo desenfocado de YouTube lee la portada dos veces como
-//! dos entradas (se mantiene así aunque `setpts`/`split`/`fade` se añadan al sidecar).
+//! aresample,aformat,anull,null,color,loop,pad,setpts,split,fade,setparams` (`boxblur` es
+//! solo GPL: no está) y, de vídeo propio, los decodificadores `h264,hevc,vp9,prores`.
+//! `engine/masterout-core/tests/sidecar_allowlist.rs` lee esa lista y exige que todo filtro,
+//! codificador y muxer de los `build_*_args` esté en ella: añadir un filtro aquí obliga a
+//! añadirlo a `common.sh` (y a publicar un sidecar nuevo). El fondo desenfocado de YouTube
+//! sigue leyendo la portada como dos entradas en vez de `split`: es más simple y no cambia
+//! el resultado.
 //!
 //! Color: todo el vídeo sale en Rec.709 de rango limitado, con conversión real
 //! (`scale=out_color_matrix=bt709:out_range=tv`) y etiquetas `bt709`.

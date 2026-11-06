@@ -81,3 +81,4 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 ## Pendiente que no es de esta lista
 - Firma y notarización de la app (el CI compila sin firma): sin hacer.
 - Windows (instalador NSIS) lo prueba solo el CI hasta que haya un PC; HEVC en Windows requiere «HEVC Video Extensions» del sistema.
+- Huecos de prueba automática conocidos (humo vía Tauri, plazo/kill con `.cmd` en Windows): `docs/pruebas/huecos.md`.

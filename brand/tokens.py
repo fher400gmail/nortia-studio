@@ -1,42 +1,31 @@
-"""Tokens (mismos nombres de variable que nortia-studio/design/final/styles.css y tokens.json) + tabla de contraste AA."""
+"""Tokens (mismos nombres de variable que design/final/styles.css) + tabla de contraste AA. ferboix. studio, opción C «Instrumento»."""
 import json, os, re
 from brand import *
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-PROTO = "/home/claude/nortia-studio/design/final"
+PROTO = os.path.join(os.path.dirname(ROOT), "design", "final")
 
 
-def color_tokens(brand, mode):
+def color_tokens(mode):
     th, sm = THEME[mode], SEM[mode]
-    a = acc(brand, mode)
+    a = acc(mode)
+    btn = btn_colors(mode)
     dark = mode == "dark"
     f, t, on = a["fill"], a["text"], a["on"]
     ink = th["ink"]
-    if brand == "madre":
-        on_bg = rgba(ink, 0.10 if dark else 0.07)
-        on_line = rgba(ink, 0.55)
-        glow = "0 10px 24px -14px " + rgba("#000000", 0.55 if dark else 0.35)
-        orb = [rgba(ink, 0.05 if not dark else 0.04), rgba(ink, 0.03), "rgba(0,0,0,0)"]
-        btn_glow = rgba("#000000", 0.50 if dark else 0.30)
-        focus = rgba(ink, 0.22)
-    else:
-        on_bg = rgba(f, 0.20 if dark else 0.13)
-        on_line = rgba(f, 0.60)
-        glow = "0 10px 24px -14px " + rgba(f, 0.50)
-        orb = [rgba(f, 0.12 if not dark else 0.10), rgba(ink, 0.03), "rgba(0,0,0,0)"]
-        btn_glow = rgba(f, 0.40)
-        focus = rgba(f, 0.30)
     return {
         "bg": th["bg"], "bg-deep": th["deep"],
         "ink": ink, "ink-2": th["ink2"], "ink-3": th["ink3"],
-        "brand": f, "brand-ink": t,
+        "brand": f, "brand-ink": t,            # acento cian: estados (lectura, selección, play, puntos de ficha) y enlaces
         "amber": sm["amber"], "amber-ink": sm["amber_ink"],
         "ok": sm["ok"], "err": sm["err"],
-        "btn-hi": f, "btn-lo": f, "on-btn": on, "btn-glow": btn_glow,   # botón plano: hi = lo (sin degradado)
-        "orb-1": orb[0], "orb-2": orb[1], "orb-3": orb[2],
+        # botón primario = TINTA con texto papel (claro) / PAPEL con texto tinta (oscuro); plano (hi = lo)
+        "btn-hi": btn["fill"], "btn-lo": btn["fill"], "on-btn": btn["on"], "btn-glow": rgba("#000000", 0.50 if dark else 0.30),
+        "orb-1": rgba(ink, 0.05 if not dark else 0.04), "orb-2": rgba(ink, 0.03), "orb-3": "rgba(0,0,0,0)",
         "pop-bg": "rgba(26,26,26,.96)" if dark else "rgba(255,255,255,.96)",
-        "on-bg": on_bg, "on-line": on_line, "on-glow": glow,
-        "focus": focus, "ctl": th["ctl"], "wv": th["wv"], "wv-on": ink,
+        "on-bg": rgba(f, 0.20 if dark else 0.13), "on-line": rgba(f, 0.60),
+        "on-glow": "0 10px 24px -14px " + rgba("#000000", 0.55 if dark else 0.35),
+        "focus": rgba(f, 0.30), "ctl": th["ctl"], "wv": th["wv"], "wv-on": ink,
         "win-edge": "rgba(255,255,255,.14)" if dark else "rgba(17,17,17,.14)",
         # nuevos (no existen en el prototipo; opcionales)
         "card": th["card"], "fill": th["fill"], "line": th["line"], "on-brand": on,
@@ -58,19 +47,17 @@ SPACE = [4, 8, 12, 16, 24, 32, 48, 64, 96]
 
 
 def build_tokens():
-    brands = {b: {m: color_tokens(b, m) for m in ("light", "dark")} for b in BRANDS}
+    color = {m: color_tokens(m) for m in ("light", "dark")}
     return {
-        "$schema": "nortia tokens v1",
-        "fuente": "BRAND.md / DESIGN.md. Mismos nombres de variable que nortia-studio/design/final/styles.css; "
-                  "'color' = nortia. studio (la app), 'brands' = todas las marcas.",
+        "$schema": "ferboix tokens v2",
+        "fuente": "BRAND.md / DESIGN.md. Mismos nombres de variable que design/final/styles.css; 'color' = ferboix. studio (una sola marca, un solo acento: cian).",
         "font": {"family": "Hanken Grotesk", "fallback": "system-ui,-apple-system,'Segoe UI',sans-serif", "weights": [400, 500, 600],
                  "wordmark": 590, "base": "13px", "field": "15.5px", "button": "16px"},
         "window": {"default": {"width": 880, "height": 860}, "min": {"width": 760, "height": 720}, "unit": "pt (px lógicos)",
                    "radius": {"mac": 26, "win": 8}, "titlebar": {"mac": 52, "win": 36}},
         "motion": {"ease": "cubic-bezier(.2,.8,.2,1)", "spring": "cubic-bezier(.34,1.5,.64,1)", "fast": "150ms", "base": "200ms",
                    "spring_ms": "240ms", "press": "90ms"},
-        "color": brands["studio"],
-        "brands": brands,
+        "color": color,
         "glass": GLASS,
         "layout": {"pad": "clamp(22px,3.4vw,40px)", "gap": "clamp(12px,2.1vh,20px)", "tgap": "clamp(8px,1.2vw,12px)",
                    "chip-h": "clamp(68px,9.8vh,92px)", "go-h": "clamp(52px,6.6vh,60px)", "tb-h": "52px", "tb-pl": "20px"},
@@ -84,12 +71,9 @@ def css_block(sel, d):
 
 
 def build_css(t):
-    out = ["/* nortia. tokens · generado por gen.py (no editar). data-brand = madre (por defecto) | studio | lab | teal | magenta; data-theme = light (por defecto) | dark */\n"]
-    out.append(css_block(":root", {**t["brands"]["madre"]["light"], **t["glass"]["light"], "win-r": "26px", "font": "'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif"}))
-    out.append(css_block(":root[data-theme=dark]", {**t["brands"]["madre"]["dark"], **t["glass"]["dark"]}))
-    for b in BRANDS[1:]:
-        out.append(css_block(f":root[data-brand={b}]", t["brands"][b]["light"]))
-        out.append(css_block(f":root[data-brand={b}][data-theme=dark]", t["brands"][b]["dark"]))
+    out = ["/* ferboix. studio · tokens · generado por gen.py (no editar). data-theme = light (por defecto) | dark */\n"]
+    out.append(css_block(":root", {**t["color"]["light"], **t["glass"]["light"], "win-r": "26px", "font": "'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif"}))
+    out.append(css_block(":root[data-theme=dark]", {**t["color"]["dark"], **t["glass"]["dark"]}))
     return "\n".join(out)
 
 
@@ -100,7 +84,7 @@ def verify_against_prototype(t):
     names = set()
     for a, b in blocks:
         names |= set(re.findall(r"--([a-z0-9-]+):", a or b))
-    have = set(t["brands"]["studio"]["light"]) | set(t["glass"]["light"]) | {"win-r"} | {"pad", "gap", "tgap", "chip-h", "go-h", "tb-h", "tb-pl"} \
+    have = set(t["color"]["light"]) | set(t["glass"]["light"]) | {"win-r"} | {"pad", "gap", "tgap", "chip-h", "go-h", "tb-h", "tb-pl"} \
         | {"ease", "spring", "t-fast", "t-base", "t-spring"}
     missing = sorted(names - have)
     return sorted(names), missing
@@ -113,19 +97,21 @@ def contrast_rows():
     for mode in ("light", "dark"):
         th, sm = THEME[mode], SEM[mode]
         for surf in ("bg", "card", "fill"):
-            for k, nm in (("ink", "tinta"), ("ink2", "texto 2"), ("ink3", "texto 3 / palabra de división")):
+            for k, nm in (("ink", "tinta"), ("ink2", "texto 2"), ("ink3", "texto 3 / palabra «studio»")):
                 rows.append((mode, f"{nm} sobre {surf}", th[k], th[surf], 4.5, "texto"))
         for k, nm in (("ok", "ok"), ("err", "error"), ("amber_ink", "aviso (texto)")):
             for surf in ("bg", "card"):
                 rows.append((mode, f"{nm} sobre {surf}", sm[k], th[surf], 4.5, "texto"))
         rows.append((mode, "control (ctl) sobre bg", th["ctl"], th["bg"], 3.0, "gráfico"))
-        for b in BRANDS:
-            a = acc(b, mode)
-            nm = "madre" if b == "madre" else f"{b} ({ACCENTS[b]['label']})"
-            for surf in ("bg", "card", "fill"):
-                rows.append((mode, f"{nm} · texto-acento (--brand-ink) sobre {surf}", a["text"], th[surf], 4.5, "texto"))
-            rows.append((mode, f"{nm} · texto del botón (--on-btn) sobre relleno (--brand)", a["on"], a["fill"], 4.5, "texto"))
-            rows.append((mode, f"{nm} · relleno del acento (--brand) sobre bg", a["fill"], th["bg"], 3.0, "gráfico"))
+        a, b = acc(mode), btn_colors(mode)
+        for surf in ("bg", "card", "fill"):
+            rows.append((mode, f"cian · texto-acento (--brand-ink) sobre {surf}", a["text"], th[surf], 4.5, "texto"))
+        rows.append((mode, "botón primario · texto (--on-btn) sobre relleno (--btn-hi)", b["on"], b["fill"], 4.5, "texto"))
+        rows.append((mode, "cian · texto sobre relleno cian (check de ficha, --on-brand)", a["on"], a["fill"], 4.5, "texto"))
+        for surf in ("bg", "card"):
+            rows.append((mode, f"cian · relleno (--brand: marca, play, puntos) sobre {surf}", a["fill"], th[surf], 3.0, "gráfico"))
+        rows.append((mode, "cian · relleno (--brand) sobre fill (punto en pastilla; lleva palabra)", a["fill"], th["fill"], 3.0, "gráfico"))
+        rows.append((mode, "marca del símbolo (cian) sobre el disco", a["fill"], th["ink"], 3.0, "gráfico"))
     return rows
 
 

@@ -207,6 +207,41 @@ enum Run {
     Cancelled,
 }
 
+/// Arranca el proceso reintentando unas pocas veces si el ejecutable está «ocupado»
+/// (`ETXTBSY`): en Linux pasa cuando otro hilo acaba de escribir el binario o lo tiene
+/// abierto durante un `fork` concurrente. Es raro en producción y frecuente en tests.
+fn spawn_retrying_busy(
+    program: &Path,
+    args: &[OsString],
+    out: std::fs::File,
+    err: std::fs::File,
+) -> std::io::Result<std::process::Child> {
+    let mut out = Some(out);
+    let mut err = Some(err);
+    let mut intento = 0;
+    loop {
+        let o = out.take().unwrap();
+        let e = err.take().unwrap();
+        let (o2, e2) = (o.try_clone()?, e.try_clone()?);
+        match Command::new(program)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(o)
+            .stderr(e)
+            .spawn()
+        {
+            Ok(c) => return Ok(c),
+            Err(er) if intento < 10 && er.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                intento += 1;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+                out = Some(o2);
+                err = Some(e2);
+            }
+            Err(er) => return Err(er),
+        }
+    }
+}
+
 fn run_one(program: &Path, args: &[OsString], log_file: &Path, cancel: &dyn Fn() -> bool) -> Run {
     let Ok(out) = std::fs::File::create(log_file) else {
         return Run::Done(false, "err.adm_log".into());
@@ -214,13 +249,7 @@ fn run_one(program: &Path, args: &[OsString], log_file: &Path, cancel: &dyn Fn()
     let Ok(err) = out.try_clone() else {
         return Run::Done(false, "err.adm_log".into());
     };
-    let Ok(mut child) = Command::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(out)
-        .stderr(err)
-        .spawn()
-    else {
+    let Ok(mut child) = spawn_retrying_busy(program, args, out, err) else {
         return Run::Done(false, format!("cannot start {}", program.display()));
     };
     let status = loop {

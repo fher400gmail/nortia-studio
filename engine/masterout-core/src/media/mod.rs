@@ -334,13 +334,15 @@ mod tests {
     #[test]
     fn external_sidecar_is_enabled_for_the_engine_tests() {
         // los tests del motor corren en depuración con el ffmpeg del sistema
-        assert!(EXTERNAL_SIDECAR);
+        let external = EXTERNAL_SIDECAR;
+        assert!(external);
     }
 
     #[cfg(not(any(debug_assertions, feature = "dev-sidecar")))]
     #[test]
     fn external_sidecar_is_disabled_in_production_builds() {
-        assert!(!EXTERNAL_SIDECAR);
+        let external = EXTERNAL_SIDECAR;
+        assert!(!external);
         let d = tempfile::tempdir().unwrap();
         // `discover` real: sin binarios junto al ejecutable no hay sidecar, aunque haya PATH/env
         assert!(discover(d.path()).is_none());

@@ -37,7 +37,7 @@ fn info(duration: f64, is_still: bool) -> MediaInfo {
     }
 }
 
-fn encoders<'a>(a: &'a Allow, p: Platform) -> &'a Set {
+fn encoders(a: &Allow, p: Platform) -> &Set {
     match p {
         Platform::MacOS => &a.encoders_macos,
         Platform::Windows => &a.encoders_windows,

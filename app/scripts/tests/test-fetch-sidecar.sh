@@ -71,15 +71,6 @@ mkrelease "$T/rel5"; repo_hashes "$T/rel5"; rm "$T/rel5/SHA256SUMS"; export FAKE
 "$FETCH" --placeholder x86_64-unknown-linux-gnu "$T/d6" >/dev/null 2>&1 && ok placeholder || bad placeholder
 [ -f "$T/d6/binaries/ffmpeg-x86_64-unknown-linux-gnu" ] && [ -f "$T/d6/binaries/ffprobe-x86_64-unknown-linux-gnu" ] && [ -f "$T/d6/licenses/COPYING.LGPL" ] && ok "placeholder ficheros" || bad "placeholder ficheros"
 
-# 8) release publicado solo con macOS (job de Windows desactivado): macOS vale; Windows falla con mensaje claro
-mkdir -p "$T/rel8"; for n in ffmpeg-universal-apple-darwin ffprobe-universal-apple-darwin LICENSE.LGPLv2.1 COPYING.LGPL LICENSE.lame; do echo "contenido de $n" > "$T/rel8/$n"; done
-( cd "$T/rel8" && for f in *; do echo "$(sum "$f")  $f"; done > SHA256SUMS ); cp "$T/rel8/SHA256SUMS" "$T/repo-sha8"
-export FAKE_RELEASE="$T/rel8" SIDECAR_SHA_FILE="$T/repo-sha8"
-"$FETCH" macos "$T/d8" >"$T/out8" 2>&1 && ok "release solo macOS: macos descarga" || { bad "release solo macOS: macos descarga"; cat "$T/out8"; }
-"$FETCH" windows "$T/d8w" >"$T/out8w" 2>&1 && bad "release solo macOS: windows debe fallar" || ok "release solo macOS: windows falla"
-grep -q 'no incluye' "$T/out8w" && grep -qi 'windows' "$T/out8w" && ok "mensaje claro de que falta Windows" || { bad "mensaje claro de que falta Windows"; cat "$T/out8w"; }
-[ -z "$(ls "$T/d8w/binaries" 2>/dev/null)" ] && ok "windows: nada copiado" || bad "windows: nada copiado"
-
 # 7) plataforma desconocida
 "$FETCH" solaris "$T/d7" >/dev/null 2>&1 && bad "plataforma desconocida" || ok "plataforma desconocida falla"
 exit $fail

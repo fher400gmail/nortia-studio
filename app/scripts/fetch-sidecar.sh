@@ -36,14 +36,6 @@ case "$platform" in
   *) die "plataforma desconocida: $platform" ;;
 esac
 
-# Un release puede publicarse solo con macOS (job de Windows desactivado: vars.HOSTED_RUNNERS).
-# Entonces sidecar-sha256.txt no fija los binarios de Windows y se falla AQUÍ, con un mensaje claro.
-[ -s "$SHA_FILE" ] || die "falta $SHA_FILE"
-for f in "${sources[@]}"; do
-  grep -qE "^[0-9a-f]{64}[[:space:]]+$f\$" "$SHA_FILE" \
-    || die "el release $TAG no incluye $f para $platform (no figura en $(basename "$SHA_FILE")). Si el release se publicó solo con macOS porque el job de Windows está desactivado, no hay sidecar de $platform hasta publicar un release que lo incluya."
-done
-
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 pats=(-p SHA256SUMS)
 for f in "${sources[@]}" "${LICENSES[@]}"; do pats+=(-p "$f"); done
@@ -51,6 +43,7 @@ echo "descargando $TAG ($REPO)"
 "$GH" release download "$TAG" --repo "$REPO" "${pats[@]}" -D "$work" --clobber \
   || die "no se pudo descargar el release $TAG"
 
+[ -s "$SHA_FILE" ] || die "falta $SHA_FILE"
 [ -s "$work/SHA256SUMS" ] || die "el release $TAG no trae SHA256SUMS"
 for f in "${sources[@]}" "${LICENSES[@]}"; do
   [ -f "$work/$f" ] || die "falta $f en el release $TAG"

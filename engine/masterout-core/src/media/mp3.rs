@@ -42,6 +42,33 @@ fn mime_for(path: &Path) -> &'static str {
     }
 }
 
+/// Lado largo máximo de la carátula incrustada (APIC). La portada conformada es de 3000²
+/// (≈2 MB por MP3); para una carátula de reproductor sobran 1400 px.
+pub const APIC_MAX_SIDE: u32 = 1400;
+
+/// Tipo MIME y bytes de la carátula a incrustar: la imagen tal cual si cabe en
+/// [`APIC_MAX_SIDE`]; si no, reducida a ese lado largo y recodificada como JPEG (calidad 90).
+pub fn embedded_cover(path: &Path) -> Result<(String, Vec<u8>), AudioError> {
+    let bytes = std::fs::read(path)?;
+    let img = ::image::load_from_memory(&bytes)
+        .map_err(|e| unsupported(format!("err.cover_unreadable: {e}")))?;
+    if img.width().max(img.height()) <= APIC_MAX_SIDE {
+        return Ok((mime_for(path).into(), bytes));
+    }
+    let small = img
+        .resize(
+            APIC_MAX_SIDE,
+            APIC_MAX_SIDE,
+            ::image::imageops::FilterType::Lanczos3,
+        )
+        .to_rgb8();
+    let mut out = Vec::new();
+    ::image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90)
+        .encode_image(&small)
+        .map_err(|e| unsupported(format!("err.cover_unreadable: {e}")))?;
+    Ok(("image/jpeg".into(), out))
+}
+
 fn text_frame(id: &str, text: &str) -> Frame {
     Frame::with_content(id, Content::Text(text.to_string()))
 }
@@ -75,11 +102,12 @@ fn write_id3(out: &Path, tags: &Id3Tags, cover: Option<&Path>) -> Result<(), Aud
         }
     }
     if let Some(path) = cover {
+        let (mime_type, data) = embedded_cover(path)?;
         tag.add_frame(Picture {
-            mime_type: mime_for(path).into(),
+            mime_type,
             picture_type: PictureType::CoverFront,
             description: String::new(),
-            data: std::fs::read(path)?,
+            data,
         });
     }
     tag.write_to_path(out, Version::Id3v23).map_err(id3_err)

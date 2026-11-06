@@ -15,6 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 # Runners de GitHub por defecto (repo público, D-38). Se apagan con la variable de repo HOSTED_RUNNERS == 'false'.
+# Solo el Mac alojado se apaga con HOSTED_MAC == 'false' (Linux y Windows siguen). Si GitHub no da runners de
+# Mac: SELF_HOSTED=true + HOSTED_MAC=false y el trozo de macOS se compila en el Mac de Fer (job macos-propio,
+# docs/runner-mac.md). Los dos jobs de macOS suben el MISMO artefacto (ffmpeg-sidecar-macos): con los dos
+# activos a la vez, el segundo subiría un nombre repetido y fallaría; por eso se enciende uno solo.
 jobs:
   prepare:
     if: vars.HOSTED_RUNNERS != 'false'
@@ -34,7 +38,7 @@ jobs:
           echo "tag=ffmpeg-sidecar-v${V}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
   macos:
-    if: vars.HOSTED_RUNNERS != 'false'
+    if: vars.HOSTED_RUNNERS != 'false' && vars.HOSTED_MAC != 'false'
     needs: prepare
     runs-on: macos-15
     timeout-minutes: 90
@@ -60,6 +64,68 @@ jobs:
         run: ACCEPT_ARCH=arm64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-arm64"
       - name: Pruebas de aceptación (slice x86_64 bajo Rosetta)
         run: ACCEPT_ARCH=x86_64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-x86_64"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ffmpeg-sidecar-macos
+          path: dist/
+          if-no-files-found: error
+
+  # Mac de Fer (runner autoalojado, D-35/D-38): misma build universal que `macos`, mismo artefacto.
+  macos-propio:
+    if: vars.SELF_HOSTED == 'true'
+    needs: prepare
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 120
+    env:
+      FFMPEG_VERSION: ${{ needs.prepare.outputs.ffmpeg_version }}
+      # Mac personal: nunca más de 4 hilos de compilación.
+      NCPU: "4"
+    steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Preflight del runner (sin brew ni sudo: todo se instala a mano una vez)
+        run: tools/ci/runner-preflight.sh --cmd clang --cmd make --cmd nasm --cmd pkg-config --cmd gpg --cmd curl --cmd lipo --cmd otool --cmd codesign --cmd python3
+      - name: Compilar (arm64 + x86_64, lipo)
+        run: |
+          rm -rf dist "$RUNNER_TEMP/work"
+          tools/ffmpeg/build-macos.sh "$RUNNER_TEMP/work" "$PWD/dist"
+      - name: Comprobar enlaces (lista blanca) y minos 14.0
+        run: |
+          for f in dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin; do
+            for a in arm64 x86_64; do
+              echo "--- $f ($a)"; otool -arch $a -L "$f"
+              # solo librerías del sistema (/usr/lib, /System/Library)
+              if otool -arch $a -L "$f" | tail -n +2 | grep -vE '^[[:space:]]+(/usr/lib/|/System/Library/)'; then echo "enlace fuera de la lista blanca"; exit 1; fi
+              otool -arch $a -l "$f" | grep -A4 LC_BUILD_VERSION | tee /dev/stderr | grep -q 'minos 14.0' || { echo "minos != 14.0"; exit 1; }
+            done
+          done
+      # Aceptación por slice solo si este Mac puede ejecutarla: arm64 en Apple Silicon; x86_64 en Intel o
+      # en Apple Silicon con Rosetta. Un slice que no se puede ejecutar queda sin probar (aviso visible, no fallo).
+      - name: Qué slices puede ejecutar este Mac
+        id: slices
+        run: |
+          for a in arm64 x86_64; do
+            if arch -$a /usr/bin/true 2>/dev/null; then echo "$a=true" >> "$GITHUB_OUTPUT"; echo "slice $a: se puede ejecutar"
+            else echo "$a=false" >> "$GITHUB_OUTPUT"; echo "::warning::Este Mac no puede ejecutar el slice $a: sin prueba de aceptación de ese slice (Apple Silicon: Rosetta con softwareupdate --install-rosetta)."; fi
+          done
+      - name: Pruebas de aceptación (slice arm64)
+        if: steps.slices.outputs.arm64 == 'true'
+        run: ACCEPT_ARCH=arm64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-arm64"
+      - name: Pruebas de aceptación (slice x86_64)
+        if: steps.slices.outputs.x86_64 == 'true'
+        run: ACCEPT_ARCH=x86_64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-x86_64"
+      - name: Comprobar que están los buildconf de los dos slices
+        run: |
+          # `release` copia buildconf-arm64.txt y buildconf-x86_64.txt (los escribe accept.sh): sin la prueba
+          # de un slice no hay release, y se falla aquí, antes de subir nada.
+          for a in arm64 x86_64; do
+            test -s "dist/buildconf-$a.txt" || { echo "::error::falta dist/buildconf-$a.txt: este Mac no pudo probar el slice $a y el release lo exige (Apple Silicon: instala Rosetta)."; exit 1; }
+          done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ffmpeg-sidecar-macos
@@ -116,9 +182,11 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # El artefacto de macOS (ffmpeg-sidecar-macos) lo sube `macos` (alojado) o `macos-propio` (Mac de Fer):
+  # download-artifact lo busca por nombre en el run, da igual qué job lo subió. Si no hay ninguno, falla en voz alta.
   release:
-    if: vars.HOSTED_RUNNERS != 'false'
-    needs: [prepare, macos, windows]
+    if: always() && needs.prepare.result == 'success' && needs.windows.result == 'success' && (needs.macos.result == 'success' || needs.macos-propio.result == 'success')
+    needs: [prepare, macos, macos-propio, windows]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -128,6 +196,10 @@ jobs:
       TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Origen del trozo de macOS
+        run: |
+          echo "macos alojado: ${{ needs.macos.result }} · macos propio: ${{ needs.macos-propio.result }}"
+          if [ "${{ needs.macos.result }}" != success ] && [ "${{ needs.macos-propio.result }}" != success ]; then echo "::error::ningún job de macOS terminó bien"; exit 1; fi
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ffmpeg-sidecar-macos
@@ -138,6 +210,9 @@ jobs:
           path: art/windows
       - name: Reunir archivos del release
         run: |
+          for f in art/macos/ffmpeg-universal-apple-darwin art/macos/ffprobe-universal-apple-darwin art/windows/ffmpeg-x86_64-pc-windows-msvc.exe art/windows/ffprobe-x86_64-pc-windows-msvc.exe; do
+            test -s "$f" || { echo "::error::falta el artefacto $f"; exit 1; }
+          done
           mkdir rel
           cp art/macos/ffmpeg-universal-apple-darwin art/macos/ffprobe-universal-apple-darwin rel/
           cp art/windows/ffmpeg-x86_64-pc-windows-msvc.exe art/windows/ffprobe-x86_64-pc-windows-msvc.exe rel/

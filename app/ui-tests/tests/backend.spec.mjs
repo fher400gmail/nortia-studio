@@ -291,6 +291,14 @@ test('about_texts_exist_in_both_languages_and_name_the_licenses', () => {
 
 /* ───────────── tarea 7: mejoras de la revisión final del hito 2 ───────────── */
 
+test('safe_off_matches_the_default_on_false_presets_of_the_engine', () => {
+  const presets = JSON.parse(readFileSync(new URL('../../../engine/masterout-core/presets.json', import.meta.url), 'utf8'));
+  const list = Array.isArray(presets) ? presets : (presets.presets || Object.values(presets));
+  const off = list.filter(p => p.default_on === false).map(p => p.id).sort();
+  assert.ok(list.length > 5, 'se leyeron los presets');
+  assert.deepEqual([...SAFE_OFF].sort(), off, 'SAFE_OFF debe coincidir con presets.json');
+});
+
 test('default_on_missing_falls_back_to_the_safe_set_and_warns', () => {
   const all = ['spotify', 'apple_adm', 'cover', 'apple_motion'];
   const warns = [];

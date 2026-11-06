@@ -1,24 +1,27 @@
-# El Mac de Fer como runner de compilación
+# El Mac de Fer como runner de compilación (OPCIONAL)
 
-Guía corta para Fer. Decisión: D-35 (CI sin pagar). Los workflows están en `.github/workflows/`.
+Guía corta para Fer. Desde D-38 el repositorio es público y la CI corre por defecto en los runners de GitHub (minutos ilimitados), así que **este runner ya no hace falta**. Se conserva como opción (D-35), por ejemplo si GitHub vuelve a bloquear los runners alojados o quieres compilar en tu Mac. Los workflows están en `.github/workflows/`.
+
+## Cómo se activa o desactiva
+
+- Mac propio: crea la variable de repositorio `SELF_HOSTED` con valor `true` (Settings → Secrets and variables → Actions → Variables). Entonces corren además `mac-propio` (engine) y `check-propio` / `macos-propio` (app). Sin la variable, esos trabajos no corren aunque el runner esté instalado.
+- Runners de GitHub: corren siempre; se apagan creando la variable `HOSTED_RUNNERS` con valor `false`.
+- El release del sidecar (`ffmpeg-sidecar.yml`) usa solo runners de GitHub y exige macOS y Windows.
 
 ## Qué hace
 
-Es un programa de GitHub (el «runner») instalado en tu Mac. Cuando se sube código al repositorio privado `fher400gmail/nortia-studio`, GitHub le manda trabajos y tu Mac los ejecuta:
+Un programa de GitHub (el «runner») instalado en tu Mac recibe trabajos del repositorio y los ejecuta:
 
 - **engine** (`engine-tests.yml`): formato, clippy (también cruzado a Windows), todos los tests del motor y la prueba real de Apple Music (`afclip`).
 - **app** (`app-build.yml`): comprobaciones de la app, build universal (`.dmg`) y humo con el sidecar de ffmpeg junto al ejecutable.
-- **ffmpeg-sidecar** (`ffmpeg-sidecar.yml`): compila ffmpeg/ffprobe y publica el release. Sin Windows: el release lleva solo los binarios de macOS.
-
-Los trabajos de Windows y los de los runners de GitHub quedan apagados. Solo se encienden si creas la variable de repositorio `HOSTED_RUNNERS` con valor `true` (Settings → Secrets and variables → Actions → Variables). No lo hagas mientras GitHub tenga la facturación bloqueada: saldrían en rojo.
 
 ## Seguridad
 
-- Ejecuta **solo lo que hay en este repositorio privado**. No aceptes ni actives forks ni colaboradores que no conozcas: quien pueda lanzar un workflow ejecuta código en tu Mac.
-- No usa tokens personales: solo el `github.token` temporal de cada ejecución. El workflow que publica el release es el único con permiso de escritura.
-- Los workflows no usan `sudo` ni instalan nada: todo lo necesario se instala una vez, a mano (abajo).
-- Trabaja **solo mientras el Mac está despierto, con tu sesión iniciada** (el servicio es un agente de usuario). Si está dormido o apagado, los trabajos esperan en cola y se ejecutan al volver.
-- Va de uno en uno y con un máximo de 4 hilos de compilación, para que el Mac siga usable. Un build universal o el sidecar pueden tardar bastante.
+- **El repositorio es público: no instales este runner salvo que sea imprescindible.** En un repo público, cualquiera puede abrir un pull request y, si el runner propio lo acepta, ejecutaría su código en tu Mac. Si lo activas: Settings → Actions → General → «Fork pull request workflows» → «Require approval for all outside collaborators», y no apruebes PRs que no entiendas.
+- No usa tokens personales: solo el `github.token` temporal de cada ejecución.
+- Los workflows del Mac propio no usan `sudo` ni instalan nada: todo se instala una vez, a mano (abajo).
+- Trabaja **solo mientras el Mac está despierto, con tu sesión iniciada** (el servicio es un agente de usuario). Si está dormido o apagado, los trabajos esperan en cola.
+- Va de uno en uno y con un máximo de 4 hilos de compilación, para que el Mac siga usable.
 
 ## Pararlo y arrancarlo
 
@@ -34,7 +37,7 @@ Estado también en GitHub: Settings → Actions → Runners (debe verse «Idle»
 
 ## Dónde queda cada cosa
 
-- **El `.dmg`**: en GitHub, Actions → el run de «app» → abajo, **Artifacts** → `master-check-macos` (contiene el `.dmg` y el `.app` en zip). Se conserva unos 90 días. Otros artefactos: `master-check-humo` (informe del humo) y `afclip-raw` (registro de Apple Music).
+- **El `.dmg`**: en GitHub, Actions → el run de «app» → abajo, **Artifacts** → `master-check-macos` (en el Mac propio, `master-check-macos-propio`; contiene el `.dmg` y el `.app` en zip). Se conserva unos 90 días. Otros: `master-check-humo` (informe del humo) y `afclip-raw` (registro de Apple Music), con sufijo `-propio` en el Mac propio.
 - **Copia local**: el runner trabaja en `~/actions-runner/_work/nortia-studio/nortia-studio/`; el `.dmg` queda en `app/src-tauri/target/universal-apple-darwin/release/bundle/dmg/`. La carpeta `target/` se conserva entre ejecuciones para compilar más deprisa; si ocupa demasiado, bórrala (la siguiente ejecución tarda más una vez).
 - **Release del sidecar**: Releases del repositorio, etiqueta `ffmpeg-sidecar-v…`.
 - **Fixtures de másters reales (opcional)**: `~/mastercheck-fixtures`. Si la carpeta existe, los tests del motor la usan; si no, esos tests se saltan solos.

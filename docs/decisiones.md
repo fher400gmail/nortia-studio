@@ -129,7 +129,7 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 
 ## D-ING-11 · Marca paraguas: Nortia Labs
 - 05/11/2026 · Fer: quitar todo lo visible de su persona; marca genérica que englobe todos los trabajos. Claude propuso Nortia; "Nortia" a secas está cogido en Gumroad y existe Nortia Inteligencia de Negocio (empresa española de software) → se elige **Nortia Labs**, usuario `nortialabs` (libre en Gumroad, GitHub y X comprobado el 05/11/2026 13:22).
-- Alcance: nombre visible y usuario en Gumroad, GitHub, X, web, portadas, PDFs, fichas, correo de la empresa (`fher400+nortialabs@gmail.com`). Upwork y Fiverr exigen nombre real: se mantiene el nombre, pero el perfil no menciona música ni discográficas. Los recibos de Gumroad llevan el nombre fiscal por ley (solo lo ve el comprador).
+- Alcance: nombre visible y usuario en Gumroad, GitHub, X, web, portadas, PDFs, fichas, correo de la empresa (alias de correo de la empresa; no se publica en el repositorio). Upwork y Fiverr exigen nombre real: se mantiene el nombre, pero el perfil no menciona música ni discográficas. Los recibos de Gumroad llevan el nombre fiscal por ley (solo lo ve el comprador).
 - Identidad visual: dirección B (software de confianza), símbolo A (norte), variante N2 aprobada. **Sustituida en fase 2 por "nortia." (D-20).**
 - Hecho ya: sustituido "Fernando Boix" por "Nortia Labs" en la guía Verifactu (PDF regenerado), guía de uso y fuentes de portadas; el Excel no contenía el nombre.
 

@@ -105,7 +105,7 @@ fn dither_rule_lower_bits_float_or_resampled_up_to_24() {
 fn preset_contract_table_id_subfolder_tag() {
     let expected = [
         ("spotify", "01 Spotify", "Spotify"),
-        ("apple_adm", "02 Apple Music", "Apple Digital Masters"),
+        ("apple_adm", "02 Apple Music", "Apple Music"),
         ("amazon", "03 Amazon Music", "Amazon Music"),
         ("tidal", "04 Tidal", "Tidal"),
         ("deezer", "05 Deezer", "Deezer"),

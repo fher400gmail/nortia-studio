@@ -140,7 +140,7 @@ fn exports_full_tree_for_synthetic_master() {
         f.join("01 Spotify")
             .join(name("Spotify", 24, 96_000, "flac")),
         f.join("02 Apple Music")
-            .join(name("Apple Digital Masters", 24, 96_000, "wav")),
+            .join(name("Apple Music", 24, 96_000, "wav")),
         f.join("05 Deezer").join(name("Deezer", 16, 44_100, "wav")),
         f.join("07 Distribuidora")
             .join(name("Distribuidora", 16, 44_100, "wav")),
@@ -195,7 +195,7 @@ fn written_wavs_have_expected_headers() {
     let d = export::run(&request(&master, &out, &ids), &|_| {}).unwrap();
     assert!(d.failed.is_empty(), "{:?}", d.failed);
     let cases = [
-        ("02 Apple Music", "Apple Digital Masters", 24, 96_000, true),
+        ("02 Apple Music", "Apple Music", 24, 96_000, true),
         ("05 Deezer", "Deezer", 16, 44_100, true),
         ("07 Distribuidora", "Distribuidora", 16, 44_100, true),
         ("07 Distribuidora", "TuneCore", 24, 96_000, false),
@@ -471,7 +471,7 @@ fn dither_follows_plan_for_float_master() {
         .unwrap();
     let src = wav::read(&master).unwrap();
     let out_buf = wav::read(&d.folder.join("02 Apple Music").join(name(
-        "Apple Digital Masters",
+        "Apple Music",
         24,
         96_000,
         "wav",
@@ -502,7 +502,7 @@ fn integer_master_native_destination_has_no_dither() {
     let out = tmp.path().join("out");
     let d = export::run(&request(&master, &out, &["apple_adm"]), &|_| {}).unwrap();
     let o = wav::read(&d.folder.join("02 Apple Music").join(name(
-        "Apple Digital Masters",
+        "Apple Music",
         24,
         96_000,
         "wav",

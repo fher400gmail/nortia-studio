@@ -43,7 +43,7 @@ Precio: 9,99 € pago único en la Mac App Store. Sin cuenta, sin red, sin suscr
 ```
 {Artista} - {Título}{ (Versión)}/
   01 Spotify/{Artista} - {Título} [Spotify] 24bit-96kHz.flac
-  02 Apple Music/{Artista} - {Título} [Apple Digital Masters] 24bit-96kHz.wav
+  02 Apple Music/{Artista} - {Título} [Apple Music] 24bit-96kHz.wav
   03 Amazon Music/{Artista} - {Título} [Amazon Music] 24bit-96kHz.flac
   04 Tidal/{Artista} - {Título} [Tidal] 24bit-96kHz.flac
   05 Deezer/{Artista} - {Título} [Deezer] 16bit-44kHz.wav
@@ -136,3 +136,12 @@ Sustituye a las adendas de 15:50 y 15:51. Se escribe siempre en minúsculas, com
 ## Adenda 05/11/2026 17:50 — límite de 96 kHz (Fer)
 
 master check **no admite másters por encima de 96 kHz**: la app los rechaza al analizar con el mensaje "master check admite másters de hasta 96 kHz" (clave `err.rate_over_96k`). Desaparece cualquier ruta de 192 kHz: el preset TuneCore pasa a 24 bit a la frecuencia nativa del máster (sin metadatos incrustados). Sin notas en el README al respecto. La regla de resolución de §4 se completa: los destinos "nativa" nunca superan 96 kHz porque la entrada no puede superarlos.
+
+## Adenda 06/11/2026 — marcas de terceros: opción B, sin logos ajenos (D-31, CEO; pendiente de ratificar con Fer)
+
+Base: `docs/legal/marcas-plataformas.md` (investigación T8a: Apple Digital Masters está vedado a terceros no autorizados; Amazon, TIDAL, Deezer y TuneCore exigen permiso escrito o no publican guía; Spotify y YouTube prohíben parecerse a su marca). Sustituye a lo que contradiga arriba:
+
+1. **Ningún logo ni glifo imitativo de terceros.** Las fichas llevan el nombre oficial de la plataforma en texto (Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube Music, YouTube (vídeo), Portada animada) y el punto de estado de la marca (variante V1 «solo nombre», por defecto). La variante V2 «gesto por grupo» (`data-chip-style="gesto"`) usa un gesto propio por grupo (punto, barra, dos puntos), no imitativo.
+2. **Contrato de nombres (§4):** el archivo del destino de Apple pasa de `[Apple Digital Masters] 24bit-96kHz.wav` a **`[Apple Music] 24bit-96kHz.wav`**. La subcarpeta `02 Apple Music/` se mantiene. El preset `apple_adm` conserva su id; su nombre y su etiqueta son «Apple Music».
+3. **Textos sin aval.** Se retiran «Apple Digital Masters» como nombre de ficha, archivo o carpeta, y cualquier «certificado», «aprobado por», «Ready», «optimizado para», «Mastered for». El mensaje de 16 bit es «Apple Music pide un máster de 24 bit o más». El informe de loudness dice «Comprobación con las herramientas de Apple (AAC 256): n muestras con clipping» (las claves internas `adm_*` no cambian). Un test falla si esas cadenas reaparecen en la interfaz o en el i18n del motor.
+4. **Aviso de marcas** en «Acerca de» y al final del README de entrega: «Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.»

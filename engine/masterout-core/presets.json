@@ -18,9 +18,9 @@
   },
   {
     "id": "apple_adm",
-    "name": "Apple Music (Digital Masters)",
+    "name": "Apple Music",
     "subfolder_key": "apple",
-    "tag": "Apple Digital Masters",
+    "tag": "Apple Music",
     "container": "wav",
     "bits": "native",
     "rate": "native",
@@ -54,7 +54,7 @@
   },
   {
     "id": "tidal",
-    "name": "Tidal",
+    "name": "TIDAL",
     "subfolder_key": "tidal",
     "tag": "Tidal",
     "container": "flac",
@@ -107,7 +107,7 @@
   },
   {
     "id": "youtube_video",
-    "name": "Vídeo YouTube",
+    "name": "YouTube (vídeo)",
     "subfolder_key": "youtube",
     "tag": "YouTube",
     "container": "mp4",
@@ -229,7 +229,7 @@
   },
   {
     "id": "apple_motion",
-    "name": "Apple Motion",
+    "name": "Portada animada (Apple Music)",
     "subfolder_key": "apple",
     "tag": "Apple Motion",
     "container": "mp4",

@@ -74,6 +74,19 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 - Pendiente de Fer: pasar `docs/pruebas/hito2-checklist.md` (16 comprobaciones) en su Mac con el .dmg de Actions.
 - Hito 3 (del revisor final): progreso "preparando"; humo vía Tauri y en Windows; carrera mínima de cancel; textos sueltos en app.js; claves err.lame_failed/err.id3; open_path acotado; tope de duración (err.too_long); set_hook; feature test-hooks; mainBinaryName; lame + licencia; logos oficiales; además vídeo/Canvas/portada conformados, ADM/afclip en Mac.
 
+## D-31 · Marcas de terceros: opción B, solo nombre en texto (06/11/2026)
+- 06/11/2026 · CEO (pendiente de ratificar con Fer). master check no muestra ningún logo, badge ni glifo imitativo de plataformas. Cada una aparece con su **nombre oficial en texto** y el punto de estado de la marca (variante V1 «solo nombre», por defecto); la V2 «gesto por grupo» queda como variante de estilo (`data-chip-style="gesto"`). Etiquetas `[Apple Music]`, `[TIDAL]`, `[Portada animada]` en los archivos; aviso de marcas en «Acerca de», en el README de entrega y en `terceros.md` §9 (siete marcas: Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube, TuneCore).
+- Por qué: ninguna plataforma tiene guía pública para una herramienta de terceros; el uso del nombre en texto es referencial y está permitido, el logo exige acuerdo y el glifo imitativo no lo cubre ningún permiso (es el peor caso). Marcas no verificadas se tratan como «exigen permiso».
+- Investigación, fuentes y salidas abiertas (acuerdos o permiso escrito, antes de vender): [docs/legal/marcas-plataformas.md](legal/marcas-plataformas.md).
+
+## D-32 · CI: macOS solo bajo demanda en ramas de trabajo (06/11/2026)
+- 06/11/2026 · CEO. Los minutos de macOS cuentan ×10 en el plan gratuito. Los jobs de macOS de `app-build.yml` y `engine-tests.yml` corren en `main`, a mano (`workflow_dispatch`) o con `[mac]` en el mensaje del commit; en ramas `hito*` no corren por defecto (d7c77a0). Linux y Windows corren siempre.
+- **Regla de proceso:** antes de fusionar una rama a `main` se lanza a mano un run con `[mac]` (humo de macOS con `ADM=required` incluido) y no se fusiona sin verlo en verde. Es lo que habría cazado antes un fallo como el de `setparams`, que solo se ve con el sidecar real.
+- Complemento: `engine/masterout-core/tests/sidecar_allowlist.rs` ata los argumentos de ffmpeg del motor a la lista blanca del sidecar sin necesidad de CI. Sigue pendiente (hito 4) ejecutar los tests de vídeo de macOS y Windows con el sidecar del release en vez del ffmpeg de brew/choco.
+
+## D-33 · Cierre del hito 3
+- **Pendiente.** Se escribe al fusionar `hito3-media` en `main` (estado del sidecar nuevo, runs de CI en verde, diferidos al hito 4).
+
 ---
 
 # FASE 1 (histórico, cerrada)

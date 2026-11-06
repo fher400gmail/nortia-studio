@@ -143,3 +143,6 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 
 ## D-36 · Nueva marca: ferboix. studio (06/11/2026 10:36)
 - 06/11/2026 · **Fer.** La empresa se llama **ferboix. studio** (sustituye a nortia. / nortia. studio). Fer pide «nuevo branding». Pendiente: opciones visuales (el CEO las enseña, no las cuenta), elección de Fer, y aplicación a todo (UI, «Acerca de», README de entrega, BRAND/DESIGN, tokens, iconos, plantillas, skill de marca, nombre del repositorio). `master check` conserva su nombre.
+
+## D-37 · Marca ferboix. studio: opción C «Instrumento» (06/11/2026 10:49)
+- 06/11/2026 · **Fer** («me gusta, aplícalo siempre como manual de branding de marca»), sobre tres opciones en imagen (A continuidad, B fermata violeta, C potenciómetro cian; recomendación del CEO: C). Wordmark `ferboix.` en tinta con punto circular a medida + `studio` en gris; símbolo: potenciómetro (disco de tinta/papel con marca de posición en el acento); acento cian `#0097B8` (texto `#00728B` en claro, `#0097B8` en oscuro); botón primario en tinta. Se aplica a todo lo que se vea: app, iconos, «Acerca de», README de entrega, plantillas, manual (`brand/`), skill de marca. `master check` conserva su nombre. Sustituye a D-28 (nortia.).

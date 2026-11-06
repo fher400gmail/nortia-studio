@@ -54,8 +54,15 @@ fn dead_export_err_keys_are_gone() {
     // el motor emite `err.container`, `err.threadpool` y `err.documents`; los `export.err.*` ya no los usa nadie
     for lang in [Lang::Es, Lang::En] {
         let keys = i18n::keys(lang);
-        for dead in ["export.err.container", "export.err.threadpool", "export.err.documents"] {
-            assert!(!keys.iter().any(|k| k == dead), "{dead} sigue en el diccionario");
+        for dead in [
+            "export.err.container",
+            "export.err.threadpool",
+            "export.err.documents",
+        ] {
+            assert!(
+                !keys.iter().any(|k| k == dead),
+                "{dead} sigue en el diccionario"
+            );
         }
         for live in ["err.container", "err.threadpool", "err.documents"] {
             assert!(keys.iter().any(|k| k == live), "{live} falta");

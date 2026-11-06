@@ -20,19 +20,37 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Barato: detecta errores de compilación de src-tauri antes de gastar minutos de macOS.
+  # Runner propio (Mac de Fer, D-35): detecta errores de compilación de src-tauri antes del build universal.
   check:
-    name: linux · check + clippy
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    name: mac propio · check + clippy
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: "4"
     steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: app/src-tauri
+          # target/ persiste entre runs (compilación incremental): no se borra.
+          clean: false
+      - name: Limpiar el espacio de trabajo (conserva target/)
+        run: git clean -ffdx --exclude=target
+      - name: Preflight del runner
+        run: tools/ci/runner-preflight.sh --cmd cargo --cmd rustc --cmd node --cmd npm --cmd gh --target aarch64-apple-darwin --target x86_64-apple-darwin
+      # check-wiring.py importa yaml; el python3 de las Command Line Tools no lo trae. Se crea un venv
+      # persistente en ~/.cache (una sola vez, tarda segundos) y se antepone al PATH.
+      - name: "PyYAML para check-wiring.py"
+        run: |
+          if ! python3 -c 'import yaml' 2>/dev/null; then
+            [ -x "$HOME/.cache/mastercheck-venv/bin/python3" ] || python3 -m venv "$HOME/.cache/mastercheck-venv"
+            "$HOME/.cache/mastercheck-venv/bin/pip" install -q pyyaml==6.0.2
+            echo "$HOME/.cache/mastercheck-venv/bin" >> "$GITHUB_PATH"
+          fi
       - name: "Scripts de CI (descarga verificada del sidecar, cableado de externalBin)"
         run: |
           bash app/scripts/tests/test-fetch-sidecar.sh
@@ -41,10 +59,6 @@ jobs:
         run: |
           HOST=$(rustc -vV | sed -n 's/^host: //p')
           bash app/scripts/fetch-sidecar.sh --placeholder "$HOST" app/src-tauri
-      - name: "Dependencias de Tauri (Linux)"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: "cargo check (feature app)"
         working-directory: app/src-tauri
         run: cargo check -p mastercheck-app --features app
@@ -57,9 +71,6 @@ jobs:
       - name: "tests de la lógica pura"
         working-directory: app/src-tauri
         run: cargo test --no-default-features
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - name: "tests de la UI (node)"
         working-directory: app
         run: |
@@ -67,32 +78,51 @@ jobs:
           npm test
 
   macos:
-    name: macos-15 · build
+    name: mac propio · build universal
     needs: check
-    # Los minutos de macOS cuentan x10 en el plan gratuito: en ramas de trabajo solo con «[mac]» en el commit o a mano.
+    # Build universal + humo: pesado para un Mac personal. En ramas de trabajo solo con «[mac]» en el commit o a mano (D-32).
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[mac]')
-    runs-on: macos-15
-    timeout-minutes: 45
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 90
+    env:
+      CARGO_BUILD_JOBS: "4"
     steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: app/src-tauri
+          # target/ persiste entre runs (compilación incremental): no se borra.
+          clean: false
+      - name: Limpiar el espacio de trabajo (conserva target/)
+        run: git clean -ffdx --exclude=target
+      - name: Preflight del runner
+        run: tools/ci/runner-preflight.sh --cmd cargo --cmd rustc --cmd node --cmd npm --cmd gh --cmd lipo --cmd ditto --target aarch64-apple-darwin --target x86_64-apple-darwin
+      - name: "tauri-cli 2.12.4 (solo si falta)"
+        run: |
+          if command -v cargo-tauri >/dev/null && cargo tauri --version | grep -q '2\.12\.4'; then
+            cargo tauri --version
+          else
+            cargo install tauri-cli --version 2.12.4 --locked --force
+          fi
       - name: "Sidecar ffmpeg (descarga del release por tag y verificación SHA256)"
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash app/scripts/fetch-sidecar.sh macos app/src-tauri
       - name: "Build universal (sin firma ni notarización)"
         working-directory: app
-        run: npx --yes @tauri-apps/cli@2.12.4 build --target universal-apple-darwin
+        run: |
+          # Solo se borra el bundle de runs anteriores (no la caché de compilación): evita .dmg viejos en out/.
+          rm -rf src-tauri/target/universal-apple-darwin/release/bundle
+          cargo tauri build --target universal-apple-darwin
       - name: "Empaquetar el .app en zip"
         run: |
           B=app/src-tauri/target/universal-apple-darwin/release/bundle
           find "$B" -maxdepth 3 | head -50
-          mkdir -p out
+          rm -rf out; mkdir -p out
           ditto -c -k --sequesterRsrc --keepParent "$B/macos/master check.app" "out/master-check-macos-app.zip"
           cp "$B"/dmg/*.dmg out/
           ls -la out
@@ -117,8 +147,8 @@ jobs:
           done
           for f in terceros.txt LICENSE.LGPLv2.1 COPYING.LGPL LICENSE.lame; do test -s "$APP/Contents/Resources/legal/$f"; done
           du -sh "$APP" out/*
-      # Apple Music (afclip): afconvert y afclip vienen con macOS (/usr/bin; comprobado en macos-15).
-      # Si algún día falta afclip en el runner, NO se instala nada: aviso visible y el caso pasa al
+      # Apple Music (afclip): afconvert y afclip vienen con macOS (/usr/bin).
+      # Si falta afclip en el Mac, NO se instala nada: aviso visible y el caso pasa al
       # checklist de Fer (docs/pruebas/hito3-checklist.md, prueba 9).
       - name: "Detectar afclip (Apple Music)"
         id: adm
@@ -170,9 +200,11 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+  # Windows queda aparcado (D-34/D-35): solo corre con la variable de repo HOSTED_RUNNERS == 'true'.
   windows:
     name: windows-latest · build
     needs: check
+    if: vars.HOSTED_RUNNERS == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:

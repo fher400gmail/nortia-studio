@@ -15,13 +15,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Runner propio (Mac de Fer, D-35). Un solo runner: los jobs se encolan y van uno tras otro.
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 10
     outputs:
       ffmpeg_version: ${{ steps.v.outputs.ffmpeg_version }}
       tag: ${{ steps.v.outputs.tag }}
     steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - id: v
         run: |
@@ -33,14 +40,26 @@ jobs:
 
   macos:
     needs: prepare
-    runs-on: macos-15
-    timeout-minutes: 90
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 120
     env:
       FFMPEG_VERSION: ${{ needs.prepare.outputs.ffmpeg_version }}
+      # Mac personal: como mucho 4 hilos de compilación (lo lee ncpu() de tools/ffmpeg/common.sh).
+      NCPU: "4"
     steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Dependencias de compilación
-        run: brew install nasm pkg-config
+        with:
+          clean: false
+      - name: Limpiar el espacio de trabajo
+        run: git clean -ffdx
+      - name: Preflight del runner (nada se instala desde el workflow)
+        run: tools/ci/runner-preflight.sh --cmd nasm --cmd pkg-config --cmd gpg --cmd curl --cmd clang --cmd lipo --cmd codesign --cmd otool --cmd tar --cmd xz
       - name: Compilar (arm64 + x86_64, lipo)
         run: tools/ffmpeg/build-macos.sh "$RUNNER_TEMP/work" "$PWD/dist"
       - name: Comprobar enlaces (lista blanca) y minos 14.0
@@ -53,18 +72,32 @@ jobs:
               otool -arch $a -l "$f" | grep -A4 LC_BUILD_VERSION | tee /dev/stderr | grep -q 'minos 14.0' || { echo "minos != 14.0"; exit 1; }
             done
           done
+      # Cada slice solo se puede ejecutar si el Mac lo soporta: arm64 solo en Apple Silicon;
+      # x86_64 en Intel, o en Apple Silicon con Rosetta. Si no, aviso visible (y solo otool/lipo).
       - name: Pruebas de aceptación (slice arm64)
-        run: ACCEPT_ARCH=arm64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-arm64"
-      - name: Pruebas de aceptación (slice x86_64 bajo Rosetta)
-        run: ACCEPT_ARCH=x86_64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-x86_64"
+        run: |
+          if arch -arm64 /usr/bin/true 2>/dev/null; then
+            ACCEPT_ARCH=arm64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-arm64"
+          else
+            echo "::warning::Este Mac no ejecuta arm64 (Intel): slice arm64 sin aceptación funcional, solo otool/lipo."
+          fi
+      - name: Pruebas de aceptación (slice x86_64; en Apple Silicon requiere Rosetta)
+        run: |
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            ACCEPT_ARCH=x86_64 tools/ffmpeg/accept.sh dist/ffmpeg-universal-apple-darwin dist/ffprobe-universal-apple-darwin h264_videotoolbox dist "$RUNNER_TEMP/accept-x86_64"
+          else
+            echo "::warning::Este Mac no ejecuta x86_64 (falta Rosetta: softwareupdate --install-rosetta --agree-to-license): slice x86_64 sin aceptación funcional."
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ffmpeg-sidecar-macos
           path: dist/
           if-no-files-found: error
 
+  # Windows queda aparcado (D-34/D-35): solo corre con la variable de repo HOSTED_RUNNERS == 'true'.
   windows:
     needs: prepare
+    if: vars.HOSTED_RUNNERS == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     env:
@@ -112,22 +145,40 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # Publicación del release: también en el Mac propio. Sin Windows (job desactivado) publica solo los
+  # binarios de macOS; SHA256SUMS lista lo que haya. fetch-sidecar.sh falla con mensaje claro si
+  # luego alguien pide el sidecar de Windows de un release que no lo trae.
   release:
     needs: [prepare, macos, windows]
-    runs-on: ubuntu-latest
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && needs.macos.result == 'success' && (needs.windows.result == 'success' || needs.windows.result == 'skipped') }}
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 15
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ needs.prepare.outputs.tag }}
+      HAVE_WINDOWS: ${{ needs.windows.result == 'success' }}
     steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          clean: false
+      - name: Limpiar el espacio de trabajo
+        run: git clean -ffdx
+      - name: Preflight del runner
+        run: tools/ci/runner-preflight.sh --cmd gh --cmd cmp
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ffmpeg-sidecar-macos
           path: art/macos
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: needs.windows.result == 'success'
         with:
           name: ffmpeg-sidecar-windows
           path: art/windows
@@ -135,22 +186,32 @@ jobs:
         run: |
           mkdir rel
           cp art/macos/ffmpeg-universal-apple-darwin art/macos/ffprobe-universal-apple-darwin rel/
-          cp art/windows/ffmpeg-x86_64-pc-windows-msvc.exe art/windows/ffprobe-x86_64-pc-windows-msvc.exe rel/
           # comunes (idénticos en ambos SO): fuentes, firma, licencias
           cp art/macos/ffmpeg-*.tar.xz art/macos/ffmpeg-*.tar.xz.asc art/macos/lame-*.tar.gz \
              art/macos/LICENSE.LGPLv2.1 art/macos/COPYING.LGPL art/macos/LICENSE.lame rel/
-          cmp art/macos/ffmpeg-*.tar.xz art/windows/ffmpeg-*.tar.xz
-          cmp art/macos/lame-*.tar.gz art/windows/lame-*.tar.gz
           cp art/macos/configure_line.txt rel/configure_line-macos.txt
-          cp art/windows/configure_line.txt rel/configure_line-windows.txt
-          cp art/macos/buildconf-arm64.txt rel/buildconf-macos-arm64.txt
-          cp art/macos/buildconf-x86_64.txt rel/buildconf-macos-x86_64.txt
-          cp art/windows/buildconf.txt rel/buildconf-windows.txt
+          # buildconf por slice: solo existe el de los slices que este Mac pudo ejecutar
+          n=0
+          for a in arm64 x86_64; do
+            if [ -f "art/macos/buildconf-$a.txt" ]; then cp "art/macos/buildconf-$a.txt" "rel/buildconf-macos-$a.txt"; n=$((n+1))
+            else echo "::warning::falta buildconf-$a.txt: el slice $a no se pudo ejecutar en este Mac (aceptación funcional pendiente)"; fi
+          done
+          test "$n" -ge 1
+          if [ "$HAVE_WINDOWS" = "true" ]; then
+            cp art/windows/ffmpeg-x86_64-pc-windows-msvc.exe art/windows/ffprobe-x86_64-pc-windows-msvc.exe rel/
+            cmp art/macos/ffmpeg-*.tar.xz art/windows/ffmpeg-*.tar.xz
+            cmp art/macos/lame-*.tar.gz art/windows/lame-*.tar.gz
+            cp art/windows/configure_line.txt rel/configure_line-windows.txt
+            cp art/windows/buildconf.txt rel/buildconf-windows.txt
+          else
+            echo "::warning::Release SOLO de macOS: el job de Windows no se ha ejecutado (vars.HOSTED_RUNNERS != 'true')."
+          fi
           tools/ffmpeg/finalize.sh rel
           ls -l rel
       - name: Crear o actualizar release
         run: |
           NOTES="Sidecar ffmpeg LGPL (sin GPL ni nonfree) para master check. Fuentes exactas, configure_line y licencias adjuntas. Commit ${GITHUB_SHA}."
+          if [ "$HAVE_WINDOWS" != "true" ]; then NOTES="$NOTES Solo macOS (sin binarios de Windows)."; fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" rel/* --clobber
           else

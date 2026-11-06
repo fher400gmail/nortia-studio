@@ -69,7 +69,7 @@ check(ph < cc, "los marcadores van antes de cargo check")
 for job, plat in (("macos", "macos"), ("windows", "windows")):
     fs = find(job, f"fetch-sidecar.sh {plat}")
     check(len(fs) == 1 and fs[0].get("env", {}).get("GH_TOKEN") == "${{ github.token }}", f"{job}: descarga el sidecar con GH_TOKEN de github.token")
-    b = next(i for i, s in enumerate(steps(job)) if "tauri-apps/cli" in json.dumps(s))
+    b = next(i for i, s in enumerate(steps(job)) if "tauri-apps/cli" in json.dumps(s) or "cargo tauri build" in json.dumps(s))
     f = next(i for i, s in enumerate(steps(job)) if f"fetch-sidecar.sh {plat}" in json.dumps(s))
     check(f < b, f"{job}: el sidecar se descarga antes de compilar")
 check(bool(find("macos", "smoke-mac.sh")), "macos ejecuta smoke-mac.sh")
@@ -87,34 +87,94 @@ for name in os.listdir(os.path.join(ROOT, "app", "scripts")):
     if name.endswith((".sh", ".ps1", ".py")) and name != "check-wiring.py":
         check("sudo" not in read("app", "scripts", name), f"{name} no usa sudo")
 
+for name in sorted(os.listdir(os.path.join(ROOT, "tools", "ci"))) + ["../ffmpeg/" + n for n in sorted(os.listdir(os.path.join(ROOT, "tools", "ffmpeg"))) if n.endswith(".sh")]:
+    check("sudo" not in read("tools", "ci", name), f"tools/ci/{name} no usa sudo")
+
 # --- hashes fijados en el repositorio
 pinned = {l.split()[1]: l.split()[0] for l in read("app", "scripts", "sidecar-sha256.txt").splitlines() if l.strip() and not l.startswith("#")}
-for n in ("ffmpeg-universal-apple-darwin", "ffprobe-universal-apple-darwin", "ffmpeg-x86_64-pc-windows-msvc.exe", "ffprobe-x86_64-pc-windows-msvc.exe"):
+for n in ("ffmpeg-universal-apple-darwin", "ffprobe-universal-apple-darwin"):
     check(bool(re.fullmatch(r"[0-9a-f]{64}", pinned.get(n, ""))), f"sidecar-sha256.txt fija {n}")
+# Windows es opcional (release publicado sin Windows mientras su job está desactivado), pero o están los dos o ninguno
+win = [n for n in ("ffmpeg-x86_64-pc-windows-msvc.exe", "ffprobe-x86_64-pc-windows-msvc.exe") if n in pinned]
+check(len(win) in (0, 2) and all(re.fullmatch(r"[0-9a-f]{64}", pinned[n]) for n in win), "sidecar-sha256.txt: Windows fija ffmpeg y ffprobe, o ninguno")
+check("no incluye" in fetch, "fetch-sidecar.sh falla con mensaje claro si el release no trae la plataforma")
 check("sidecar-sha256.txt" in fetch, "fetch-sidecar.sh lee sidecar-sha256.txt")
 
-# --- acciones de terceros: por SHA, salvo las tres que no se pudieron resolver (documentadas en el informe)
+# --- acciones de terceros: por SHA, salvo las que no se pudieron resolver (documentadas en el informe);
+# esas solo pueden aparecer en jobs alojados (tras vars.HOSTED_RUNNERS), nunca en el runner propio.
 UNRESOLVED = {"dtolnay/rust-toolchain@stable", "Swatinem/rust-cache@v2", "actions/setup-node@v4"}
+SELF_OK = {"actions/checkout", "actions/upload-artifact", "actions/download-artifact"}
 side = yaml.safe_load(read(".github", "workflows", "ffmpeg-sidecar.yml"))
 ref = {}
 for j in side["jobs"].values():
     for st in j["steps"]:
         u = st.get("uses", "")
-        if u.startswith(("actions/checkout@", "actions/upload-artifact@")):
+        if u.startswith(("actions/checkout@", "actions/upload-artifact@", "actions/download-artifact@")):
             ref[u.split("@")[0]] = u.split("@")[1]
-for wfname in ("app-build.yml", "engine-tests.yml"):
+
+
+def is_self(job):
+    return job.get("runs-on") == ["self-hosted", "macOS"]
+
+
+def gated(job):
+    cond = str(job.get("if", "")).strip()
+    if cond.startswith("${{") and cond.endswith("}}"):
+        cond = cond[3:-2].strip()
+    return cond.startswith("vars.HOSTED_RUNNERS == 'true'")
+
+
+WFS = {}
+for wfname in ("app-build.yml", "engine-tests.yml", "ffmpeg-sidecar.yml"):
     w = yaml.safe_load(read(".github", "workflows", wfname))
+    WFS[wfname] = w
     check(w.get("permissions") == {"contents": "read"}, f"{wfname}: permissions contents: read")
     for jn, j in w["jobs"].items():
+        # runners: o el Mac propio, o alojado detrás de la variable (si no, GitHub los factura y salen en rojo)
+        check(is_self(j) or gated(j), f"{wfname}/{jn}: corre en [self-hosted, macOS] o tras vars.HOSTED_RUNNERS == 'true'")
+        if is_self(j):
+            first = j["steps"][0].get("run", "")
+            check("GITHUB_PATH" in first and ".cargo/bin" in first and "/opt/homebrew/bin" in first and "/usr/local/bin" in first,
+                  f"{wfname}/{jn}: el primer paso añade cargo, Homebrew y /usr/local al PATH (el servicio no carga .zshrc)")
+            blob = json.dumps(j)
+            check("sudo" not in blob and "brew install" not in blob and "apt-get" not in blob,
+                  f"{wfname}/{jn}: runner propio sin sudo ni instalaciones (todo viene preinstalado)")
+        wperm = j.get("permissions", {})
+        check((wperm.get("contents") == "write") == (wfname == "ffmpeg-sidecar.yml" and jn == "release") or not wperm,
+              f"{wfname}/{jn}: contents: write solo en el job que publica el release")
         for st in j["steps"]:
             u = st.get("uses")
-            if not u or u in UNRESOLVED:
+            if not u:
                 continue
             name, _, sha = u.partition("@")
-            check(re.fullmatch(r"[0-9a-f]{40}", sha) is not None and ref.get(name) == sha, f"{wfname}/{jn}: {name} pinneada por SHA (la de ffmpeg-sidecar.yml)")
+            if is_self(j):
+                check(name in SELF_OK and re.fullmatch(r"[0-9a-f]{40}", sha) is not None and ref.get(name) == sha,
+                      f"{wfname}/{jn}: {name} (solo acciones ligeras, pinneadas por SHA) en el runner propio")
+            elif u not in UNRESOLVED:
+                check(re.fullmatch(r"[0-9a-f]{40}", sha) is not None and ref.get(name, sha) == sha, f"{wfname}/{jn}: {name} pinneada por SHA (la de ffmpeg-sidecar.yml si se repite)")
+check(side["jobs"]["release"].get("permissions") == {"contents": "write"}, "ffmpeg-sidecar/release: permissions contents: write")
 eng = yaml.safe_load(read(".github", "workflows", "engine-tests.yml"))
-check(isinstance(eng["jobs"]["macos"].get("timeout-minutes"), int) and eng["jobs"]["macos"].get("continue-on-error") is False,
-      "engine macos: timeout-minutes y continue-on-error: false explícitos")
+mp = eng["jobs"]["mac-propio"]
+mpb = json.dumps(mp, ensure_ascii=False)
+check(isinstance(mp.get("timeout-minutes"), int), "engine mac-propio: timeout-minutes explícito")
+check(0 < int(mp.get("env", {}).get("CARGO_BUILD_JOBS", 99)) <= 4, "engine mac-propio: CARGO_BUILD_JOBS <= 4 (Mac personal)")
+check("cargo fmt" in mpb and "cargo clippy" in mpb and "--target x86_64-pc-windows-gnu" in mpb and "cargo test" in mpb and "--all-features" in mpb,
+      "engine mac-propio: fmt, clippy nativo y cruzado a windows-gnu, test --all-features")
+check("mastercheck-fixtures" in mpb and "MASTEROUT_FIXTURES" in mpb and '[ -d' in mpb, "engine mac-propio: MASTEROUT_FIXTURES solo si existe ~/mastercheck-fixtures")
+adm_e = [st for st in mp["steps"] if "MASTEROUT_REQUIRE_ADM" in json.dumps(st)]
+check(len(adm_e) == 1 and adm_e[0].get("if") == "steps.adm.outputs.present == 'true'", "engine mac-propio: prueba real de ADM con MASTEROUT_REQUIRE_ADM=1 si hay afclip")
+check(eng["jobs"]["macos"].get("continue-on-error") is False and isinstance(eng["jobs"]["macos"].get("timeout-minutes"), int),
+      "engine macos (alojado): timeout-minutes y continue-on-error: false explícitos")
+# app-build: tauri-cli instalado solo si falta, caché de target conservada
+ab = json.dumps(jobs["macos"], ensure_ascii=False)
+check("command -v cargo-tauri" in ab and "cargo install tauri-cli --version 2.12.4 --locked" in ab, "macos: tauri-cli 2.12.4 instalado solo si falta")
+for jn in ("check", "macos"):
+    co = next(st for st in jobs[jn]["steps"] if str(st.get("uses", "")).startswith("actions/checkout@"))
+    clean = next(st for st in jobs[jn]["steps"] if "git clean" in st.get("run", ""))
+    check(co.get("with", {}).get("clean") is False and "--exclude=target" in clean["run"], f"app {jn}: el workspace se limpia conservando target/")
+    check(0 < int(jobs[jn].get("env", {}).get("CARGO_BUILD_JOBS", 99)) <= 4, f"app {jn}: CARGO_BUILD_JOBS <= 4")
+rel = side["jobs"]["release"]
+check("needs.windows.result == 'skipped'" in str(rel.get("if")), "sidecar release: tolera el job de Windows omitido (release solo macOS)")
 check(bool(find("macos", "afclip-raw")), "el log crudo de afclip se sube como artefacto")
 check(bool(find("windows", "smoke-win.ps1")), "windows ejecuta smoke-win.ps1")
 

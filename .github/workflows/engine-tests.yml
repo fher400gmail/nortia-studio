@@ -22,8 +22,70 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Runner propio (Mac de Fer, D-35). Usa lo instalado en el Mac: rustup, Homebrew (ffmpeg), afclip.
+  # Los jobs alojados de abajo (ubuntu/macos-15/windows) solo corren si la variable de repo
+  # HOSTED_RUNNERS vale 'true' (hoy no existe: GitHub bloqueó los runners alojados por facturación y no se paga).
+  mac-propio:
+    name: mac propio
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      # Mac personal: nunca más de 4 compilaciones en paralelo.
+      CARGO_BUILD_JOBS: "4"
+    steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # El target/ del motor persiste entre runs (compilación incremental): no se borra.
+          clean: false
+      - name: Limpiar el espacio de trabajo (conserva target/)
+        run: git clean -ffdx --exclude=target
+      - name: Preflight del runner
+        run: tools/ci/runner-preflight.sh --cmd cargo --cmd rustc --cmd ffmpeg --cmd ffprobe --target x86_64-pc-windows-gnu
+      - name: Versiones
+        run: |
+          rustc -vV; cargo -V; cargo fmt --version; cargo clippy --version; ffmpeg -version | head -1
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - name: Clippy cruzado para Windows (imports solo-unix y cfg)
+        run: cargo clippy --manifest-path engine/Cargo.toml --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+      # Fixtures reales (másters de Fer) en ~/mastercheck-fixtures. Si no existe la carpeta no se
+      # define MASTEROUT_FIXTURES y los tests que la necesitan se saltan solos (tests/common/mod.rs:
+      # «skip: MASTEROUT_FIXTURES no definido»).
+      - name: Fixtures (si existen en el runner)
+        run: |
+          if [ -d "$HOME/mastercheck-fixtures" ]; then
+            echo "MASTEROUT_FIXTURES=$HOME/mastercheck-fixtures" >> "$GITHUB_ENV"
+            echo "fixtures: $HOME/mastercheck-fixtures"
+          else
+            echo "::notice::No hay ~/mastercheck-fixtures: los tests con másters reales se omiten."
+          fi
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features
+      # Apple Music (afclip) real: afconvert y afclip vienen con macOS (/usr/bin).
+      - name: Detectar afclip (Apple Music)
+        id: adm
+        run: |
+          if AFCLIP=$(command -v afclip) && command -v afconvert >/dev/null; then
+            echo "afclip: $AFCLIP"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::afclip/afconvert no están en este Mac: la prueba real de Apple Music no se ha ejecutado."
+          fi
+      - name: Apple Music (afclip) real (MASTEROUT_REQUIRE_ADM=1)
+        if: steps.adm.outputs.present == 'true'
+        env:
+          MASTEROUT_REQUIRE_ADM: "1"
+        run: cargo test --manifest-path engine/Cargo.toml -p masterout-core --test media_adm real_tools -- --nocapture
+
   linux:
     name: ubuntu-latest
+    if: vars.HOSTED_RUNNERS == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -48,7 +110,7 @@ jobs:
   macos:
     name: macos-15
     # Los minutos de macOS cuentan x10 en el plan gratuito: en ramas de trabajo solo con «[mac]» en el commit o a mano.
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[mac]')
+    if: vars.HOSTED_RUNNERS == 'true' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[mac]'))
     # 05/11/2026: macos-latest (arm64) sin capacidad, jobs sin adquirir; se usa macos-15 hasta que se recupere.
     runs-on: macos-15
     # La pasada de motor en macOS depende de que haya runner (macos-15 a veces no se adquiere y el
@@ -74,7 +136,7 @@ jobs:
 
   windows:
     name: windows-latest
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    if: vars.HOSTED_RUNNERS == 'true' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito'))
     runs-on: windows-latest
     timeout-minutes: 30
     steps:

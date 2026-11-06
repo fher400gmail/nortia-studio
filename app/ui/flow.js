@@ -5,7 +5,7 @@
 export const isCancelled = (flag, delivery) => !!(flag || (delivery && delivery.cancelled));
 
 /** Fichas que arrancan apagadas si el motor no dice cuáles son (`app_info.default_on` ausente):
-    las que presets.json trae con `default_on: false`. Hoy solo Apple Motion (el HEVC pesa mucho). */
+    las que presets.json trae con `default_on: false`. Hoy solo portada animada (el HEVC pesa mucho). */
 export const SAFE_OFF = ['apple_motion'];
 
 /** Conjunto de ids de preset encendidos al empezar. La lista del motor manda; si no llega una

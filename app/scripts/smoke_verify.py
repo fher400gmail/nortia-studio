@@ -4,7 +4,7 @@
 Uso: smoke_verify.py --out <carpeta de salida> --platform mac|win [--adm required|any]
 
 Lee <out>/smoke-result.json (entrega + bloque `smoke`), exige [Portada], [Canvas], [YouTube], [MP3 320]
-y Apple Motion, los sondea con ffprobe y anota el tiempo de media::capabilities() en frío.
+y portada animada, los sondea con ffprobe y anota el tiempo de media::capabilities() en frío.
 Los avisos van como ::warning:: de GitHub Actions; un fallo sale con código 1.
 """
 import argparse
@@ -18,6 +18,23 @@ CAPS_TARGET_MS = 3000       # objetivo del sondeo en frío
 CAPS_DEADLINE_MS = 16000    # 2 códecs x 8 s de plazo: más allá hay algo colgado
 
 errors = []
+
+I18N = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "engine", "masterout-core", "i18n")
+
+
+def adm_literals():
+    """Textos del informe sobre la comprobación de Apple, tal cual los escribe el motor (es y en)."""
+    out = []
+    for lang in ("es", "en"):
+        with open(os.path.join(I18N, f"{lang}.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        unavailable = d["report.adm_unavailable"]
+        out.append({
+            "prefix": unavailable.split(":")[0],
+            "unavailable": unavailable.split("{reason}")[0].strip(),
+            "zero": d["report.adm_clipping"].replace("{n}", "0"),
+        })
+    return out
 
 
 def fail(msg):
@@ -163,15 +180,17 @@ def main():
         warn("HEVC no disponible en este equipo: la portada animada solo sale en 2048x2732 (instala «HEVC Video Extensions» para el cuadrado de 3840x3840)")
         want(not square, "sin HEVC no debe haber 3840x3840")
 
-    # Apple Digital Masters en el informe de loudness
+    # comprobación de Apple (afclip) en el informe de loudness: los literales salen del i18n del
+    # motor (es y en), no se copian a mano; así un cambio de texto no rompe el humo en silencio
     txt = open(report[0], encoding="utf-8").read() if report else ""
-    adm_lines = [l for l in txt.splitlines() if "Apple Digital Masters" in l]
-    print("informe ADM:", adm_lines)
+    lits = adm_literals()
+    adm_lines = [l for l in txt.splitlines() if any(x["prefix"] in l for x in lits)]
+    print("informe de la comprobación de Apple:", adm_lines)
     if args.adm == "required":
-        want(any("0 muestras con clipping" in l for l in adm_lines),
-             f"el informe debe decir '0 muestras con clipping' (hay: {adm_lines})")
-    elif args.platform == "mac" and adm_lines and any("no disponible" in l for l in adm_lines):
-        warn("Apple Digital Masters no validado en el humo: " + adm_lines[0])
+        want(any(x["zero"] in l for l in adm_lines for x in lits),
+             f"el informe debe decir '{lits[0]['zero']}' o '{lits[1]['zero']}' (hay: {adm_lines})")
+    elif args.platform == "mac" and adm_lines and any(x["unavailable"] in l for l in adm_lines for x in lits):
+        warn("Comprobación de Apple (afclip) no ejecutada en el humo: " + adm_lines[0])
     return finish()
 
 

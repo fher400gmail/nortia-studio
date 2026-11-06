@@ -122,6 +122,11 @@ check(bool(find("windows", "smoke-win.ps1")), "windows ejecuta smoke-win.ps1")
 verify = read("app", "scripts", "smoke_verify.py")
 for tag_ in ("Portada", "Canvas", "YouTube", "MP3 320", "Portada animada"):
     check(f'"{tag_}"' in verify, f"smoke_verify exige [{tag_}]")
+# el humo filtra el informe con los literales del i18n del motor (no copiados a mano)
+check("report.adm_unavailable" in verify and "report.adm_clipping" in verify and "i18n" in verify,
+      "smoke_verify lee del i18n del motor los literales del informe de Apple")
+for f in ("smoke_verify.py", "smoke-mac.sh", "smoke-win.ps1"):
+    check("Digital" + " Masters" not in read("app", "scripts", f), f"{f} no nombra el programa de Apple como texto")
 check("capabilities" in verify and "CAPS_TARGET_MS" in verify, "smoke_verify anota el tiempo de capabilities()")
 ps = read("app", "scripts", "smoke-win.ps1")
 check("\\\\?\\" in ps and "ffprobe" in ps, "smoke-win.ps1 prueba rutas \\\\?\\ con ffprobe")

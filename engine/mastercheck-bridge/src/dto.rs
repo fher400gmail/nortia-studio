@@ -63,7 +63,7 @@ pub struct JobDto {
     #[serde(default)]
     pub warnings: Vec<String>,
     /// Nombres de los archivos adicionales del destino (PNG de la portada, segundo tamaño de
-    /// Apple Motion), en la misma subcarpeta.
+    /// portada animada), en la misma subcarpeta.
     #[serde(default)]
     pub extra_files: Vec<String>,
 }

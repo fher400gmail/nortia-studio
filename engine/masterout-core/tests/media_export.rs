@@ -1,6 +1,6 @@
 //! Entrega de punta a punta con portada y material propio: portada JPG+PNG, Canvas, vídeo de
-//! YouTube, Apple Motion y MP3 con APIC. Se ejecutan con el ffmpeg del entorno (PATH o
-//! `MASTERCHECK_FFMPEG`); sin él se saltan. El Apple Motion (HEVC/H.264 de 3840²) tarda
+//! YouTube, portada animada y MP3 con APIC. Se ejecutan con el ffmpeg del entorno (PATH o
+//! `MASTERCHECK_FFMPEG`); sin él se saltan. La portada animada (HEVC/H.264 de 3840²) tarda
 //! minutos con un ffmpeg de software: solo con `MASTERCHECK_SLOW=1`.
 
 mod common;

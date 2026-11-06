@@ -115,10 +115,10 @@ jobs:
           done
           for f in terceros.txt LICENSE.LGPLv2.1 COPYING.LGPL LICENSE.lame; do test -s "$APP/Contents/Resources/legal/$f"; done
           du -sh "$APP" out/*
-      # Apple Digital Masters: afconvert y afclip vienen con macOS (/usr/bin; comprobado en macos-15).
+      # Apple Music (afclip): afconvert y afclip vienen con macOS (/usr/bin; comprobado en macos-15).
       # Si algún día falta afclip en el runner, NO se instala nada: aviso visible y el caso pasa al
       # checklist de Fer (docs/pruebas/hito3-checklist.md, prueba 9).
-      - name: "Detectar afclip (Apple Digital Masters)"
+      - name: "Detectar afclip (Apple Music)"
         id: adm
         run: |
           if AFCLIP=$(command -v afclip) && command -v afconvert >/dev/null; then
@@ -126,10 +126,10 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::afclip no está en este runner: la validación Apple Digital Masters no se ha ejecutado. Pasa el caso por el Mac de Fer: docs/pruebas/hito3-checklist.md, prueba 9."
+            echo "::warning::afclip no está en este runner: la comprobación de Apple Music (afclip) no se ha ejecutado. Pasa el caso por el Mac de Fer: docs/pruebas/hito3-checklist.md, prueba 9."
           fi
       # El enlace va en el mensaje reason.adm_tools_missing: si deja de responder 200 se avisa, sin romper el build.
-      - name: "La página de Apple Digital Masters responde 200"
+      - name: "La página de las herramientas de Apple Music (afclip) responde 200"
         run: |
           URL="https://www.apple.com/apple-music/apple-digital-masters/"
           CODE=$(curl -sSIL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15" -o /dev/null -w '%{http_code}' "$URL" || echo 000)
@@ -137,7 +137,7 @@ jobs:
           if [ "$CODE" != "200" ]; then
             echo "::warning::$URL devuelve $CODE: el enlace de reason.adm_tools_missing (engine/masterout-core/i18n) puede estar roto"
           fi
-      - name: "Apple Digital Masters real (afconvert, AAC, afclip; −1 dBTP → 0 clips, +1 dBTP → más de 0)"
+      - name: "Apple Music (afclip) real (afconvert, AAC; −1 dBTP → 0 clips, +1 dBTP → más de 0)"
         if: steps.adm.outputs.present == 'true'
         env:
           MASTEROUT_REQUIRE_ADM: "1"

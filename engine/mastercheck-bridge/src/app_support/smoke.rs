@@ -27,7 +27,7 @@ pub fn parse_spec(spec: &str) -> Result<(PathBuf, PathBuf), String> {
 }
 
 /// Destinos que ejercita el humo. El MP3 necesita el sidecar (ffmpeg); la portada, solo una
-/// imagen; Canvas, el vídeo de YouTube y Apple Motion, las dos cosas (parten de la portada).
+/// imagen; Canvas, el vídeo de YouTube y portada animada, las dos cosas (parten de la portada).
 pub fn smoke_ids(has_sidecar: bool, has_cover: bool) -> Vec<String> {
     let mut ids: Vec<&str> = vec!["spotify", "apple_adm", "deezer", "distributor_std"];
     if has_sidecar {

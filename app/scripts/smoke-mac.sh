@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Humo headless de master check en macOS. Uso: smoke-mac.sh "<ruta al .app>" "<carpeta de trabajo>"
 # Ejecuta el binario real (analizar + planificar + exportar) con portada sintética y comprueba
-# [Portada], [Canvas], [YouTube], [MP3 320] y Apple Motion con el ffprobe del propio sidecar
+# [Portada], [Canvas], [YouTube], [MP3 320] y portada animada con el ffprobe del propio sidecar
 # empaquetado en Contents/MacOS. Variables:
-#   ADM=required   exige «0 muestras con clipping» de Apple Digital Masters en el informe
+#   ADM=required   exige «0 muestras con clipping» de la comprobación de Apple en el informe
 #   (lo pone el job solo si instaló afclip; si no, el informe dirá «no disponible» y hay aviso)
 # Fuerza el idioma a español (LANG) para que los documentos se llamen README.txt e
 # informe-loudness.txt aunque el runner de CI esté en inglés.

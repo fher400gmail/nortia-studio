@@ -22,7 +22,7 @@ const Data = (() => {
   const needsSidecar = new Set(['mp3', 'canvas', 'ytv', 'motion']);
   /* fichas encendidas al empezar: `default_on` de presets.json, que el motor da en app_info
      (una sola fuente de verdad). Hasta que llega, y si no llega la lista, el conjunto seguro
-     (todo salvo Apple Motion, como el prototipo aprobado) con un aviso en consola. */
+     (todo salvo portada animada, como el prototipo aprobado) con un aviso en consola. */
   const presetIds = Object.values(preset);
   let onIds = resolveDefaults(undefined, presetIds);
   const setDefaults = list => { onIds = resolveDefaults(list, presetIds, m => console.warn(m)); };

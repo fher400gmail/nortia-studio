@@ -80,14 +80,14 @@ pub struct Job {
     pub is_upsampling: bool,
     pub embed_metadata: bool,
     pub verdict: Verdict,
-    /// `Some` para portada, Canvas, YouTube y Apple Motion.
+    /// `Some` para portada, Canvas, YouTube y portada animada.
     pub media: Option<MediaKind>,
     /// Archivo propio del usuario para este destino (en vez de fabricarlo desde la portada).
     pub own_media: Option<PathBuf>,
     /// Nombres de los archivos adicionales del mismo destino (el PNG de la portada, el
-    /// segundo tamaño de Apple Motion), en la misma subcarpeta.
+    /// segundo tamaño de la portada animada), en la misma subcarpeta.
     pub extra_files: Vec<String>,
-    /// Apple Motion sin codificador HEVC: solo sale el archivo de 2048×2732 (H.264) y el de
+    /// portada animada sin codificador HEVC: solo sale el archivo de 2048×2732 (H.264) y el de
     /// 3840×3840 se omite (el aviso `reason.hevc_unavailable` va en `warnings`).
     pub hevc_skipped: bool,
     /// Claves `warn.*` que se mostrarán en la interfaz y en el README.
@@ -158,7 +158,7 @@ fn resolve_media(
             return disabled(p, "err.media_unreadable");
         }
     }
-    // La portada de la entrega (la usan MP3, Canvas, YouTube y Apple Motion sin material propio)
+    // La portada de la entrega (la usan MP3, Canvas, YouTube y portada animada sin material propio)
     if kind != MediaKind::Cover && own.is_none() {
         if let Some(c) = &cx.cover {
             if !crate::media::usable_media_file(c, true, false) {
@@ -377,7 +377,7 @@ pub fn resolve(
 /// Resuelve los destinos activos, en el orden de las subcarpetas, con los nombres
 /// de carpeta y etiquetas del idioma pedido. `caps`: `None` si no hay ffmpeg/ffprobe (se
 /// deshabilitan, con motivo, las fichas de vídeo y el MP3; el resto sale igual); si hay, los
-/// codificadores que funcionan (sin H.264 no hay vídeo; sin HEVC, Apple Motion omite 3840×3840).
+/// codificadores que funcionan (sin H.264 no hay vídeo; sin HEVC, portada animada omite 3840×3840).
 pub fn resolve_in(
     master: &MasterInfo,
     meta: &ReleaseMeta,

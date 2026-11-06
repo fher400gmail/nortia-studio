@@ -2,7 +2,7 @@
 # Uso: pwsh -File smoke-win.ps1 -Exe "<ruta al .exe instalado por NSIS (lo descubre el workflow: el único que no es ffmpeg/ffprobe/uninstall)>" -Work "<carpeta>"
 # Mismo guion que smoke-mac.sh, más:
 #   - ffprobe debe aceptar rutas canonicalizadas con prefijo \\?\ (las que produce media::probe);
-#   - si hevc_mf no existe en el equipo, Apple Motion solo sale en 2048x2732 y hay ::warning::
+#   - si hevc_mf no existe en el equipo, portada animada solo sale en 2048x2732 y hay ::warning::
 #     (lo comprueba smoke_verify.py a partir del bloque `smoke` de smoke-result.json).
 param(
   [Parameter(Mandatory = $true)][string]$Exe,
@@ -59,7 +59,7 @@ if (-not (Test-Path -LiteralPath $result)) { throw 'no hay smoke-result.json' }
 $d = Get-Content -LiteralPath $result -Raw -Encoding UTF8 | ConvertFrom-Json
 Write-Host "capabilities() en frío (Windows): h264=$($d.smoke.capabilities.h264) hevc=$($d.smoke.capabilities.hevc) $($d.smoke.capabilities.millis) ms"
 if (-not $d.smoke.capabilities.hevc) {
-  Write-Host '::warning::HEVC no disponible (hevc_mf): Apple Motion solo sale en 2048x2732 (3840x3840 requiere «HEVC Video Extensions»).'
+  Write-Host '::warning::HEVC no disponible (hevc_mf): portada animada solo sale en 2048x2732 (3840x3840 requiere «HEVC Video Extensions»).'
 }
 Get-ChildItem -Recurse -File $out | ForEach-Object { $_.FullName } | Sort-Object | Tee-Object -FilePath (Join-Path $Work 'listado.txt')
 

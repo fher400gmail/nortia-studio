@@ -185,7 +185,7 @@ test('mock_plan_media_chips_need_a_cover_or_their_own_file', async () => {
   // sin portada ni material: las cuatro fichas, deshabilitadas con el motivo del motor
   let j = byId(await be.plan(master, meta, ALL));
   for (const id of MEDIA) { assert.equal(j[id].enabled, false, id); assert.match(j[id].disabled_reason, /Falta la portada/); }
-  // con portada: todas habilitadas; la portada trae su PNG y Apple Motion sus dos tamaños
+  // con portada: todas habilitadas; la portada trae su PNG y portada animada sus dos tamaños
   j = byId(await be.plan(master, { ...meta, cover_path: '/m/portada.jpg' }, ALL));
   for (const id of MEDIA) assert.equal(j[id].enabled, true, id);
   assert.match(j.cover.file_name, /\[Portada\] 3000x3000\.jpg$/);

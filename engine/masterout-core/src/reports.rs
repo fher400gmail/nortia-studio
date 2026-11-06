@@ -129,6 +129,10 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
         &[("version", s.app_version), ("date", &s.created_at)],
     ));
     out.push('\n');
+    // aviso de marcas de terceros (D-31): al final, igual que en «Acerca de»
+    out.push('\n');
+    out.push_str(&t(lang, "readme.trademarks"));
+    out.push('\n');
     out
 }
 

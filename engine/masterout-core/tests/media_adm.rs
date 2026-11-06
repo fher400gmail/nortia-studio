@@ -187,18 +187,17 @@ fn commands_keep_non_utf8_paths_byte_for_byte() {
 fn singular_plural_and_lowercase_reason_in_the_report_line() {
     let one = rep(AdmStatus::Clipping, 1);
     assert!(report(Some(&one), Lang::Es)
-        .contains("Apple Digital Masters: 1 muestra con clipping en el AAC"));
-    assert!(
-        report(Some(&one), Lang::En).contains("Apple Digital Masters: 1 clipped sample in the AAC")
-    );
+        .contains("Comprobación con las herramientas de Apple (AAC 256): 1 muestra con clipping"));
+    assert!(report(Some(&one), Lang::En)
+        .contains("Check with Apple's tools (AAC 256): 1 clipped sample"));
     let na = rep(
         AdmStatus::Unavailable {
             reason_key: "reason.adm_mac_only".into(),
         },
         0,
     );
-    assert!(report(Some(&na), Lang::Es).contains("no disponible: la validación"));
-    assert!(report(Some(&na), Lang::En).contains("not available: validation"));
+    assert!(report(Some(&na), Lang::Es).contains("no disponible: la comprobación"));
+    assert!(report(Some(&na), Lang::En).contains("not available: the check"));
 }
 
 #[test]
@@ -421,10 +420,12 @@ fn rep(status: AdmStatus, n: u64) -> AdmReport {
 fn report_line_renders_in_es_and_en() {
     let clip = rep(AdmStatus::Clipping, 42);
     let es = report(Some(&clip), Lang::Es);
-    assert!(es.contains("Apple Digital Masters: 42 muestras con clipping en el AAC"));
+    assert!(es.contains(
+        "Comprobación con las herramientas de Apple (AAC 256): 42 muestras con clipping"
+    ));
     assert!(es.contains(&t(Lang::Es, "adm_clipping")));
     let en = report(Some(&clip), Lang::En);
-    assert!(en.contains("Apple Digital Masters: 42 clipped samples in the AAC"));
+    assert!(en.contains("Check with Apple's tools (AAC 256): 42 clipped samples"));
     let na = rep(
         AdmStatus::Unavailable {
             reason_key: "reason.adm_mac_only".into(),
@@ -433,10 +434,10 @@ fn report_line_renders_in_es_and_en() {
     );
     let es = report(Some(&na), Lang::Es);
     assert!(es.contains(&format!(
-        "Apple Digital Masters: no disponible: {}",
+        "Comprobación con las herramientas de Apple: no disponible: {}",
         t(Lang::Es, "reason.adm_mac_only").replacen('L', "l", 1)
     )));
-    assert!(!report(None, Lang::Es).contains("Apple Digital Masters:"));
+    assert!(!report(None, Lang::Es).contains("Comprobación con las herramientas de Apple"));
     // sin ADM el informe es idéntico al de siempre
     let ok = report(Some(&rep(AdmStatus::Ok, 0)), Lang::Es);
     assert!(ok.contains("0 muestras con clipping"));

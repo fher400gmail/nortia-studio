@@ -114,6 +114,22 @@ fn readme_lists_each_active_job_once_in_order() {
 }
 
 #[test]
+fn readme_ends_with_the_trademark_notice() {
+    let (m, ms) = (meta(), master(96000, 24));
+    let jobs = plan::resolve(&ms, &m, &["spotify", "apple_adm"], &Default::default());
+    for lang in [Lang::Es, Lang::En] {
+        let r = readme(lang, &summary(&m, &ms, &jobs));
+        let notice = t(lang, "readme.trademarks");
+        assert!(notice.contains("master check"), "{notice}");
+        assert_eq!(r.matches(&notice).count(), 1);
+        assert!(r.trim_end().ends_with(&notice), "{r}");
+        // la carpeta y el archivo de Apple llevan «Apple Music», no el programa Digital Masters
+        assert!(r.contains("[Apple Music] 24bit-96kHz.wav"), "{r}");
+        assert!(!r.contains("Digital Masters"));
+    }
+}
+
+#[test]
 fn readme_marks_upsampling_and_disabled() {
     let m = meta();
     let ms = master(44100, 24);

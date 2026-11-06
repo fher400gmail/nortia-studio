@@ -98,7 +98,7 @@
   "media.own": "{name} · your own file",
   "media.clear": "Remove {name}",
   "media.pick": "Choose an image or video",
-  "media.bad_type": "Only images (JPG, PNG) and videos (MP4, MOV) are supported.",
+  "media.bad_type": "Only images (JPG, PNG, WebP) and videos (MP4, MOV, M4V, MKV, WebM) are supported.",
   "done.notes": "Notes:",
   "sidecar.missing": "MP3 and video unavailable: ffmpeg is missing from this install.",
   "cover.bad_type": "The cover art must be a JPG or PNG image.",

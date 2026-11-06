@@ -98,7 +98,7 @@
   "media.own": "{name} · material propio",
   "media.clear": "Quitar {name}",
   "media.pick": "Elegir imagen o vídeo",
-  "media.bad_type": "Solo se admiten imágenes (JPG, PNG) y vídeos (MP4, MOV).",
+  "media.bad_type": "Solo se admiten imágenes (JPG, PNG, WebP) y vídeos (MP4, MOV, M4V, MKV, WebM).",
   "done.notes": "Avisos:",
   "sidecar.missing": "MP3 y vídeo no disponibles: falta ffmpeg en esta instalación.",
   "cover.bad_type": "La portada debe ser una imagen JPG o PNG.",

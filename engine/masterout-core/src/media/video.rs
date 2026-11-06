@@ -508,6 +508,22 @@ fn kill(child: &mut Child) {
     let _ = child.wait();
 }
 
+// DIAG-TEMP
+fn dtrace(t0: std::time::Instant, msg: &str) {
+    if std::env::var_os("NORTIA_FFMPEG_TRACE").is_some() {
+        eprintln!("[trace {:>8.3}s] {msg}", t0.elapsed().as_secs_f64());
+        #[cfg(windows)]
+        if msg.starts_with("tras kill") {
+            if let Ok(o) = Command::new("tasklist")
+                .args(["/FI", "IMAGENAME eq ffmpeg.exe"])
+                .output()
+            {
+                eprintln!("[trace] tasklist: {}", String::from_utf8_lossy(&o.stdout));
+            }
+        }
+    }
+}
+
 /// Máximo de stderr que se conserva (los últimos bytes).
 const STDERR_KEEP: usize = 16 * 1024;
 
@@ -596,12 +612,19 @@ pub fn run_ffmpeg_with_deadline(
         };
         AudioError::UnsupportedFormat(format!("{key}: {}: {e}", sidecar.ffmpeg.display()))
     })?;
+    dtrace(
+        started,
+        &format!("spawn pid={} exe={}", child.id(), sidecar.ffmpeg.display()),
+    );
     let pipe = child.stderr.take();
     let reader = thread::spawn(move || pipe.map(drain_tail).unwrap_or_default());
     let status = loop {
         if cancel() {
+            dtrace(started, "cancel detectado");
             kill(&mut child);
+            dtrace(started, "tras kill+wait");
             let _ = reader.join();
+            dtrace(started, "tras reader.join");
             cleanup();
             return Err(AudioError::Cancelled);
         }

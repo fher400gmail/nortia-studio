@@ -821,6 +821,21 @@ fn encoder_failure_is_per_job() {
     assert!(!out.exists() && !d.path().join("yt.mp4.part").exists());
 }
 
+/// Ejecuta `f` en un hilo aparte y falla si no termina en `cap`.
+fn run_with_hard_cap<T: Send + 'static>(
+    cap: Duration,
+    what: &str,
+    f: impl FnOnce() -> T + Send + 'static,
+) -> T {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.recv_timeout(cap).unwrap_or_else(|_| {
+        panic!("{what}: sin terminar tras {cap:?} (la cancelación no paró a ffmpeg)")
+    })
+}
+
 #[test]
 fn cancel_kills_ffmpeg() {
     let Some(sc) = sidecar() else { return };
@@ -845,15 +860,21 @@ fn cancel_kills_ffmpeg() {
         Platform::Windows => v(&["-c:v", "h264_mf"]),
     });
     a.push(out.to_str().unwrap().into());
-    let flag = AtomicBool::new(false);
+    let flag = std::sync::Arc::new(AtomicBool::new(false));
     let t0 = Instant::now();
-    let r = std::thread::scope(|s| {
-        s.spawn(|| {
-            std::thread::sleep(Duration::from_millis(500));
-            flag.store(true, Ordering::SeqCst);
-        });
-        run_ffmpeg(&sc, &a, &|| flag.load(Ordering::SeqCst))
+    let f2 = flag.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(500));
+        f2.store(true, Ordering::SeqCst);
     });
+    // Tope duro: si la cancelación no mata a ffmpeg (p. ej. en Windows el hijo del shim de
+    // chocolatey conserva la tubería), el test falla a los 20 s con un mensaje claro en vez de
+    // colgar el job entero. El <2 s de abajo no se relaja.
+    let r = run_with_hard_cap(
+        Duration::from_secs(20),
+        "run_ffmpeg tras cancelar",
+        move || run_ffmpeg(&sc, &a, &|| flag.load(Ordering::SeqCst)),
+    );
     assert!(matches!(r, Err(AudioError::Cancelled)), "{r:?}");
     assert!(
         t0.elapsed() < Duration::from_secs(2),

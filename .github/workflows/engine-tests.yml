@@ -88,6 +88,38 @@ jobs:
         continue-on-error: true
         shell: bash
         run: choco install ffmpeg -y
+      # DIAG-TEMP (se quita antes del commit final)
+      - name: Diagnóstico ffmpeg/color
+        shell: bash
+        continue-on-error: true
+        run: |
+          set +e
+          which -a ffmpeg ffprobe
+          ls -la /c/ProgramData/chocolatey/bin | grep -i ffmpeg
+          ls -R /c/ProgramData/chocolatey/lib/ffmpeg | head -30
+          ffmpeg -version | head -3
+          ffmpeg -hide_banner -encoders | grep -i "_mf"
+          cd "$RUNNER_TEMP"
+          VF="scale=out_color_matrix=bt709:out_range=tv,format=yuv420p"
+          TAGS="-color_primaries bt709 -color_trc bt709 -colorspace bt709"
+          SRC="-f lavfi -i testsrc=s=640x360:r=30:d=1"
+          probe() { ffprobe -v error -show_streams -select_streams v:0 "$1" | grep -E "^(color_|pix_fmt|profile)"; ffprobe -v trace "$1" 2>&1 | grep -ci "colr" ; }
+          echo "== A: como el motor"
+          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -c:v h264_mf -profile:v 100 -f mp4 a.mp4 2>&1 | tail -15; probe a.mp4
+          echo "== B: +write_colr"
+          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -c:v h264_mf -profile:v 100 -movflags +write_colr -f mp4 b.mp4 2>&1 | tail -5; probe b.mp4
+          echo "== C: bsf h264_metadata"
+          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -c:v h264_mf -profile:v 100 -bsf:v "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0" -f mp4 c.mp4 2>&1 | tail -5; probe c.mp4
+          echo "== D: bsf + write_colr + color_range"
+          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -color_range tv -c:v h264_mf -profile:v 100 -bsf:v "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0" -movflags +write_colr -f mp4 d.mp4 2>&1 | tail -5; probe d.mp4
+          echo "== E: libx264 presente?"
+          ffmpeg -hide_banner -encoders | grep -c libx264
+      - name: Diagnóstico cancelación (traza)
+        shell: bash
+        continue-on-error: true
+        env:
+          NORTIA_FFMPEG_TRACE: "1"
+        run: cargo test --manifest-path engine/Cargo.toml -p masterout-core --test media_video cancel_kills_ffmpeg -- --nocapture
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features

@@ -391,12 +391,12 @@ fn mp3_has_id3v23_frames() {
         Some("ESABC2600001")
     );
     assert!(tag.get("TCOM").is_some() && tag.get("TPUB").is_some() && tag.get("TCOP").is_some());
-    // portada conformada (JPG 3000×3000) incrustada como APIC
+    // portada conformada (JPG 3000×3000) incrustada como APIC, reducida a 1400 px de lado largo
     let pic = tag.pictures().next().expect("sin APIC");
     assert_eq!(pic.mime_type, "image/jpeg");
     assert_eq!(pic.picture_type, id3::frame::PictureType::CoverFront);
     let img = image::load_from_memory(&pic.data).unwrap();
-    assert_eq!((img.width(), img.height()), (3000, 3000));
+    assert_eq!((img.width(), img.height()), (1400, 1400));
     // 320 kbps CBR con cabecera Xing, medido por ffprobe
     let info = media::probe::probe(&sc, &file).unwrap();
     assert_eq!(info.audio_codec.as_deref(), Some("mp3"));

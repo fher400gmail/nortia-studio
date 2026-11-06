@@ -118,12 +118,12 @@ fn delivery_with_cover_produces_cover_canvas_youtube_and_mp3() {
     assert_eq!(y.audio_sample_rate, Some(48_000));
     assert!((y.duration - 4.0).abs() < 0.3, "{y:?}");
     assert_eq!(y.moov_first, Some(true));
-    // MP3 con la portada conformada incrustada
+    // MP3 con la portada conformada incrustada, reducida a 1400 px
     let mp3 = file_in(f, "08 Promo", &n("MP3 320", "", "mp3"));
     let tag = id3::Tag::read_from_path(&mp3).unwrap();
     let pic = tag.pictures().next().expect("APIC");
     let img = image::load_from_memory(&pic.data).unwrap();
-    assert_eq!((img.width(), img.height()), (3000, 3000));
+    assert_eq!((img.width(), img.height()), (1400, 1400));
     // el README lista los archivos extra y los avisos de la portada
     let readme = std::fs::read_to_string(f.join("README.txt")).unwrap();
     assert!(

@@ -275,3 +275,46 @@ fn apple_motion_end_to_end_when_slow_tests_are_enabled() {
         assert!(!i.has_audio && (i.duration - 10.0).abs() < 0.4, "{i:?}");
     }
 }
+
+/// Material propio por encima del tope de píxeles (el de la portada): se rechaza con ffprobe
+/// antes de decodificarlo, en Canvas, YouTube y portada animada.
+#[test]
+fn oversized_own_media_is_rejected_before_encoding() {
+    let Some(sc) = sidecar() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path(), 3);
+    // 16 400 × 16: pasa el tope de píxeles pero no el de lado (16 384)
+    let big = tmp.path().join("enorme.png");
+    let st = Command::new(&sc.ffmpeg)
+        .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+        .arg("color=c=red:s=16400x16:d=1")
+        .args(["-frames:v", "1"])
+        .arg(&big)
+        .status()
+        .unwrap();
+    assert!(st.success());
+    let mut media = MediaInputs::default();
+    for id in ["canvas", "youtube_video", "apple_motion"] {
+        media.per_preset.insert(id.into(), big.clone());
+    }
+    let req = ExportRequest::new(
+        m,
+        meta(),
+        ["canvas", "youtube_video", "apple_motion"]
+            .map(String::from)
+            .to_vec(),
+        tmp.path().join("out"),
+        Lang::En,
+    )
+    .with_threads(2)
+    .with_sidecar(Some(sc))
+    .with_media(media);
+    let d = export::run(&req, &|_| {}).unwrap();
+    assert_eq!(d.failed.len(), 3, "{:?} {:?}", d.failed, d.failed_details);
+    assert!(
+        d.failed.iter().all(|(_, k)| k == "err.media_too_large"),
+        "{:?}",
+        d.failed
+    );
+    assert!(d.failed_details.iter().all(|(_, det)| det.as_deref() == Some("16400x16")));
+}

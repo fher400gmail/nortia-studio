@@ -122,6 +122,22 @@ pub fn parse_probe_json(json: &str) -> Result<MediaInfo, AudioError> {
     })
 }
 
+/// Tope de tamaño del material propio (el mismo que el de la portada, `image::MAX_SIDE` y
+/// `image::MAX_PIXELS`): ffmpeg decodificaría un WebP de 16383² (≈1 GB en RGBA) o un vídeo
+/// enorme sin límite. `err.media_too_large` con las dimensiones en el detalle.
+pub fn check_size(info: &MediaInfo) -> Result<(), AudioError> {
+    use super::image::{MAX_PIXELS, MAX_SIDE};
+    if info.width.max(info.height) > MAX_SIDE
+        || u64::from(info.width) * u64::from(info.height) > MAX_PIXELS
+    {
+        return Err(AudioError::UnsupportedFormat(format!(
+            "err.media_too_large: {}x{}",
+            info.width, info.height
+        )));
+    }
+    Ok(())
+}
+
 /// Recorre los átomos de primer nivel de un MP4/MOV: `Some(true)` si `moov` va antes de `mdat`.
 pub fn moov_before_mdat(path: &Path) -> Option<bool> {
     let mut f = File::open(path).ok()?;
@@ -282,6 +298,18 @@ mod tests {
           "format":{"format_name":"png_pipe","duration":"0.040000"}}"#;
         let i = parse_probe_json(j).unwrap();
         assert!(i.is_still && i.duration == 0.0 && !i.has_audio);
+    }
+
+    #[test]
+    fn check_size_applies_the_cover_limits() {
+        let mut i = parse_probe_json(MP4).unwrap();
+        assert!(check_size(&i).is_ok());
+        (i.width, i.height) = (16_385, 16);
+        assert_eq!(check_size(&i).unwrap_err().key_and_detail().0, "err.media_too_large");
+        (i.width, i.height) = (12_000, 12_000); // 144 MP
+        assert_eq!(check_size(&i).unwrap_err().key_and_detail().0, "err.media_too_large");
+        (i.width, i.height) = (10_000, 12_000); // 120 MP exactos
+        assert!(check_size(&i).is_ok());
     }
 
     #[test]

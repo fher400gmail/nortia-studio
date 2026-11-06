@@ -91,6 +91,7 @@
   "err.cover_unreadable": "No se pudo leer la portada.",
   "err.cover_write": "No se pudo escribir la portada.",
   "err.cover_too_large": "La portada es demasiado grande. Máximo 16384 px por lado y 120 megapíxeles.",
+  "err.media_too_large": "El material propio es demasiado grande. Máximo 16384 px por lado y 120 megapíxeles.",
   "err.encoder_unavailable": "Este equipo no puede crear el vídeo: falta el codificador H.264 del sistema. El resto de la entrega se ha exportado.",
   "err.ffmpeg_failed": "No se pudo crear este archivo. El resto de la entrega se ha exportado.",
   "err.ffmpeg_timeout": "La creación del archivo tardó demasiado y se canceló. El resto de la entrega se ha exportado.",

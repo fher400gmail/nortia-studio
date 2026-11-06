@@ -508,6 +508,8 @@ impl Ctx<'_> {
     /// Fuente de un vídeo: el material propio del destino o, si no hay, la portada conformada.
     fn video_source(&self, job: &Job) -> Result<VideoSource, AudioError> {
         if let Some(p) = &job.own_media {
+            // tope de tamaño con ffprobe antes de que ffmpeg decodifique nada
+            media::probe::check_size(&media::probe::probe(self.sidecar()?, p)?)?;
             return Ok(VideoSource::UserMedia(p.clone()));
         }
         let cover = self

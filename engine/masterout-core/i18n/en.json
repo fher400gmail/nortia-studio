@@ -91,6 +91,7 @@
   "err.cover_unreadable": "The cover could not be read.",
   "err.cover_write": "The cover could not be written.",
   "err.cover_too_large": "The cover is too large. Maximum 16384 px per side and 120 megapixels.",
+  "err.media_too_large": "Your own image or video is too large. Maximum 16384 px per side and 120 megapixels.",
   "err.encoder_unavailable": "This computer cannot create the video: the system H.264 encoder is missing. The rest of the delivery was exported.",
   "err.ffmpeg_failed": "This file could not be created. The rest of the delivery was exported.",
   "err.ffmpeg_timeout": "Creating this file took too long and was cancelled. The rest of the delivery was exported.",

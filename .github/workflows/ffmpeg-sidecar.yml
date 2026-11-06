@@ -88,7 +88,7 @@ jobs:
           done
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Preflight del runner (sin brew ni sudo: todo se instala a mano una vez)
+      - name: Preflight del runner (sin brew ni sudo, todo se instala a mano una vez)
         run: tools/ci/runner-preflight.sh --cmd clang --cmd make --cmd nasm --cmd pkg-config --cmd gpg --cmd curl --cmd lipo --cmd otool --cmd codesign --cmd python3
       - name: Compilar (arm64 + x86_64, lipo)
         run: |

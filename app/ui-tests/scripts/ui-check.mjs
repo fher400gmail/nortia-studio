@@ -121,7 +121,7 @@ async function run(lang) {
   await page.click('[data-act=preset]');
   assert.equal(await page.locator('.chip[data-id=tidal]').getAttribute('aria-checked'), 'false', `${lang}: el preset apaga las fichas default_on:false`);
 
-  // el AAC de Apple Digital Masters pasa de 0 dB: aviso de estado al terminar (no error)
+  // el AAC de la comprobación de Apple pasa de 0 dB: aviso de estado al terminar (no error)
   await page.goto(`${base}/index.html?backend=mock&lang=${lang}&theme=light&fast=1&state=done&adm=clip`);
   await page.waitForSelector('.donebox');
   assert.match((await page.textContent('.statusline')).trim(), tx.adm, `${lang}: aviso de ADM`);
@@ -192,6 +192,25 @@ async function run(lang) {
   assert.equal(await page.locator('.chip .mono svg').count(), 0, `${lang}: V1 no lleva glifos`);
   assert.equal(await page.locator('.chip[data-id=spotify] .mono i.dot').count(), 1, `${lang}: V1 lleva el punto de estado`);
   assert.equal(await page.locator('.chip svg text').count(), 0, `${lang}: ningún glifo con texto de marca`);
+  // punto de estado V1: anillo sólido y sin atenuar al estar apagado (contraste ≥ 3:1); deshabilitado sin outline cuadrado
+  const p2 = await browser.newPage({ viewport: { width: 880, height: 860 } });
+  await p2.goto(`${base}/index.html?backend=mock&lang=${lang}&theme=light&fast=1&state=normal`);
+  await p2.waitForSelector('html[data-ready]');
+  const off = await p2.evaluate(() => {
+    const dot = document.querySelector('.chip[aria-checked=false]:not(.dis) .dot') || document.querySelector('.chip:not(.on):not(.dis) .dot');
+    const dis = document.querySelector('.chip.dis:not(.has-media) .mono');
+    const eff = el => { let o = 1; for (let e = el; e && e !== document.body; e = e.parentElement) o *= +getComputedStyle(e).opacity; return o; };
+    return { dot: dot ? { style: getComputedStyle(dot).borderTopStyle, w: parseFloat(getComputedStyle(dot).borderTopWidth), op: eff(dot) } : null, disOutline: dis ? getComputedStyle(dis).outlineStyle : null, disDot: document.querySelector('.chip.dis .dot') ? { style: getComputedStyle(document.querySelector('.chip.dis .dot')).borderTopStyle, op: eff(document.querySelector('.chip.dis .dot')) } : null };
+  });
+  assert.ok(off.disDot, `${lang}: hay un punto en una ficha deshabilitada ${JSON.stringify(off)}`);
+  assert.equal(off.disDot.style, 'solid', `${lang}: anillo deshabilitado sólido`);
+  assert.ok(off.disDot.op >= 0.99, `${lang}: anillo deshabilitado sin atenuar (${off.disDot.op})`);
+  assert.equal(off.disOutline, 'none', `${lang}: sin outline cuadrado en deshabilitado`);
+  await p2.click('.chip[data-id=amazon]');
+  const offDot = await p2.evaluate(() => { const d = document.querySelector('.chip[data-id=amazon] .dot'); let o = 1; for (let e = d; e && e !== document.body; e = e.parentElement) o *= +getComputedStyle(e).opacity; return { style: getComputedStyle(d).borderTopStyle, w: parseFloat(getComputedStyle(d).borderTopWidth), op: o }; });
+  assert.equal(offDot.style, 'solid', `${lang}: anillo apagado sólido`);
+  assert.ok(offDot.w <= 1.6 && offDot.op >= 0.99, `${lang}: anillo apagado fino y sin atenuar (${JSON.stringify(offDot)})`);
+  await p2.close();
   await page.goto(q('&state=normal&chips=gesto'));
   await page.waitForSelector('html[data-ready]');
   assert.equal(await page.getAttribute('html', 'data-chip-style'), 'gesto');

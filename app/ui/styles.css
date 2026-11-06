@@ -427,7 +427,10 @@ body.still *,body.still *::before,body.still *::after{animation:none!important}
 :root[data-chip-style=nombre] .chip .mono:not(:has(.mthumb)){width:auto;aspect-ratio:auto;height:12px;background:none;border-radius:0}
 :root[data-chip-style=nombre] .chip.on .mono:not(:has(.mthumb)){background:none}
 :root[data-chip-style=nombre] .chip .ck{display:none}
-.chip .dot{display:block;width:10px;height:10px;border-radius:50%;box-sizing:border-box;border:1.6px solid var(--ink-3);background:transparent;transition:background .25s var(--ease),border-color .25s var(--ease)}
+.chip .dot{display:block;width:10px;height:10px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--ctl);background:transparent;transition:background .25s var(--ease),border-color .25s var(--ease)}
 .chip.on .dot{background:var(--brand);border-color:var(--brand)}
-.chip.dis .dot{border-style:dashed}
+/* el punto no se atenúa con la ficha (anillo --ctl ≥ 3:1 sobre papel y tinta, también apagado y deshabilitado);
+   lo que baja de intensidad es el nombre. Deshabilitada: sin outline cuadrado en el hueco del icono */
+:root[data-chip-style=nombre] .chip:not(.on)>.mono:not(:has(.mthumb)),:root[data-chip-style=nombre] .chip.dis>.mono:not(:has(.mthumb)){opacity:1!important}
+:root[data-chip-style=nombre] .chipw .chip.dis:not(.has-media) .mono{outline:0}
 :root[data-chip-style=nombre] .chip:hover .mono{transform:none}

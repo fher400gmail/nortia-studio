@@ -182,18 +182,30 @@ pub struct SidecarPaths {
 
 const EXE_SUFFIX: &str = if cfg!(windows) { ".exe" } else { "" };
 
+/// ¿Se admiten ffmpeg/ffprobe de fuera del paquete (`MASTERCHECK_FFMPEG`, `MASTERCHECK_FFPROBE`,
+/// PATH)? Solo en compilaciones de depuración (los tests del motor usan el ffmpeg del sistema)
+/// o con la feature `dev-sidecar`. Una app de producción solo ejecuta el sidecar LGPL que
+/// viene junto al ejecutable: un `ffmpeg` del PATH puede ser GPL, un shim o un binario
+/// manipulado, y un antivirus que ponga en cuarentena el empaquetado no debe hacer que se use
+/// otro sin avisar.
+pub const EXTERNAL_SIDECAR: bool = cfg!(any(debug_assertions, feature = "dev-sidecar"));
+
 fn find_one(
     name: &str,
     env_var: &str,
     exe_dir: &Path,
     env: &dyn Fn(&str) -> Option<OsString>,
     path_var: Option<OsString>,
+    allow_external: bool,
 ) -> Option<PathBuf> {
     let file = format!("{name}{EXE_SUFFIX}");
     // 1) junto al ejecutable (Tauri externalBin, sin sufijo de target en el bundle)
     let next_to_exe = exe_dir.join(&file);
     if next_to_exe.is_file() {
         return Some(next_to_exe);
+    }
+    if !allow_external {
+        return None;
     }
     // 2) variable de entorno
     if let Some(v) = env(env_var).filter(|v| !v.is_empty()) {
@@ -209,11 +221,13 @@ fn find_one(
         .find(|p| p.is_file())
 }
 
-/// Versión pura de [`discover`] (entorno y PATH inyectados) para poder probarla.
-pub fn discover_with(
+/// Versión pura de [`discover`] (entorno, PATH y política inyectados) para poder probarla.
+/// Con `allow_external = false` solo cuenta lo que hay junto al ejecutable.
+pub fn discover_policy(
     exe_dir: &Path,
     env: &dyn Fn(&str) -> Option<OsString>,
     path_var: Option<OsString>,
+    allow_external: bool,
 ) -> Option<SidecarPaths> {
     Some(SidecarPaths {
         ffmpeg: find_one(
@@ -222,13 +236,31 @@ pub fn discover_with(
             exe_dir,
             env,
             path_var.clone(),
+            allow_external,
         )?,
-        ffprobe: find_one("ffprobe", "MASTERCHECK_FFPROBE", exe_dir, env, path_var)?,
+        ffprobe: find_one(
+            "ffprobe",
+            "MASTERCHECK_FFPROBE",
+            exe_dir,
+            env,
+            path_var,
+            allow_external,
+        )?,
     })
 }
 
-/// Busca `ffmpeg` y `ffprobe`: junto al ejecutable, luego `MASTERCHECK_FFMPEG` /
-/// `MASTERCHECK_FFPROBE`, luego PATH. `None` si falta alguno de los dos.
+/// [`discover_policy`] con la política de esta compilación ([`EXTERNAL_SIDECAR`]).
+pub fn discover_with(
+    exe_dir: &Path,
+    env: &dyn Fn(&str) -> Option<OsString>,
+    path_var: Option<OsString>,
+) -> Option<SidecarPaths> {
+    discover_policy(exe_dir, env, path_var, EXTERNAL_SIDECAR)
+}
+
+/// Busca `ffmpeg` y `ffprobe` junto al ejecutable. En depuración o con la feature
+/// `dev-sidecar` sigue con `MASTERCHECK_FFMPEG` / `MASTERCHECK_FFPROBE` y PATH. `None` si
+/// falta alguno de los dos (las fichas de vídeo quedan deshabilitadas con `reason.no_sidecar`).
 pub fn discover(exe_dir: &Path) -> Option<SidecarPaths> {
     discover_with(exe_dir, &|k| std::env::var_os(k), std::env::var_os("PATH"))
 }
@@ -262,23 +294,63 @@ mod tests {
             _ => None,
         };
         // PATH y entorno: gana el entorno
-        let got = discover_with(exe_dir.path(), &env, path_var.clone()).unwrap();
+        let got = discover_policy(exe_dir.path(), &env, path_var.clone(), true).unwrap();
         assert_eq!(got.ffmpeg, env_ff);
         // sin entorno: gana PATH
-        let got = discover_with(exe_dir.path(), &|_| None, path_var.clone()).unwrap();
+        let got = discover_policy(exe_dir.path(), &|_| None, path_var.clone(), true).unwrap();
         assert_eq!(got.ffprobe, path_dir.path().join(exe("ffprobe")));
         // junto al ejecutable: gana sobre todo
         touch(&exe_dir.path().join(exe("ffmpeg")));
         touch(&exe_dir.path().join(exe("ffprobe")));
-        let got = discover_with(exe_dir.path(), &env, path_var).unwrap();
+        let got = discover_policy(exe_dir.path(), &env, path_var, true).unwrap();
         assert_eq!(got.ffmpeg, exe_dir.path().join(exe("ffmpeg")));
+    }
+
+    #[test]
+    fn production_discover_only_looks_next_to_the_executable() {
+        let exe_dir = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        touch(&other.path().join(exe("ffmpeg")));
+        touch(&other.path().join(exe("ffprobe")));
+        let path_var = std::env::join_paths([other.path()]).ok();
+        let env = |k: &str| match k {
+            "MASTERCHECK_FFMPEG" => Some(other.path().join(exe("ffmpeg")).into_os_string()),
+            "MASTERCHECK_FFPROBE" => Some(other.path().join(exe("ffprobe")).into_os_string()),
+            _ => None,
+        };
+        // entorno y PATH poblados, nada junto al ejecutable: sin sidecar
+        assert!(discover_policy(exe_dir.path(), &env, path_var.clone(), false).is_none());
+        // solo uno de los dos junto al ejecutable: tampoco se completa desde fuera
+        touch(&exe_dir.path().join(exe("ffmpeg")));
+        assert!(discover_policy(exe_dir.path(), &env, path_var.clone(), false).is_none());
+        // los dos junto al ejecutable: se usan esos
+        touch(&exe_dir.path().join(exe("ffprobe")));
+        let got = discover_policy(exe_dir.path(), &env, path_var, false).unwrap();
+        assert_eq!(got.ffmpeg, exe_dir.path().join(exe("ffmpeg")));
+        assert_eq!(got.ffprobe, exe_dir.path().join(exe("ffprobe")));
+    }
+
+    #[cfg(any(debug_assertions, feature = "dev-sidecar"))]
+    #[test]
+    fn external_sidecar_is_enabled_for_the_engine_tests() {
+        // los tests del motor corren en depuración con el ffmpeg del sistema
+        assert!(EXTERNAL_SIDECAR);
+    }
+
+    #[cfg(not(any(debug_assertions, feature = "dev-sidecar")))]
+    #[test]
+    fn external_sidecar_is_disabled_in_production_builds() {
+        assert!(!EXTERNAL_SIDECAR);
+        let d = tempfile::tempdir().unwrap();
+        // `discover` real: sin binarios junto al ejecutable no hay sidecar, aunque haya PATH/env
+        assert!(discover(d.path()).is_none());
     }
 
     #[test]
     fn discover_none_when_either_binary_is_missing() {
         let d = tempfile::tempdir().unwrap();
         touch(&d.path().join(exe("ffmpeg")));
-        assert!(discover_with(d.path(), &|_| None, None).is_none());
-        assert!(discover_with(Path::new("/nonexistent-dir"), &|_| None, None).is_none());
+        assert!(discover_policy(d.path(), &|_| None, None, true).is_none());
+        assert!(discover_policy(Path::new("/nonexistent-dir"), &|_| None, None, true).is_none());
     }
 }

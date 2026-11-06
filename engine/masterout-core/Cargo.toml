@@ -20,6 +20,9 @@ moxcms = "0.9.1"
 # Ganchos de prueba (inyección de fallos). Sin ella no existen en el binario de producción;
 # las pruebas del propio crate la activan por la dependencia de desarrollo de abajo.
 test-hooks = []
+# Admite ffmpeg/ffprobe de MASTERCHECK_FFMPEG/MASTERCHECK_FFPROBE y del PATH también en release
+# (p. ej. `cargo test --release`). Nunca en el binario que se distribuye.
+dev-sidecar = []
 
 [dev-dependencies]
 masterout-core = { path = ".", features = ["test-hooks"] }

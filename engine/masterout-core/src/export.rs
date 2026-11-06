@@ -159,7 +159,8 @@ pub struct Delivery {
     pub elapsed_ms: u128,
 }
 
-/// Sidecar junto al ejecutable actual, en `MASTERCHECK_FFMPEG`/`MASTERCHECK_FFPROBE` o en PATH.
+/// Sidecar junto al ejecutable actual. Solo en depuración o con la feature `dev-sidecar` sigue
+/// con `MASTERCHECK_FFMPEG`/`MASTERCHECK_FFPROBE` y PATH (ver [`media::EXTERNAL_SIDECAR`]).
 pub fn default_sidecar() -> Option<SidecarPaths> {
     let dir = std::env::current_exe()
         .ok()

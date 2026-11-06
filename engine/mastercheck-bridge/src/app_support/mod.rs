@@ -37,7 +37,8 @@ pub const SIDECAR_RELEASE: &str = "ffmpeg-sidecar-v7.1.5-3a21763";
 pub struct AppInfo {
     pub version: String,
     pub os: String,
-    /// ffmpeg/ffprobe (vídeo y MP3) disponibles junto al ejecutable, en el entorno o en PATH.
+    /// ffmpeg/ffprobe (vídeo y MP3) disponibles: junto al ejecutable (en producción solo ahí; en
+    /// depuración también `MASTERCHECK_FFMPEG`/`MASTERCHECK_FFPROBE` y PATH).
     pub sidecar_available: bool,
     /// Release del componente de vídeo y MP3 empaquetado; `None` si no está junto al ejecutable.
     #[serde(default)]
@@ -61,8 +62,9 @@ pub fn app_info(version: &str, exe_dir: &Path, default_out_root: Option<String>)
 
 /// Como [`app_info`], con el entorno y el PATH inyectados (para probarlo). La release del
 /// sidecar solo se anuncia si ffmpeg y ffprobe están junto al ejecutable (lo empaquetado por
-/// `externalBin`): uno de `MASTERCHECK_FFMPEG` o del PATH puede ser cualquier otra compilación
-/// (p. ej. con GPL) y «Acerca de» no debe atribuirle la release.
+/// `externalBin`): en depuración, uno de `MASTERCHECK_FFMPEG` o del PATH puede ser cualquier
+/// otra compilación (p. ej. con GPL) y «Acerca de» no debe atribuirle la release. En
+/// producción el motor ni siquiera los busca (`media::EXTERNAL_SIDECAR`).
 pub fn app_info_with(
     version: &str,
     exe_dir: &Path,

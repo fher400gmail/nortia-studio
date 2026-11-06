@@ -271,6 +271,7 @@ const Views = (() => {
       const f = S.delivery ? S.delivery.failed : [];
       return `${hero()}<div class="donebox">${Icons.doneMark}<h1>${t('done.title', { n: '<span data-n></span>', name: '<span data-fname></span>' })}</h1>
       ${f.length ? `<p class="warnline" role="alert"><b>${t('done.failed')}</b> ${f.map(([id, msg]) => esc(destName(id) + ': ' + msg)).join(' · ')}</p>` : ''}
+      ${S.openErr ? `<p class="warnline" role="alert">${Icons.x} ${esc(t('open.failed'))}</p>` : ''}
       ${S.vnotes.length ? `<p class="statusline" role="status">${Icons.warn}<span><b>${t('done.verdicts')}</b> ${S.vnotes.map(n => esc(n.name + ': ' + n.text)).join(' · ')}</span></p>` : ''}
       ${S.notes.length ? `<p class="noteline"><b>${t('done.notes')}</b> ${S.notes.map(esc).join(' ')}</p>` : ''}
       <div class="acts"><button class="bb pri" data-act="open">${Icons.folder}<span>${t('open')}</span></button><button class="bb glass" data-act="again">${Icons.plus}<span>${t('again')}</span></button></div>${sum()}</div>`;
@@ -576,11 +577,11 @@ const Events = (() => {
   async function open() {
     const a = $('[data-act=open]'); if (!a || !S.delivery) return;
     const s = $('span', a); s.textContent = t('opening'); setTimeout(() => s.textContent = t('open'), 1200);
-    try { await backend.openPath(S.delivery.folder); } catch (e) { console.warn(e); }
+    try { S.openErr = false; await backend.openPath(S.delivery.folder); } catch (e) { console.warn(e); S.openErr = true; App.render(); }
   }
   function again() {
     Player.stop();
-    Object.assign(S, { mode: 'idle', loaded: false, cover: null, coverPath: null, artist: '', title: '', m: {}, master: null, waveform: [], plan: null, delivery: null, rows: [], banner: '', err: '', media: {}, notes: [], vnotes: [], prep: null });
+    Object.assign(S, { mode: 'idle', loaded: false, cover: null, coverPath: null, artist: '', title: '', m: {}, master: null, waveform: [], plan: null, delivery: null, rows: [], banner: '', err: '', media: {}, notes: [], vnotes: [], prep: null, openErr: false });
     S.on = Data.defaults();
     App.render();
   }

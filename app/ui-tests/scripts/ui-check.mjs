@@ -8,8 +8,8 @@ const { server, base } = await serve();
 const browser = await chromium.launch();
 
 const T = {
-  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', preparing: 'Preparando…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, sidecar: /falta ffmpeg/i, noComponent: /no disponible/i, dist: 'Distribuidora', dropHint: 'Arrastra la portada', adm: /Apple Music: pasa de 0 dB al codificar/ },
-  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', preparing: 'Preparing…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, sidecar: /ffmpeg is missing/i, noComponent: /not available/i, dist: 'Distributor', dropHint: 'Drop the cover', adm: /Apple Music: clips when encoded/ }
+  es: { drop: 'Suelta tu canción', create: 'Crear carpeta de entrega', creating: 'Creando carpeta…', preparing: 'Preparando…', open: 'Abrir carpeta', again: 'Nueva canción', lufs: /^−9,1 LUFS · pasa de 0 dB$/, done: /^Listo: \d+ archivos en Vera Alcón - Luz de Noviembre$/, notWav: /no es un WAV válido/, sidecar: /falta ffmpeg/i, noComponent: /no disponible/i, dist: 'Distribuidora', dropHint: 'Arrastra la portada', adm: /Apple Music: pasa de 0 dB al codificar/, openFail: /No se pudo abrir la carpeta/, legalFail: /No se pudo abrir el documento de licencias/ },
+  en: { drop: 'Drop your song', create: 'Create delivery folder', creating: 'Creating folder…', preparing: 'Preparing…', open: 'Open folder', again: 'New song', lufs: /^-9\.1 LUFS · over 0 dB$/, done: /^Done: \d+ files in Vera Alcón - Luz de Noviembre$/, notWav: /not a valid WAV/, sidecar: /ffmpeg is missing/i, noComponent: /not available/i, dist: 'Distributor', dropHint: 'Drop the cover', adm: /Apple Music: clips when encoded/, openFail: /folder could not be opened/, legalFail: /licenses document could not be opened/ }
 };
 
 let failures = 0;
@@ -126,6 +126,32 @@ async function run(lang) {
   await page.waitForSelector('.donebox');
   assert.match((await page.textContent('.statusline')).trim(), tx.adm, `${lang}: aviso de ADM`);
   assert.equal(await page.locator('.warnline').count(), 0, `${lang}: no es un error`);
+
+  // «Abrir carpeta» rechazado por el backend: aviso visible, no solo consola
+  await page.goto(`${base}/index.html?backend=mock&lang=${lang}&theme=light&fast=1&state=done&fail=open`);
+  await page.waitForSelector('.donebox');
+  await page.click('[data-act=open]');
+  await page.waitForSelector('.donebox .warnline');
+  assert.match((await page.textContent('.donebox .warnline')).trim(), tx.openFail, `${lang}: aviso al fallar Abrir carpeta`);
+
+  // «Licencias» rechazado: aviso en Acerca de
+  await page.goto(`${base}/index.html?backend=mock&lang=${lang}&theme=light&fast=1&state=normal&fail=legal`);
+  await page.waitForSelector('html[data-ready]');
+  await page.click('#aboutBtn');
+  await page.click('#pop-about [data-act=legal]');
+  await page.waitForSelector('#pop-about .warnline');
+  assert.match((await page.textContent('#pop-about .warnline')).trim(), tx.legalFail, `${lang}: aviso al fallar Licencias`);
+
+  // Cancelar justo al crear (antes del primer evento): la exportación no termina en «Listo»
+  await page.goto(`${base}/index.html?backend=mock&lang=${lang}&theme=light&fast=1&state=normal&fail=cancel_early`);
+  await page.waitForSelector('html[data-ready]');
+  /* el render de «creando» es síncrono: el botón Cancelar existe en el mismo turno, antes de cualquier evento del backend */
+  await page.evaluate(() => {
+    document.querySelector('.go[data-act=create]').click();
+    document.querySelector('[data-act=cancel]').click();
+  });
+  await page.waitForSelector('.go[data-act=create]', { timeout: 15000 });
+  assert.equal(await page.locator('.donebox').count(), 0, `${lang}: cancelar antes del primer evento cancela`);
 
   // Acerca de: versión, licencias y enlace al documento de terceros; Esc lo cierra
   await page.click('#aboutBtn');

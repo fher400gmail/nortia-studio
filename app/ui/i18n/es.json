@@ -75,6 +75,7 @@
   "done.completed": "Completado",
   "open": "Abrir carpeta",
   "opening": "Abriendo…",
+  "open.failed": "No se pudo abrir la carpeta.",
   "again": "Nueva canción",
   "doc.readme": "README.txt",
   "doc.loudness_report": "informe-loudness.txt",

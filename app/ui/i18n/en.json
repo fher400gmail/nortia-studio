@@ -75,6 +75,7 @@
   "done.completed": "Completed",
   "open": "Open folder",
   "opening": "Opening…",
+  "open.failed": "The folder could not be opened.",
   "again": "New song",
   "doc.readme": "README.txt",
   "doc.loudness_report": "loudness-report.txt",

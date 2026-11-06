@@ -111,11 +111,14 @@ function bridgeError(lang, key, detail = null) {
  * Backend simulado. Opciones: `fast` (progreso casi instantáneo), `lang` inicial,
  * `sidecar` (false simula que no hay ffmpeg: sin MP3 ni vídeo), `defaultOff` (ids de preset con
  * `default_on: false`, como presets.json), `os`, `adm` ('clip' simula que el AAC de Apple Digital
- * Masters pasa de 0 dB al codificar: el veredicto final de la ficha de Apple es un aviso).
+ * Masters pasa de 0 dB al codificar: el veredicto final de la ficha de Apple es un aviso), `fail`
+ * (lista separada por comas: `legal`, `open` hacen que open_legal / open_path rechacen;
+ * `cancel_early` ignora un cancel anterior al primer evento).
  */
-export function createMock({ fast = false, lang = 'es', sidecar = true, defaultOff = ['apple_motion'], os = 'mac', version = '0.1.0-mock', dropCancelEvent = false, adm = null } = {}) {
+export function createMock({ fast = false, lang = 'es', sidecar = true, defaultOff = ['apple_motion'], os = 'mac', version = '0.1.0-mock', dropCancelEvent = false, adm = null, fail = '' } = {}) {
   let curLang = lang;
   let cancelled = false;
+  let eventsSeen = false;
   let folderIx = 0;
   const tx = k => (TEXT[curLang] || TEXT.en)[k] || k;
 
@@ -190,7 +193,7 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
 
     /** Emite la misma secuencia de eventos que el puente y devuelve el DeliveryDto. */
     async export(req, onProgress = () => {}) {
-      cancelled = false;
+      cancelled = false; eventsSeen = false;
       const { master } = await be.analyze(req.master_path, 4);
       const plan = await be.plan(master, req.meta, req.active_ids, req.media_inputs || {});
       const jobs = plan.jobs.filter(j => j.enabled);
@@ -198,6 +201,7 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
       const wait = ms => new Promise(r => setTimeout(r, fast ? 6 : ms));
       const root = `${req.out_root}/${plan.delivery_folder}`;
       const files = [];
+      eventsSeen = true;
       onProgress({ kind: 'analyzed' });
       onProgress({ kind: 'planned' });
       /* el motor prepara una vez las muestras de cada combinación (bits, frecuencia) antes del primer destino */
@@ -227,13 +231,14 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
       return delivery;
     },
 
-    async cancelExport() { cancelled = true; },
+    /* `fail=cancel_early`: como el motor, ignora un cancel que llega antes de registrar la exportación (antes del primer evento) */
+    async cancelExport() { if (fail.includes('cancel_early') && !eventsSeen) return; cancelled = true; },
     async pickFolder() { folderIx = (folderIx + 1) % MOCK_FOLDERS[curLang].length; return MOCK_FOLDERS[curLang][folderIx]; },
     async pickFile() { return null; },
-    async openPath() {},
+    async openPath() { if (fail.includes('open')) throw new Error('err.internal'); },
     /** Abre el documento de licencias y fuentes (terceros) incluido en la app. */
     legalOpened: 0,
-    async openLegal() { if (be.legalFails) throw new Error('err.internal'); be.legalOpened++; },
+    async openLegal() { if (be.legalFails || fail.includes('legal')) throw new Error('err.internal'); be.legalOpened++; },
     async allowAsset() {},
     /** Miniatura de una imagen o un vídeo: el mock devuelve siempre el mismo PNG pequeño. */
     async mediaThumbnail() { return MOCK_THUMB; },
@@ -282,7 +287,7 @@ export function detect(g = globalThis) {
   const forced = q.get('backend');
   const hasTauri = !!(g.__TAURI_INTERNALS__ || g.__TAURI__);
   if (forced === 'tauri' || (!forced && hasTauri)) return createTauri(g);
-  return createMock({ fast: q.has('fast') || q.has('still'), lang: q.get('lang') === 'en' ? 'en' : 'es', sidecar: q.get('sidecar') !== '0', defaultOff: q.has('off') ? q.get('off').split(',') : undefined, os: q.get('os') === 'win' ? 'win' : 'mac', adm: q.get('adm') });
+  return createMock({ fast: q.has('fast') || q.has('still'), lang: q.get('lang') === 'en' ? 'en' : 'es', sidecar: q.get('sidecar') !== '0', defaultOff: q.has('off') ? q.get('off').split(',') : undefined, os: q.get('os') === 'win' ? 'win' : 'mac', adm: q.get('adm'), fail: q.get('fail') || '' });
 }
 
 export const backend = detect();

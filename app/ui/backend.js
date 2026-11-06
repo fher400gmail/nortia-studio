@@ -12,7 +12,7 @@ const PRESETS = [
   { id: 'spotify', sub: 'spotify', tag: 'Spotify', container: 'flac', bits: 'native', rate: 'native' },
   { id: 'apple_adm', sub: 'apple', tag: 'Apple Music', container: 'wav', bits: 'native', rate: 'native', minBits: 24, reason: 'apple_needs_24bit' },
   { id: 'amazon', sub: 'amazon', tag: 'Amazon Music', container: 'flac', bits: 'native', rate: 'native' },
-  { id: 'tidal', sub: 'tidal', tag: 'Tidal', container: 'flac', bits: 'native', rate: 'native' },
+  { id: 'tidal', sub: 'tidal', tag: 'TIDAL', container: 'flac', bits: 'native', rate: 'native' },
   { id: 'deezer', sub: 'deezer', tag: 'Deezer', container: 'wav', bits: 16, rate: 44100 },
   { id: 'youtube_music', sub: 'youtube', tag: 'YouTube Music', container: 'wav', bits: 'native', rate: 48000, minBits: 16, reason: 'youtube_music_needs_16bit' },
   { id: 'youtube_video', sub: 'youtube', tag: 'YouTube', container: 'mp4', bits: 'native', rate: 48000, media: true, suffix: '1080p' },
@@ -20,15 +20,15 @@ const PRESETS = [
   { id: 'mp3_promo', sub: 'promo', tag: 'MP3 320', container: 'mp3', bits: 0, rate: 44100 },
   { id: 'cover', sub: 'artwork', tag: 'Portada', container: 'jpg', bits: 0, rate: 0, media: true, noSidecarOk: true, suffix: '3000x3000', extra: 'png' },
   { id: 'canvas', sub: 'artwork', tag: 'Canvas', container: 'mp4', bits: 0, rate: 0, media: true, suffix: '1080x1920' },
-  { id: 'apple_motion', sub: 'apple', tag: 'Apple Motion', container: 'mp4', bits: 0, rate: 0, media: true, suffix: '3840x3840', extraSuffix: '2048x2732' }
+  { id: 'apple_motion', sub: 'apple', tag: 'Portada animada', tagEn: 'Motion artwork', container: 'mp4', bits: 0, rate: 0, media: true, suffix: '3840x3840', extraSuffix: '2048x2732' }
 ];
 
 /** PNG de 96 px (paisaje en gris pizarra, sin naranja) que el mock devuelve como miniatura. */
 export const MOCK_THUMB = 'data:image/png;base64,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';
 
 const FOLDERS = {
-  es: { spotify: '01 Spotify', apple: '02 Apple Music', amazon: '03 Amazon Music', tidal: '04 Tidal', deezer: '05 Deezer', youtube: '06 YouTube', distributor: '07 Distribuidora', promo: '08 Promo', artwork: '09 Imagen' },
-  en: { spotify: '01 Spotify', apple: '02 Apple Music', amazon: '03 Amazon Music', tidal: '04 Tidal', deezer: '05 Deezer', youtube: '06 YouTube', distributor: '07 Distributor', promo: '08 Promo', artwork: '09 Artwork' }
+  es: { spotify: '01 Spotify', apple: '02 Apple Music', amazon: '03 Amazon Music', tidal: '04 TIDAL', deezer: '05 Deezer', youtube: '06 YouTube', distributor: '07 Distribuidora', promo: '08 Promo', artwork: '09 Imagen' },
+  en: { spotify: '01 Spotify', apple: '02 Apple Music', amazon: '03 Amazon Music', tidal: '04 TIDAL', deezer: '05 Deezer', youtube: '06 YouTube', distributor: '07 Distributor', promo: '08 Promo', artwork: '09 Artwork' }
 };
 
 const TEXT = {
@@ -165,7 +165,7 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
         const bits = p.bits === 'native' ? nativeBits : p.bits;
         const rate = p.rate === 'native' ? master.sample_rate : p.rate;
         const khz = rate / 1000;
-        const tag = p.id === 'distributor_std' ? tx('tag.distributor') : p.id === 'cover' ? tx('tag.cover') : p.tag;
+        const tag = p.id === 'distributor_std' ? tx('tag.distributor') : p.id === 'cover' ? tx('tag.cover') : (curLang === 'en' && p.tagEn) || p.tag;
         const khzLabel = Number.isInteger(khz) ? `${khz}kHz` : `${khz.toFixed(1)}kHz`;
         let file_name, extra_files = [], estimated_bytes, warnings = [];
         if (p.media) {

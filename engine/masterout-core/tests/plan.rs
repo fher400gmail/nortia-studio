@@ -107,7 +107,7 @@ fn preset_contract_table_id_subfolder_tag() {
         ("spotify", "01 Spotify", "Spotify"),
         ("apple_adm", "02 Apple Music", "Apple Music"),
         ("amazon", "03 Amazon Music", "Amazon Music"),
-        ("tidal", "04 Tidal", "Tidal"),
+        ("tidal", "04 TIDAL", "TIDAL"),
         ("deezer", "05 Deezer", "Deezer"),
         ("youtube_music", "06 YouTube", "YouTube Music"),
         ("youtube_video", "06 YouTube", "YouTube"),
@@ -121,7 +121,7 @@ fn preset_contract_table_id_subfolder_tag() {
         ("mp3_promo", "08 Promo", "MP3 320"),
         ("cover", "09 Imagen", "Portada"),
         ("canvas", "09 Imagen", "Canvas"),
-        ("apple_motion", "02 Apple Music", "Apple Motion"),
+        ("apple_motion", "02 Apple Music", "Portada animada"),
     ];
     let all = presets::all();
     assert_eq!(all.len(), expected.len());
@@ -267,8 +267,8 @@ fn plan_media_presets_enabled_with_cover_and_sidecar() {
             ),
             (
                 "02 Apple Music",
-                "Vera Alcón - Luz de Noviembre [Apple Motion] 3840x3840.mp4",
-                vec!["Vera Alcón - Luz de Noviembre [Apple Motion] 2048x2732.mp4"]
+                "Vera Alcón - Luz de Noviembre [Portada animada] 3840x3840.mp4",
+                vec!["Vera Alcón - Luz de Noviembre [Portada animada] 2048x2732.mp4"]
             ),
         ]
     );
@@ -298,7 +298,8 @@ fn plan_media_presets_enabled_with_cover_and_sidecar() {
 fn media_presets_are_off_by_default_except_none() {
     let all = presets::all();
     let motion = all.iter().find(|p| p.id == "apple_motion").unwrap();
-    assert_eq!(motion.tag, "Apple Motion");
+    assert_eq!(motion.tag, "Portada animada");
+    assert_eq!(motion.tag_key.as_deref(), Some("tag.motion"));
     assert_eq!(motion.subfolder_key, "apple");
 }
 
@@ -386,7 +387,7 @@ fn without_hevc_apple_motion_keeps_only_the_h264_size_and_says_why() {
     assert_eq!(j.preset_id, "apple_motion");
     assert_eq!(
         j.file_name,
-        "Vera Alcón - Luz de Noviembre [Apple Motion] 2048x2732.mp4"
+        "Vera Alcón - Luz de Noviembre [Portada animada] 2048x2732.mp4"
     );
     assert!(j.extra_files.is_empty() && j.hevc_skipped);
     assert_eq!(j.warnings, vec!["reason.hevc_unavailable"]);

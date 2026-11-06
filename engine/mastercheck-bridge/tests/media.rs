@@ -317,7 +317,7 @@ fn plan_dto_reports_missing_hevc_in_the_apple_motion_warnings() {
     let j = &p.jobs[0];
     assert!(j.enabled && j.extra_files.is_empty());
     assert!(
-        j.file_name.ends_with("[Apple Motion] 2048x2732.mp4"),
+        j.file_name.ends_with("[Portada animada] 2048x2732.mp4"),
         "{}",
         j.file_name
     );

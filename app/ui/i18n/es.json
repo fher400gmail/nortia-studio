@@ -111,7 +111,7 @@
   "about.others": "También: Tauri (Apache-2.0/MIT), flac-codec, ebur128, rubato e image (MIT/Apache-2.0) y la tipografía Hanken Grotesk (SIL OFL 1.1).",
   "about.legal": "Licencias y código fuente",
   "about.legal_failed": "No se pudo abrir el documento de licencias.",
-  "about.trademarks": "Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.",
+  "about.trademarks": "Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube y TuneCore son marcas de sus titulares. master check no está afiliado ni avalado por ellos.",
   "about.maker": "nortia. studio",
   "pct": "{n} %",
   "size.lt_1kb": "<1 KB",

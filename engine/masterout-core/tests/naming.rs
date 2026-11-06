@@ -37,8 +37,8 @@ fn folder_with_version() {
 #[test]
 fn sanitizes_path_separators() {
     assert_eq!(
-        audio_file_name("AC/DC", "¿Qué?: remix", "Tidal", 24, 48000, "flac"),
-        "AC-DC - ¿Qué-- remix [Tidal] 24bit-48kHz.flac"
+        audio_file_name("AC/DC", "¿Qué?: remix", "TIDAL", 24, 48000, "flac"),
+        "AC-DC - ¿Qué-- remix [TIDAL] 24bit-48kHz.flac"
     );
 }
 
@@ -143,4 +143,18 @@ fn spanish_contract_unchanged() {
     assert_eq!(d.loudness_report, "informe-loudness.txt");
     assert_eq!(d.sheet_csv, "ficha-lanzamiento.csv");
     assert_eq!(d.sheet_txt, "ficha-lanzamiento.txt");
+}
+
+#[test]
+fn official_spelling_in_tags_and_folders_in_both_languages() {
+    use masterout_core::{i18n::Lang, presets};
+    let all = presets::all();
+    let get = |id: &str| all.iter().find(|p| p.id == id).unwrap();
+    assert_eq!(preset_tag(get("tidal"), Lang::Es), "TIDAL");
+    assert_eq!(preset_tag(get("tidal"), Lang::En), "TIDAL");
+    assert_eq!(subfolder("tidal", Lang::Es), "04 TIDAL");
+    assert_eq!(subfolder("tidal", Lang::En), "04 TIDAL");
+    assert_eq!(preset_tag(get("apple_motion"), Lang::Es), "Portada animada");
+    assert_eq!(preset_tag(get("apple_motion"), Lang::En), "Motion artwork");
+    assert_eq!(preset_tag(get("apple_adm"), Lang::En), "Apple Music");
 }

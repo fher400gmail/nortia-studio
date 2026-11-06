@@ -92,10 +92,10 @@ fn i18n_and_presets_use_the_official_spelling() {
 fn trademark_notice_is_in_both_languages() {
     assert_eq!(
         t(Lang::Es, "readme.trademarks"),
-        "Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos."
+        "Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube y TuneCore son marcas de sus titulares. master check no está afiliado ni avalado por ellos."
     );
     assert_eq!(
         t(Lang::En, "readme.trademarks"),
-        "Spotify, Apple Music, Amazon Music, TIDAL, Deezer and YouTube are trademarks of their respective owners. master check is not affiliated with or endorsed by them."
+        "Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube and TuneCore are trademarks of their respective owners. master check is not affiliated with or endorsed by them."
     );
 }

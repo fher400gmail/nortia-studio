@@ -47,6 +47,12 @@ test('grafia_oficial_de_las_plataformas', () => {
   }
   assert.equal(ui.es['chip.ytv'], 'YouTube (vídeo)');
   assert.equal(ui.en['chip.ytv'], 'YouTube (video)');
+  assert.equal(presets.find(x => x.id === 'tidal').tag, 'TIDAL');
+  assert.equal(presets.find(x => x.id === 'apple_motion').tag, 'Portada animada');
+  assert.equal(eng.es['folder.tidal'], '04 TIDAL');
+  assert.equal(eng.en['folder.tidal'], '04 TIDAL');
+  assert.equal(eng.es['tag.motion'], 'Portada animada');
+  assert.equal(eng.en['tag.motion'], 'Motion artwork');
   assert.equal(ui.es['chip.motion'], 'Portada animada');
   assert.equal(ui.en['chip.motion'], 'Motion artwork');
   assert.equal(ui.es['chip.long.motion'], 'Portada animada (Apple Music)');
@@ -58,8 +64,8 @@ test('grafia_oficial_de_las_plataformas', () => {
 });
 
 test('aviso_de_marcas_en_acerca_de_y_en_el_motor', () => {
-  assert.equal(ui.es['about.trademarks'], 'Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.');
-  assert.equal(ui.en['about.trademarks'], 'Spotify, Apple Music, Amazon Music, TIDAL, Deezer and YouTube are trademarks of their respective owners. master check is not affiliated with or endorsed by them.');
+  assert.equal(ui.es['about.trademarks'], 'Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube y TuneCore son marcas de sus titulares. master check no está afiliado ni avalado por ellos.');
+  assert.equal(ui.en['about.trademarks'], 'Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube and TuneCore are trademarks of their respective owners. master check is not affiliated with or endorsed by them.');
   assert.equal(eng.es['readme.trademarks'], ui.es['about.trademarks']);
   assert.equal(eng.en['readme.trademarks'], ui.en['about.trademarks']);
 });

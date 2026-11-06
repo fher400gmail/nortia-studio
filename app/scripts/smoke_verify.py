@@ -45,7 +45,8 @@ def streams(info, kind):
 
 
 def one(files, tag, ext):
-    hits = [f for f in files if f"[{tag}]" in os.path.basename(f) and f.lower().endswith(ext)]
+    tags = tag if isinstance(tag, tuple) else (tag,)
+    hits = [f for f in files if any(f"[{x}]" in os.path.basename(f) for x in tags) and f.lower().endswith(ext)]
     if len(hits) != 1:
         fail(f"se esperaba 1 archivo [{tag}] *{ext} y hay {len(hits)}")
         return None
@@ -146,19 +147,20 @@ def main():
             want(a["codec_name"] == "mp3" and int(a["sample_rate"]) == 44100 and 315000 <= br <= 325000,
                  f"{base(p)}: {a['codec_name']} {a['sample_rate']} Hz {br} bps (se esperaba mp3 44100 Hz 320 kbps)")
             print(f"ok   {base(p)}: mp3 44.1 kHz {br // 1000} kbps")
-    # Apple Motion
-    small = one(files, "Apple Motion", "2048x2732.mp4")
+    # portada animada (es: «Portada animada»; en: «Motion artwork»)
+    motion = ("Portada animada", "Motion artwork")
+    small = one(files, motion, "2048x2732.mp4")
     if small:
         video_check(ffprobe, small, "h264", 2048, 2732, audio=False)
-    square = [f for f in files if "[Apple Motion]" in base(f) and "3840x3840" in base(f)]
+    square = [f for f in files if any(f"[{x}]" in base(f) for x in motion) and "3840x3840" in base(f)]
     if caps["hevc"]:
         if len(square) == 1:
             # en Linux (solo desarrollo) el «HEVC» es libx264: nunca se distribuye
             video_check(ffprobe, square[0], "h264" if args.platform == "linux" else "hevc", 3840, 3840, audio=False)
         else:
-            fail("HEVC disponible y falta [Apple Motion] 3840x3840.mp4")
+            fail("HEVC disponible y falta la portada animada 3840x3840.mp4")
     else:
-        warn("HEVC no disponible en este equipo: Apple Motion solo sale en 2048x2732 (instala «HEVC Video Extensions» para el cuadrado de 3840x3840)")
+        warn("HEVC no disponible en este equipo: la portada animada solo sale en 2048x2732 (instala «HEVC Video Extensions» para el cuadrado de 3840x3840)")
         want(not square, "sin HEVC no debe haber 3840x3840")
 
     # Apple Digital Masters en el informe de loudness

@@ -268,7 +268,7 @@ fn apple_motion_end_to_end_when_slow_tests_are_enabled() {
         let p = file_in(
             &d.folder,
             "02 Apple Music",
-            &naming::media_file_name(ARTIST, TITLE, "Apple Motion", suffix, "mp4"),
+            &naming::media_file_name(ARTIST, TITLE, "Portada animada", suffix, "mp4"),
         );
         let i = probe(&sc, &p).unwrap();
         assert_eq!((i.width, i.height), (w, h));

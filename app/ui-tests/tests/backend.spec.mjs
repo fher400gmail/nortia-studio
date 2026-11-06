@@ -192,7 +192,7 @@ test('mock_plan_media_chips_need_a_cover_or_their_own_file', async () => {
   assert.match(j.cover.extra_files[0], /\.png$/);
   assert.match(j.canvas.file_name, /\[Canvas\] 1080x1920\.mp4$/);
   assert.match(j.youtube_video.file_name, /\[YouTube\] 1080p\.mp4$/);
-  assert.match(j.apple_motion.extra_files[0], /\[Apple Motion\] 2048x2732\.mp4$/);
+  assert.match(j.apple_motion.extra_files[0], /\[Portada animada\] 2048x2732\.mp4$/);
   assert.equal(j.apple_motion.subfolder, '02 Apple Music');
   // un vídeo propio habilita Canvas aunque no haya portada
   j = byId(await be.plan(master, meta, ALL, { canvas: '/v/mio.mp4' }));

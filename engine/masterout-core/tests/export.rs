@@ -729,7 +729,7 @@ fn panic_inside_a_job_is_contained_and_leaves_no_partials() {
     let mut all = Vec::new();
     walk(&d.folder, &mut all);
     assert!(all.iter().all(|p| !p.to_string_lossy().ends_with(".part")));
-    assert!(!d.folder.join("04 Tidal").exists());
+    assert!(!d.folder.join("04 TIDAL").exists());
 }
 
 #[test]

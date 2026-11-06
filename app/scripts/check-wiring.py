@@ -120,7 +120,7 @@ check(bool(find("windows", "smoke-win.ps1")), "windows ejecuta smoke-win.ps1")
 
 # --- humo: etiquetas exigidas y comprobaciones
 verify = read("app", "scripts", "smoke_verify.py")
-for tag_ in ("Portada", "Canvas", "YouTube", "MP3 320", "Apple Motion"):
+for tag_ in ("Portada", "Canvas", "YouTube", "MP3 320", "Portada animada"):
     check(f'"{tag_}"' in verify, f"smoke_verify exige [{tag_}]")
 check("capabilities" in verify and "CAPS_TARGET_MS" in verify, "smoke_verify anota el tiempo de capabilities()")
 ps = read("app", "scripts", "smoke-win.ps1")

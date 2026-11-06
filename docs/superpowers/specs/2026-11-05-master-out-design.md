@@ -45,7 +45,7 @@ Precio: 9,99 € pago único en la Mac App Store. Sin cuenta, sin red, sin suscr
   01 Spotify/{Artista} - {Título} [Spotify] 24bit-96kHz.flac
   02 Apple Music/{Artista} - {Título} [Apple Music] 24bit-96kHz.wav
   03 Amazon Music/{Artista} - {Título} [Amazon Music] 24bit-96kHz.flac
-  04 Tidal/{Artista} - {Título} [Tidal] 24bit-96kHz.flac
+  04 TIDAL/{Artista} - {Título} [TIDAL] 24bit-96kHz.flac
   05 Deezer/{Artista} - {Título} [Deezer] 16bit-44kHz.wav
   06 YouTube/{Artista} - {Título} [YouTube] 1080p.mp4
   07 Distribuidora/{Artista} - {Título} [Distribuidora] 16bit-44kHz.wav
@@ -144,4 +144,5 @@ Base: `docs/legal/marcas-plataformas.md` (investigación T8a: Apple Digital Mast
 1. **Ningún logo ni glifo imitativo de terceros.** Las fichas llevan el nombre oficial de la plataforma en texto (Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube Music, YouTube (vídeo), Portada animada) y el punto de estado de la marca (variante V1 «solo nombre», por defecto). La variante V2 «gesto por grupo» (`data-chip-style="gesto"`) usa un gesto propio por grupo (punto, barra, dos puntos), no imitativo.
 2. **Contrato de nombres (§4):** el archivo del destino de Apple pasa de `[Apple Digital Masters] 24bit-96kHz.wav` a **`[Apple Music] 24bit-96kHz.wav`**. La subcarpeta `02 Apple Music/` se mantiene. El preset `apple_adm` conserva su id; su nombre y su etiqueta son «Apple Music».
 3. **Textos sin aval.** Se retiran «Apple Digital Masters» como nombre de ficha, archivo o carpeta, y cualquier «certificado», «aprobado por», «Ready», «optimizado para», «Mastered for». El mensaje de 16 bit es «Apple Music pide un máster de 24 bit o más». El informe de loudness dice «Comprobación con las herramientas de Apple (AAC 256): n muestras con clipping» (las claves internas `adm_*` no cambian). Un test falla si esas cadenas reaparecen en la interfaz o en el i18n del motor.
-4. **Aviso de marcas** en «Acerca de» y al final del README de entrega: «Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.»
+4. **Aviso de marcas** en «Acerca de» y al final del README de entrega: «Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube y TuneCore son marcas de sus titulares. master check no está afiliado ni avalado por ellos.»
+5. **Remate (06/11/2026, CEO):** grafía oficial también en archivos y carpetas: etiqueta `[TIDAL]` y carpeta `04 TIDAL` (es/en). La portada animada deja de llamarse «Apple Motion» (es una app de Apple): el archivo pasa a `[Portada animada] 3840x3840.mp4` / `[Portada animada] 2048x2732.mp4` en español y `[Motion artwork] …` en inglés (clave `tag.motion`); subcarpeta `02 Apple Music/`. TuneCore se añade al aviso de marcas.

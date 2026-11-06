@@ -51,8 +51,8 @@ Técnicamente se puede enlazar. La LGPL exige: enlace dinámico (dylib/framework
 7. Descargar o instalar código/herramientas externas (2.4.5): todo en el bundle.
 8. Mencionar otras plataformas, "beta" o precios en la ficha (2.3).
 
-## 7. Vendedor "nortia."
-Cuenta individual: el vendedor es tu nombre legal; no puede mostrarse un nombre comercial (NO SEGURO si autónomo con nombre comercial lo admite). Opciones: (a) constituir sociedad (SL), obtener D-U-N-S (gratuito, 1-2 semanas) e inscribirse como Organización; (b) publicar ya como individuo y luego transferir la app a la cuenta de organización; (c) mientras tanto, "nortia." en copyright, web y soporte.
+## 7. Vendedor "ferboix. studio"
+Cuenta individual: el vendedor es tu nombre legal; no puede mostrarse un nombre comercial (NO SEGURO si autónomo con nombre comercial lo admite). Opciones: (a) constituir sociedad (SL), obtener D-U-N-S (gratuito, 1-2 semanas) e inscribirse como Organización; (b) publicar ya como individuo y luego transferir la app a la cuenta de organización; (c) mientras tanto, "ferboix. studio" en copyright, web y soporte.
 
 ## 8. Small Business Program (15 %)
 App Store Connect > Acuerdos, fiscalidad y banca > Small Business Program: solicitud por el Account Holder, aceptando condiciones. Requisito: ingresos de la cuenta inferiores a 1 M USD en el año natural anterior. Se aplica desde el siguiente mes fiscal tras la aprobación y se pierde al superar 1 M USD.

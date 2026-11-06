@@ -169,7 +169,7 @@ Fuente: <https://trademark.justia.com/owners/tunecore-inc-1675237> (marca regist
 | Riesgo legal | **Medio.** Hay que decidir cuáles «se pueden»: solo Spotify y YouTube tienen reglas escritas, y no para esta app. Solución mixta: dos reglas de marca en la misma lista | **Bajo.** Solo uso referencial de nombres | **Alto.** Apple Digital Masters prohibido; Amazon/TIDAL/Deezer/TuneCore exigen permiso o sin guía |
 | Esfuerzo | Medio-alto: descargar, revisar tamaños y colores, mantener una rama por plataforma y reglas de fondos | **Bajo**: tres glifos propios | Alto y bloqueado por permisos |
 | Claridad para un artista con prisa | Alta en Spotify/YouTube; desigual en el resto (la lista queda mezclada) | Alta si el nombre es legible: el artista busca la palabra, no el logo | Máxima, pero ilegal en la mayoría |
-| Coherencia con BRAND.md | Mala: logos de colores de terceros chocan con «tinta y papel», con «acento naranja solo en estado/CTA» y con la regla «Logos o marcas de terceros dentro de los iconos y portadas» (§5) | **Alta** | Muy mala |
+| Coherencia con BRAND.md | Mala: logos de colores de terceros chocan con «tinta y papel», con «acento cian solo en estados» y con la regla «Logos o marcas de terceros dentro de los iconos y portadas» (§5) | **Alta** | Muy mala |
 
 ### RECOMENDACIÓN: opción B
 
@@ -178,9 +178,9 @@ Fuente: <https://trademark.justia.com/owners/tunecore-inc-1675237> (marca regist
 Motivos:
 1. **Legal.** La única vía sin riesgo y sin papeles. Spotify y YouTube solo dan reglas para apps que usan su API, y su regla de oro («no parecerse», «no implicar respaldo») la incumplimos hoy con los glifos. Apple Digital Masters está vedado. Amazon, TIDAL, Deezer y TuneCore exigen permiso escrito o no publican guía. Con B no hay nada que pedir ni que perder si una marca cambia sus reglas.
 2. **Claridad.** Una ficha con el nombre en tipografía clara («Spotify», «Apple Music») es lo que un artista reconoce y busca; el logo no añade información. Los números (LUFS, bits, kHz) son lo que informa, y eso concuerda con «dato antes que adjetivo».
-3. **Marca.** Cumple BRAND.md: tinta y papel, el acento naranja solo marca estado, y el punto como único gesto (§4–5). Los glifos de grupo pueden ser formas simples con el punto (p. ej. streaming = punto + barra de nivel; distribuidora = punto + línea; extras = punto sobre marco), sin reproducir formas de ninguna marca.
+3. **Marca.** Cumple BRAND.md: tinta y papel, el acento cian solo marca estado, y el punto y el potenciómetro como únicos gestos (§4–5). Los glifos de grupo pueden ser formas simples con el punto (p. ej. streaming = punto + barra de nivel; distribuidora = punto + línea; extras = punto sobre marco), sin reproducir formas de ninguna marca.
 4. **Esfuerzo y mantenimiento.** Tres glifos, un SVG cada uno, una regla. No hay activos de terceros que actualizar.
-5. **Salida abierta.** Si en el futuro Spotify o YouTube concedieran uso por escrito, o si nortia. firma acuerdos de partner, se pasa a A para esas fichas.
+5. **Salida abierta.** Si en el futuro Spotify o YouTube concedieran uso por escrito, o si ferboix. studio firma acuerdos de partner, se pasa a A para esas fichas.
 
 **Condiciones de B:**
 - Los glifos de grupo **no** pueden reconocerse como los de ninguna plataforma (sin ondas, sonrisa, rombos, play).

@@ -11,7 +11,7 @@ fn meta() -> WavMetadata {
         album: Some("Álbum".into()),
         year: Some(2026),
         bext_description: "Master Out test".into(),
-        bext_originator: "nortia. studio".into(),
+        bext_originator: "ferboix. studio".into(),
         origination: Some((2026, 11, 5, 10, 30, 15)),
     }
 }
@@ -115,7 +115,7 @@ fn writes_bext_and_list_info_when_metadata() {
     let bext = &b[off..off + size];
     assert!(bext[..256].starts_with(b"Master Out test\0"));
     assert!(bext[15..256].iter().all(|&x| x == 0));
-    assert!(bext[256..288].starts_with(b"nortia. studio\0"));
+    assert!(bext[256..288].starts_with(b"ferboix. studio\0"));
     assert_eq!(&bext[320..330], b"2026-11-05");
     assert_eq!(&bext[330..338], b"10:30:15");
     assert_eq!(u16::from_le_bytes(bext[346..348].try_into().unwrap()), 1); // Version

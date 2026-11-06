@@ -1,4 +1,4 @@
-# Decisiones — nortia. (empresa de ingresos extra; CEOs: Fer y Claude)
+# Decisiones — ferboix. studio (empresa de ingresos extra; CEOs: Fer y Claude)
 
 Formato: D-NN · título · fecha · quién · decisión · alternativas descartadas · riesgo · revisar cuando.
 
@@ -6,7 +6,7 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 
 ---
 
-# FASE 2 · nortia. y nortia. studio
+# FASE 2 · nortia. y nortia. studio (nombre anterior; las decisiones D-20…D-33 se conservan tal cual)
 
 ## D-20 · Estructura: nortia. (madre) y subempresas
 - 05/11/2026 · Fer. Fer y Claude son los dos CEOs. La marca madre es **nortia.** (siempre minúsculas y con punto). Las subempresas se nombran `nortia. <sub>`; la primera es **nortia. studio** (audio: apps para productores y artistas). Vendrán más. Ninguna persona visible en la marca.
@@ -146,3 +146,4 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 
 ## D-37 · Marca ferboix. studio: opción C «Instrumento» (06/11/2026 10:49)
 - 06/11/2026 · **Fer** («me gusta, aplícalo siempre como manual de branding de marca»), sobre tres opciones en imagen (A continuidad, B fermata violeta, C potenciómetro cian; recomendación del CEO: C). Wordmark `ferboix.` en tinta con punto circular a medida + `studio` en gris; símbolo: potenciómetro (disco de tinta/papel con marca de posición en el acento); acento cian `#0097B8` (texto `#00728B` en claro, `#0097B8` en oscuro); botón primario en tinta. Se aplica a todo lo que se vea: app, iconos, «Acerca de», README de entrega, plantillas, manual (`brand/`), skill de marca. `master check` conserva su nombre. Sustituye a D-28 (nortia.).
+- **Implementada** (06/11/2026, rama `hito3-media`): `brand/` regenerado (`python3 gen.py`, 0 fallos de contraste y legibilidad; `BRAND.md` y `DESIGN.md` reescritos: una sola marca, sin divisiones); app con tokens nuevos (acento cian, botón primario tinta/papel, play y estados en cian), cabecera «símbolo + ferboix. studio | master check», potenciómetro en la zona de soltar y en «listo»; iconos de `app/src-tauri/icons` desde el icono C; `identifier` de Tauri → `studio.ferboix.mastercheck` (nadie tiene instalada una build: solo cambia la carpeta de datos de la app); `bext` Originator y comentario MP3 → «ferboix. studio»; `docs/`, spec y planes sin el nombre antiguo (test de literales en `marcas.spec.mjs`). La app anterior se llama «ferboix. Facturación» (misma familia). Pendiente: renombrar el repositorio y el worktree (`nortia-studio`) y la skill de marca.

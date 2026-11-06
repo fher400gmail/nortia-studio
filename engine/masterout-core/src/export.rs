@@ -439,7 +439,7 @@ impl Ctx<'_> {
             album: self.meta.album.clone(),
             year: self.meta.year,
             bext_description: format!("{} - {}", self.meta.artist, self.meta.title),
-            bext_originator: "nortia. studio".into(),
+            bext_originator: "ferboix. studio".into(),
             origination: Some(self.stamp),
         }
     }

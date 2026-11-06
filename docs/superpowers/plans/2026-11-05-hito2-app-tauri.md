@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Nombre de la app y del producto: `master check` (minúsculas) · marca `nortia. studio` · skill `nortia-brand` manda en todo lo visible (colores de `brand/tokens.css`, Hanken Grotesk, acento naranja solo donde hay significado, sin logos de terceros).
+- Nombre de la app y del producto: `master check` (minúsculas) · marca `ferboix. studio` · `brand/BRAND.md` y `brand/DESIGN.md` mandan en todo lo visible (colores de `brand/tokens.css`, Hanken Grotesk, acento cian solo donde hay significado, botón primario en tinta, sin logos de terceros).
 - Ventana: 880×860 por defecto, mínimo 760×720; macOS `decorations:true, titleBarStyle:"Overlay", hiddenTitle:true, transparent:false`; Windows `decorations:false, transparent:true, shadow:true` con controles HTML. La ventana es la tarjeta.
 - Idioma: `Lang` del sistema (`tauri-plugin-os` locale → `es*`→Es, otro→En); toda cadena visible pasa por i18n (motor: `i18n/*.json`; UI: `app/ui/i18n/{es,en}.json` con las mismas claves donde coincidan).
 - Motor intocable en nivel: nunca ganancia. Másters > 96 kHz rechazados con `err.rate_over_96k`. Contrato de nombres §4 (español) y su equivalente inglés (abajo).
@@ -52,7 +52,7 @@ app/
     index.html  styles.css  app.js  backend.js  i18n/es.json  i18n/en.json  fonts/
   src-tauri/
     Cargo.toml                     # tauri 2, plugins dialog/opener/os, mastercheck-bridge
-    tauri.conf.json                # ventana, bundle (icons de brand/), identifier "studio.nortia.mastercheck"
+    tauri.conf.json                # ventana, bundle (icons de brand/), identifier "studio.ferboix.mastercheck"
     capabilities/default.json
     src/main.rs  src/lib.rs        # comandos: analyze, plan, export, cancel_export, pick_folder, open_path, system_lang, app_info
     icons/                         # generados con `tauri icon` desde brand/iconos/macos/studio-*-1024.png
@@ -122,7 +122,7 @@ pub struct DeliveryDto { pub folder: String, pub files: Vec<(String, u64)>, pub 
 #[tauri::command] fn app_info() -> AppInfo { version, os: "mac"|"win"|"linux", lame_available: bool }
 pub fn lame::resolve_lame_path(exe_dir: &Path) -> Option<PathBuf>   // junto al ejecutable (mac: Contents/MacOS, Contents/Resources; win: mismo dir), luego PATH
 ```
-- `tauri.conf.json`: `productName "master check"`, `identifier "studio.nortia.mastercheck"`, ventana según DISEÑO-FINAL (mac overlay; win sin decoraciones; `label "main"`, `visible:false` y `show()` tras `ready` del frontend), `app.withGlobalTauri: true`, `bundle.targets ["dmg","app","nsis"]`, `bundle.icon` generado con `cargo tauri icon brand/iconos/macos/studio-verde…` → **usar el icono de marca v2** `brand/iconos/macos/studio-claro-1024.png` (o el nombre real en `brand/iconos/macos/`), `bundle.resources` incluye `lame` si existe `app/vendor/lame/<target>/` (vacío por ahora; el MP3 se desactiva con aviso si no hay `lame`), `bundle.macOS.minimumSystemVersion "14.0"`, `bundle.licenseFile` LGPL de lame cuando se incluya.
+- `tauri.conf.json`: `productName "master check"`, `identifier "studio.ferboix.mastercheck"`, ventana según DISEÑO-FINAL (mac overlay; win sin decoraciones; `label "main"`, `visible:false` y `show()` tras `ready` del frontend), `app.withGlobalTauri: true`, `bundle.targets ["dmg","app","nsis"]`, `bundle.icon` generado con `cargo tauri icon brand/iconos/macos/studio-verde…` → **usar el icono de marca v2** `brand/iconos/macos/studio-claro-1024.png` (o el nombre real en `brand/iconos/macos/`), `bundle.resources` incluye `lame` si existe `app/vendor/lame/<target>/` (vacío por ahora; el MP3 se desactiva con aviso si no hay `lame`), `bundle.macOS.minimumSystemVersion "14.0"`, `bundle.licenseFile` LGPL de lame cuando se incluya.
 - `capabilities/default.json`: `core:default`, `core:window:allow-minimize|toggle-maximize|close|start-dragging|set-title`, `dialog:allow-open`, `opener:allow-reveal-item-in-dir`, `os:allow-locale`; `fs` NO (el acceso a disco lo hace Rust con rutas elegidas).
 - Config por plataforma: `tauri.macos.conf.json` y `tauri.windows.conf.json` para `decorations/titleBarStyle/transparent/shadow`.
 - [ ] **Step 1: Tests que fallan** — `resolve_lame_path_prefers_bundle_dir` (crea `exe_dir/lame` ejecutable falso → lo devuelve), `resolve_lame_path_falls_back_to_path_env`, `system_lang_maps_locale` (función pura `map_locale("es-ES")=="es"`), `plan_command_roundtrips_dtos` (serde de MasterDto/PlanDto JSON ↔ struct).

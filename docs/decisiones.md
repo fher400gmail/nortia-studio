@@ -132,3 +132,14 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 - Alcance: nombre visible y usuario en Gumroad, GitHub, X, web, portadas, PDFs, fichas, correo de la empresa (`fher400+nortialabs@gmail.com`). Upwork y Fiverr exigen nombre real: se mantiene el nombre, pero el perfil no menciona música ni discográficas. Los recibos de Gumroad llevan el nombre fiscal por ley (solo lo ve el comprador).
 - Identidad visual: dirección B (software de confianza), símbolo A (norte), variante N2 aprobada. **Sustituida en fase 2 por "nortia." (D-20).**
 - Hecho ya: sustituido "Fernando Boix" por "Nortia Labs" en la guía Verifactu (PDF regenerado), guía de uso y fuentes de portadas; el Excel no contenía el nombre.
+
+## D-34 · Pivote: empresa de software personal, nada se vende (06/11/2026 10:36)
+- 06/11/2026 · **Fer.** «No vamos a vender, me lo quedo para mí todo lo que desarrollemos.» La empresa pasa a ser la **empresa de software personal de Fer**: herramientas para su propio trabajo (música primero), sin clientes.
+- Consecuencias inmediatas: fuera del plan pasarela de pago, licencias, EULA, notarización/firma Developer ID (basta «clic derecho → Abrir»), consulta de patentes H.264/AAC, oferta pública de fuentes LGPL (no hay distribución), versión Windows (salvo que Fer tenga PC) y las restricciones de marcas de terceros por venta (se mantiene la variante V1 «solo nombre» porque es más limpia, no por obligación). CI de GitHub no se paga: compilación en el Mac de Fer como runner autoalojado (D-35).
+- Criterio de prioridad desde ahora: **efectividad para Fer** (le sirve, le ahorra tiempo, lo usa) por encima de pulido de producto, mercado o escala. La revisión independiente se mantiene para lo que toca sus archivos (máster, portadas): un fallo ahí le cuesta a él.
+
+## D-35 · CI sin pagar: el Mac de Fer como runner autoalojado (06/11/2026 10:35)
+- 06/11/2026 · **Fer** («no voy a pagar por GitHub, necesitamos alternativa rápida»; eligió el runner propio frente a hacer público el repo). Los workflows pasan a `runs-on: [self-hosted, macOS]` para check, build, humo y sidecar; los jobs en runners de GitHub (Linux/Windows) quedan desactivados por variable hasta nuevo aviso. Requisitos en su Mac: Command Line Tools, Homebrew (gh, gnupg, nasm, pkg-config, node, ffmpeg), rustup con targets apple + windows-gnu, runner instalado como servicio, Mac sin reposo. El runner solo trabaja mientras el Mac está despierto.
+
+## D-36 · Nueva marca: ferboix. studio (06/11/2026 10:36)
+- 06/11/2026 · **Fer.** La empresa se llama **ferboix. studio** (sustituye a nortia. / nortia. studio). Fer pide «nuevo branding». Pendiente: opciones visuales (el CEO las enseña, no las cuenta), elección de Fer, y aplicación a todo (UI, «Acerca de», README de entrega, BRAND/DESIGN, tokens, iconos, plantillas, skill de marca, nombre del repositorio). `master check` conserva su nombre.

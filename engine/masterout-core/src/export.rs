@@ -45,7 +45,7 @@ pub struct ExportRequest {
     pub sidecar: Option<SidecarPaths>,
     /// Codificadores de vídeo a usar (solo las pruebas cambian el de la plataforma real).
     pub platform: Platform,
-    /// `(afconvert, afclip)` a usar en la validación de Apple Digital Masters en vez de buscarlos
+    /// `(afconvert, afclip)` a usar en la validación de Apple Music (AAC 256, afclip) en vez de buscarlos
     /// en el sistema (solo las pruebas, con herramientas falsas; salta la comprobación de macOS).
     pub adm_tools: Option<(PathBuf, PathBuf)>,
 }
@@ -74,7 +74,7 @@ impl ExportRequest {
         }
     }
 
-    /// Herramientas de Apple Digital Masters indicadas (pruebas).
+    /// Herramientas de Apple Music (AAC 256, afclip) indicadas (pruebas).
     pub fn with_adm_tools(mut self, afconvert: PathBuf, afclip: PathBuf) -> Self {
         self.adm_tools = Some((afconvert, afclip));
         self
@@ -353,7 +353,7 @@ struct Ctx<'a> {
     temp: &'a Path,
     /// Portadas ya conformadas, por ruta de origen.
     covers: Mutex<HashMap<PathBuf, Arc<Result<CoverOutput, AudioError>>>>,
-    /// Resultado de la validación Apple Digital Masters (destino `apple_adm`), para el informe.
+    /// Resultado de la validación Apple Music (AAC 256, afclip) (destino `apple_adm`), para el informe.
     adm: Mutex<Option<AdmReport>>,
     adm_tools: Option<&'a (PathBuf, PathBuf)>,
 }
@@ -738,7 +738,7 @@ impl Ctx<'_> {
                 )
             })?,
         };
-        // Apple Digital Masters: se valida el WAV recién escrito (solo hace algo en macOS).
+        // Apple Music (AAC 256, afclip): se valida el WAV recién escrito (solo hace algo en macOS).
         if job.preset_id == "apple_adm" && !self.cancelled() {
             step(0.9);
             let workdir = self.temp.join("adm");

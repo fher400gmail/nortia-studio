@@ -123,7 +123,7 @@ pub fn export_with(
     export_custom(req, lang, on_progress, cancel, sidecar, None)
 }
 
-/// Como [`export_with`], con las herramientas de Apple Digital Masters indicadas
+/// Como [`export_with`], con las herramientas de Apple Music (AAC 256, afclip) indicadas
 /// `(afconvert, afclip)` en vez de buscarlas en el sistema (pruebas con herramientas falsas).
 pub fn export_custom(
     req: &ExportRequestDto,

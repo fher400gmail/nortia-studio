@@ -1,4 +1,4 @@
-//! Validación Apple Digital Masters (solo macOS): máster -> CAF con Sound Check -> AAC 256 kbps
+//! Validación Apple Music (AAC 256, afclip) (solo macOS): máster -> CAF con Sound Check -> AAC 256 kbps
 //! -> se decodifica a WAV float -> `afclip` cuenta las muestras con clipping del AAC decodificado.
 //!
 //! Flujo verificado (docs/skills-baseline/verificacion-2026-11-05.md, bloque C, pto 7):
@@ -12,7 +12,7 @@
 //! ```
 //!
 //! El AAC de ADM se codifica como mucho a 48 kHz: familia 44,1 kHz -> 44100; el resto -> 48000.
-//! `afclip` lo distribuye Apple con las herramientas de Apple Digital Masters y no siempre está.
+//! `afclip` lo distribuye Apple con las herramientas de Apple Music (AAC 256, afclip) y no siempre está.
 //!
 //! Prueba real (solo en el humo de CI de macOS): `adm_smoke_case(-1.0, ..)` debe dar 0 muestras
 //! con clipping y `adm_smoke_case(1.0, ..)` más de 0.

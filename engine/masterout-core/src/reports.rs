@@ -136,7 +136,7 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
     out
 }
 
-/// Veredicto de un destino con el resultado de Apple Digital Masters: si el AAC tiene clipping,
+/// Veredicto de un destino con el resultado de Apple Music (AAC 256, afclip): si el AAC tiene clipping,
 /// el destino `apple_adm` pasa a `Warn("adm_clipping")` (un `Fail` previo se conserva).
 pub fn verdict_with_adm(preset_id: &str, v: &Verdict, adm: Option<&AdmReport>) -> Verdict {
     match adm {
@@ -151,7 +151,7 @@ pub fn verdict_with_adm(preset_id: &str, v: &Verdict, adm: Option<&AdmReport>) -
     }
 }
 
-/// Línea del informe para el resultado de Apple Digital Masters.
+/// Línea del informe para el resultado de Apple Music (AAC 256, afclip).
 pub fn adm_line(lang: Lang, a: &AdmReport) -> String {
     match &a.status {
         AdmStatus::Unavailable { reason_key } => {
@@ -180,7 +180,7 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
     loudness_report_with_adm(lang, s, None)
 }
 
-/// Informe de loudness con el resultado de la validación Apple Digital Masters (si se hizo).
+/// Informe de loudness con el resultado de la validación Apple Music (AAC 256, afclip) (si se hizo).
 pub fn loudness_report_with_adm(
     lang: Lang,
     s: &DeliverySummary,

@@ -82,6 +82,21 @@ enum Tried {
     Transient,
 }
 
+/// Argumentos de la codificación de prueba de un fotograma. Usa la misma cadena de color que
+/// los vídeos reales (`scale`, `format`, `setparams`): un sidecar al que le falte un filtro
+/// que el motor necesita sale de la sonda como «sin H.264» y las fichas de vídeo se
+/// deshabilitan, en vez de fallar luego en cada exportación.
+pub fn build_probe_args(png: &Path, out: &Path, platform: Platform, hevc: bool) -> Vec<String> {
+    let mut args: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"]
+        .map(String::from)
+        .to_vec();
+    args.push(png.to_string_lossy().into_owned());
+    args.extend(["-frames:v", "1", "-vf", video::BT709].map(String::from));
+    args.extend(video::probe_encoder_args(platform, hevc));
+    args.push(out.to_string_lossy().into_owned());
+    args
+}
+
 fn try_encode(
     sidecar: &SidecarPaths,
     platform: Platform,
@@ -104,13 +119,7 @@ fn try_encode(
     {
         Ok(Tried::Transient)
     } else {
-        let mut args: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"]
-            .map(String::from)
-            .to_vec();
-        args.push(png.to_string_lossy().into_owned());
-        args.extend(["-frames:v", "1", "-vf", "format=yuv420p"].map(String::from));
-        args.extend(video::probe_encoder_args(platform, hevc));
-        args.push(out.to_string_lossy().into_owned());
+        let args = build_probe_args(&png, &out, platform, hevc);
         match video::run_ffmpeg_with_deadline(sidecar, &args, cancel, Some(PROBE_DEADLINE)) {
             Ok(()) => Ok(Tried::Yes),
             Err(AudioError::Cancelled) => Err(AudioError::Cancelled),

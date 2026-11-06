@@ -96,6 +96,26 @@ fn image_thumbnail(path: &Path) -> Result<String, AudioError> {
     Ok(data_url("image/jpeg", &buf))
 }
 
+/// Argumentos de ffmpeg para el primer fotograma (o la imagen) como PNG de `THUMB_PX` como máximo.
+pub fn build_thumbnail_args(path: &Path, out: &Path) -> Vec<String> {
+    ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"]
+        .map(String::from)
+        .into_iter()
+        .chain([
+            path.to_string_lossy().into_owned(),
+            "-frames:v".into(),
+            "1".into(),
+            "-vf".into(),
+            format!(
+                "scale={THUMB_PX}:{THUMB_PX}:force_original_aspect_ratio=decrease:flags=bicubic"
+            ),
+            "-update".into(),
+            "1".into(),
+            out.to_string_lossy().into_owned(),
+        ])
+        .collect()
+}
+
 /// Primer fotograma (o la imagen) con ffmpeg, a un PNG de 160 px como máximo.
 fn ffmpeg_thumbnail(path: &Path, sidecar: Option<SidecarPaths>) -> Result<String, AudioError> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -119,22 +139,7 @@ fn ffmpeg_thumbnail(path: &Path, sidecar: Option<SidecarPaths>) -> Result<String
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     ));
-    let args: Vec<String> = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"]
-        .map(String::from)
-        .into_iter()
-        .chain([
-            path.to_string_lossy().into_owned(),
-            "-frames:v".into(),
-            "1".into(),
-            "-vf".into(),
-            format!(
-                "scale={THUMB_PX}:{THUMB_PX}:force_original_aspect_ratio=decrease:flags=bicubic"
-            ),
-            "-update".into(),
-            "1".into(),
-            out.to_string_lossy().into_owned(),
-        ])
-        .collect();
+    let args = build_thumbnail_args(path, &out);
     let r = run_ffmpeg_with_deadline(&sidecar, &args, &|| false, Some(Duration::from_secs(10)));
     let bytes = r.and_then(|()| std::fs::read(&out).map_err(AudioError::Io));
     let _ = std::fs::remove_file(&out);

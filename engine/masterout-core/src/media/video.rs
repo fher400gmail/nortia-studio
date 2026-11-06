@@ -214,7 +214,7 @@ pub fn probe_encoder_args(platform: Platform, hevc: bool) -> Vec<String> {
 /// `setparams` marca los fotogramas con matriz, primarios, transferencia y rango: en ffmpeg
 /// reciente el codificador toma el etiquetado de los fotogramas, no de `-color_*`, y el
 /// codificador de Media Foundation (`h264_mf`) se quedaba sin etiqueta (ffprobe: `unknown`).
-const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv";
+pub(crate) const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv";
 
 fn color_tags() -> Vec<String> {
     [

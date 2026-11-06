@@ -22,6 +22,9 @@ env:
 jobs:
   # Runners de GitHub por defecto (repo público, D-38; se apagan con HOSTED_RUNNERS == 'false').
   # Opción: Mac propio (D-35, docs/runner-mac.md) con la variable SELF_HOSTED == 'true'.
+  # Si GitHub no da runners de Mac: HOSTED_MAC=false apaga solo el macOS alojado (Linux y Windows siguen).
+  # Artefactos del Mac propio: master-check-macos-propio, master-check-humo-propio y afclip-raw-propio
+  # (con sufijo -propio, para no chocar con los del alojado si corren los dos).
   check:
     if: vars.HOSTED_RUNNERS != 'false'
     name: linux · check + clippy
@@ -71,7 +74,7 @@ jobs:
   macos:
     name: macos-15 · build
     needs: check
-    if: vars.HOSTED_RUNNERS != 'false'
+    if: vars.HOSTED_RUNNERS != 'false' && vars.HOSTED_MAC != 'false'
     runs-on: macos-15
     timeout-minutes: 45
     steps:

@@ -6,7 +6,25 @@ Guía corta para Fer. Desde D-38 el repositorio es público y la CI corre por de
 
 - Mac propio: crea la variable de repositorio `SELF_HOSTED` con valor `true` (Settings → Secrets and variables → Actions → Variables). Entonces corren además `mac-propio` (engine) y `check-propio` / `macos-propio` (app). Sin la variable, esos trabajos no corren aunque el runner esté instalado.
 - Runners de GitHub: corren siempre; se apagan creando la variable `HOSTED_RUNNERS` con valor `false`.
-- El release del sidecar (`ffmpeg-sidecar.yml`) usa solo runners de GitHub y exige macOS y Windows.
+- Solo el Mac alojado de GitHub se apaga con la variable `HOSTED_MAC` = `false` (Linux y Windows siguen corriendo).
+- El release del sidecar (`ffmpeg-sidecar.yml`) corre en ubuntu de GitHub y exige Windows y **uno** de los dos macOS: el alojado (`macos`) o el de tu Mac (`macos-propio`).
+
+## Cuando GitHub no da runners de Mac
+
+Si los trabajos `macos-15` se cancelan sin runner (06/11/2026, D-38), Linux y Windows siguen en GitHub y lo de macOS se hace en tu Mac. En GitHub: Settings → Secrets and variables → Actions → **Variables** → New repository variable:
+
+| Variable | Valor | Qué hace |
+|---|---|---|
+| `SELF_HOSTED` | `true` | Activan los trabajos del Mac propio: `macos-propio` (sidecar), `mac-propio` (engine), `check-propio` y `macos-propio` (app). |
+| `HOSTED_MAC` | `false` | Apaga solo el macOS alojado (sidecar `macos`, app `macos`, engine `macos`). Linux y Windows no se tocan. |
+
+- No pongas `HOSTED_RUNNERS=false`: apagaría también Linux, Windows y el trabajo `prepare` del sidecar, del que dependen los demás.
+- Sidecar: `macos-propio` sube el artefacto `ffmpeg-sidecar-macos` (el mismo nombre que el alojado), así que `release` lo recoge sin cambios. Con `SELF_HOSTED=true` y `HOSTED_MAC` sin definir correrían los dos y el segundo en subir fallaría por nombre repetido: pon siempre las dos variables a la vez.
+- App: el Mac propio sube `master-check-macos-propio` (y `master-check-humo-propio`, `afclip-raw-propio`); el `.dmg` está ahí, no en `master-check-macos`.
+- En Apple Silicon el sidecar necesita Rosetta para probar el slice x86_64; sin ella, el release falla pronto con un mensaje claro (el release exige las pruebas de los dos slices).
+- Para volver a lo normal: borra las dos variables (o pon `SELF_HOSTED=false` y `HOSTED_MAC=true`).
+
+**Seguridad (repo público + runner propio):** Settings → Actions → General → «Fork pull request workflows from outside collaborators» → **«Require approval for all outside collaborators»**. Los pull requests de otras personas no deben correr en tu Mac: no apruebes ninguno que no hayas leído entero. Los trabajos del Mac propio solo corren en `push` a ramas del repo y `workflow_dispatch`; el motor (`engine-tests.yml`) también corre en `pull_request`, así que esa aprobación es imprescindible.
 
 ## Qué hace
 

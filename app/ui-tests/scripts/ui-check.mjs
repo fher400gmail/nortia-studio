@@ -234,6 +234,49 @@ async function run(lang) {
   const box = await page.locator('.chip[data-id=spotify] .mono svg').boundingBox();
   assert.ok(Math.abs(box.width - 24) < 1.5 && Math.abs(box.height - 24) < 1.5, `${lang}: glifo de 24 px (${box.width}x${box.height})`);
 
+  // marca ferboix. studio, opción C «Instrumento» (D-37): colores medidos en los dos temas
+  const rgb = (r, g, b) => `rgb(${r}, ${g}, ${b})`;
+  const INK = rgb(17, 17, 17), PAPER = rgb(244, 243, 240), CYAN = rgb(0, 151, 184), GREY_L = rgb(106, 104, 99), GREY_D = rgb(154, 152, 147);
+  for (const theme of ['light', 'dark']) {
+    const dark = theme === 'dark';
+    await page.goto(`${base}/index.html?backend=mock&lang=${lang}&theme=${theme}&fast=1&still=1&state=normal`);
+    await page.waitForSelector('html[data-ready]');
+    const b = await page.evaluate(() => {
+      const cs = (sel, p) => { const e = document.querySelector(sel); return e ? getComputedStyle(e)[p] : null; };
+      const sym = document.querySelector('.wsym'), wm = document.querySelector('.wmk');
+      const paths = [...wm.querySelectorAll('path')].map(p => getComputedStyle(p).fill);
+      return {
+        go: { bg: cs('.go', 'backgroundColor'), fg: cs('.go', 'color'), img: cs('.go', 'backgroundImage') },
+        play: cs('.play', 'backgroundColor'),
+        lpill: cs('.lpill i', 'backgroundColor'),
+        wmDot: getComputedStyle(wm.querySelector('circle')).fill, wmInk: paths[0], wmSfx: paths[1],
+        symDisc: getComputedStyle(sym.querySelector('circle')).fill, symTick: getComputedStyle(sym.querySelector('line')).stroke,
+        symFx: { filter: getComputedStyle(sym).filter, shadow: getComputedStyle(sym).boxShadow, markup: sym.outerHTML, wmMarkup: wm.outerHTML },
+        brandVar: getComputedStyle(document.documentElement).getPropertyValue('--brand').trim().toUpperCase(),
+        title: document.querySelector('.appn').textContent.trim(), aria: wm.getAttribute('aria-label')
+      };
+    });
+    const tag = `${lang}/${theme}`;
+    assert.equal(b.go.bg, dark ? PAPER : INK, `${tag}: el botón primario es ${dark ? 'papel' : 'tinta'}`);
+    assert.equal(b.go.fg, dark ? INK : PAPER, `${tag}: texto del botón primario`);
+    assert.equal(b.go.img, 'none', `${tag}: el botón primario es plano (sin degradado)`);
+    assert.equal(b.play, CYAN, `${tag}: play en cian`);
+    assert.equal(b.lpill, CYAN, `${tag}: punto de lectura en cian`);
+    assert.equal(b.brandVar, '#0097B8', `${tag}: acento cian`);
+    assert.equal(b.wmDot, dark ? PAPER : INK, `${tag}: el punto del wordmark es tinta, no acento`);
+    assert.equal(b.wmInk, dark ? PAPER : INK, `${tag}: letras en tinta`);
+    assert.equal(b.wmSfx, dark ? GREY_D : GREY_L, `${tag}: «studio» en gris`);
+    assert.equal(b.symDisc, dark ? PAPER : INK, `${tag}: disco del símbolo`);
+    assert.equal(b.symTick, CYAN, `${tag}: marca del símbolo en cian`);
+    assert.equal(b.symFx.filter, 'none', `${tag}: símbolo sin filtro`);
+    assert.equal(b.symFx.shadow, 'none', `${tag}: símbolo sin sombra`);
+    assert.ok(!/gradient|filter|shadow|opacity/i.test(b.symFx.markup + b.symFx.wmMarkup), `${tag}: wordmark y símbolo sin degradados, sombras ni brillos`);
+    assert.equal(b.aria, 'ferboix. studio', `${tag}: nombre accesible del wordmark`);
+    assert.equal(b.title, 'master check');
+    assert.match(await page.title(), /ferboix\. studio/, `${tag}: título de la ventana`);
+    assert.ok(!/nortia/i.test(await page.content()), `${tag}: sin «nortia» en la interfaz`);
+  }
+
   // «Acerca de» lleva el aviso de marcas
   await page.goto(q('&state=normal'));
   await page.waitForSelector('html[data-ready]');

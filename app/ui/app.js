@@ -1,4 +1,4 @@
-/* nortia. studio · master check · interfaz
+/* ferboix. studio · master check · interfaz
    Módulo ES sin bundler. Los datos llegan del motor a través de `backend.js` (mock en el navegador,
    Tauri en la app) y los textos de i18n/{es,en}.json. Para abrirla en un navegador sirve la carpeta
    por http (p. ej. `python3 -m http.server`): los módulos ES y fetch no funcionan con file://.
@@ -68,9 +68,11 @@ const Icons = (() => {
     /* aviso de estado: triángulo con filete (el color lo pone el contexto; lleva siempre palabra) */
     warn: s('<path d="M12 4.5l9 15.5H3z"/><path d="M12 10v4.2M12 17.2v.1"/>', 'stroke-width="2"'),
     checkDraw: '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5.5 12.5l4.2 4.2L18.5 8"/></svg>',
-    /* símbolo barra de nortia. studio (punto estirado 2:1), en dos mitades para la entrada por polos */
-    mark: (h, id = '') => `<svg width="${h / 2}" height="${h}" viewBox="0 0 28 56" aria-hidden="true"><path d="M0 14a14 14 0 0 1 28 0v14H0z" fill="var(--brand)"/><path d="M0 28h28v14a14 14 0 0 1-28 0z" fill="var(--brand)"/></svg>`,
-    doneMark: `<svg class="markdone" viewBox="0 0 28 56" aria-hidden="true"><path class="t" d="M0 14a14 14 0 0 1 28 0v14H0z" fill="var(--brand)"/><path class="b" d="M0 28h28v14a14 14 0 0 1-28 0z" fill="var(--brand)"/></svg>`,
+    /* símbolo de ferboix. studio: potenciómetro (disco de tinta/papel + marca de posición cian a 35°). Plano: sin sombra ni degradado.
+       Medidas de brand/brand.py: radio 0,34 T; marca de 0,12 R a 0,93 R, trazo 0,36 R, extremos redondos. */
+    mark: (h, id = '') => `<svg class="pot" width="${h}" height="${h}" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="50" fill="var(--ink)"/><line transform="rotate(35 50 50)" x1="50" y1="44" x2="50" y2="3.5" stroke="var(--brand)" stroke-width="18" stroke-linecap="round"/></svg>`,
+    /* el potenciómetro de «listo»: el disco aparece y la marca gira hasta su posición */
+    doneMark: `<svg class="markdone pot" viewBox="0 0 100 100" aria-hidden="true"><circle class="t" cx="50" cy="50" r="50" fill="var(--ink)"/><g class="tk"><line x1="50" y1="44" x2="50" y2="3.5" stroke="var(--brand)" stroke-width="18" stroke-linecap="round"/></g></svg>`,
   };
 })();
 /* ───────────── util ───────────── */

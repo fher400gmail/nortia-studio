@@ -1,5 +1,5 @@
 {
-  "app.title": "master check · nortia. studio",
+  "app.title": "master check · ferboix. studio",
   "adv.title": "Advanced settings",
   "adv.off": "Not available",
   "theme.toggle": "Switch between light and dark",
@@ -112,7 +112,7 @@
   "about.legal": "Licenses and source code",
   "about.legal_failed": "The licenses document could not be opened.",
   "about.trademarks": "Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube and TuneCore are trademarks of their respective owners. master check is not affiliated with or endorsed by them.",
-  "about.maker": "nortia. studio",
+  "about.maker": "ferboix. studio",
   "pct": "{n}%",
   "size.lt_1kb": "<1 KB",
   "fmt.bits": "{n}-bit",

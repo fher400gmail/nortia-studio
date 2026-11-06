@@ -1,4 +1,4 @@
-/* nortia. studio · master check · textos de la interfaz (es/en). Módulo sin DOM. */
+/* ferboix. studio · master check · textos de la interfaz (es/en). Módulo sin DOM. */
 
 let dict = {};
 let current = 'es';

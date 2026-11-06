@@ -3,7 +3,7 @@
   "productName": "master check",
   "mainBinaryName": "master check",
   "version": "0.1.0",
-  "identifier": "studio.nortia.mastercheck",
+  "identifier": "studio.ferboix.mastercheck",
   "build": {
     "frontendDist": "../ui"
   },
@@ -35,7 +35,7 @@
     "targets": "all",
     "category": "Music",
     "shortDescription": "master check",
-    "longDescription": "master check · nortia. studio: prepara la carpeta de entrega de tu máster.",
+    "longDescription": "master check · ferboix. studio: prepara la carpeta de entrega de tu máster.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

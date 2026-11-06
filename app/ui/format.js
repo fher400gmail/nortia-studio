@@ -1,4 +1,4 @@
-/* nortia. studio · master check · formato de números por idioma (módulo puro, sin DOM).
+/* ferboix. studio · master check · formato de números por idioma (módulo puro, sin DOM).
    es: coma decimal y menos tipográfico (−9,1 LUFS) · en: punto decimal y guion (-9.1 LUFS). */
 
 const MINUS = '−';

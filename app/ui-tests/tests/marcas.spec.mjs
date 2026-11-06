@@ -1,5 +1,5 @@
 // Marcas de terceros (D-31, opción B): sin textos que impliquen aval, grafía oficial, avisos de marcas
-// y conjuntos de claves idénticos en es/en (interfaz y motor).
+// y conjuntos de claves idénticos en es/en (interfaz y motor). Marca ferboix. studio (D-37): «nortia» no puede reaparecer.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -126,4 +126,39 @@ test('terceros_y_marcas_llevan_el_aviso_exacto_con_siete_marcas', () => {
 test('el_motor_dice_comprobacion_no_validacion', () => {
   assert.deepEqual(Object.entries(eng.es).filter(([, v]) => /validaci[oó]n/i.test(v)).map(([k]) => k), []);
   assert.deepEqual(Object.entries(eng.en).filter(([, v]) => /validation/i.test(v)).map(([k]) => k), []);
+});
+
+/* ───────── marca ferboix. studio (D-37): el nombre antiguo no vuelve ─────────
+   Se admite solo el nombre del repositorio (`nortia-studio`) y el historial de decisiones (docs/decisiones.md, D-20…D-33). */
+const OLD = /nortia(?!-studio)/i;
+
+test('sin_nortia_en_ui_i18n_readme_de_entrega_e_informe', () => {
+  const bad = [];
+  for (const f of walk(UI).filter(f => /\.(js|html|css|json)$/.test(f) && !f.includes('/fonts/'))) {
+    if (OLD.test(readFileSync(f, 'utf8'))) bad.push(rel(f));
+  }
+  for (const l of ['es', 'en']) {
+    for (const [k, v] of Object.entries(eng[l])) if (OLD.test(`${k} ${v}`)) bad.push(`motor/i18n/${l}: ${k}`);   // README de entrega, informe, comentario MP3
+    for (const [k, v] of Object.entries(ui[l])) if (OLD.test(`${k} ${v}`)) bad.push(`ui/i18n/${l}: ${k}`);
+  }
+  for (const f of walk(join(ENGINE, 'src')).filter(f => f.endsWith('.rs'))) if (OLD.test(readFileSync(f, 'utf8'))) bad.push(rel(f));   // bext, textos del informe en código
+  assert.deepEqual(bad, []);
+});
+
+test('sin_nortia_en_terceros_pruebas_y_runner', () => {
+  const files = [join(ROOT, 'docs/legal/terceros.md'), join(ROOT, 'docs/runner-mac.md'), join(ROOT, 'README.md'),
+    ...readdirSync(join(ROOT, 'docs/pruebas')).filter(f => f.endsWith('.md')).map(f => join(ROOT, 'docs/pruebas', f))];
+  const bad = files.filter(f => { try { return OLD.test(readFileSync(f, 'utf8')); } catch { return false; } }).map(rel);
+  assert.deepEqual(bad, []);
+});
+
+test('la_marca_es_ferboix_studio_en_la_interfaz_y_en_el_motor', () => {
+  for (const l of ['es', 'en']) {
+    assert.equal(ui[l]['about.maker'], 'ferboix. studio');
+    assert.equal(ui[l]['app.title'], 'master check · ferboix. studio');
+    assert.equal(eng[l]['mp3.comment'], 'ferboix. studio - master check');
+  }
+  const conf = json(join(ROOT, 'app/src-tauri/tauri.conf.json'));
+  assert.equal(conf.productName, 'master check');
+  assert.equal(conf.identifier, 'studio.ferboix.mastercheck');
 });

@@ -139,13 +139,37 @@ for wfname, w in (("app-build.yml", wf), ("engine-tests.yml", eng_wf), ("ffmpeg-
                 if u:
                     check(u.split("@")[0] in ("actions/checkout", "actions/upload-artifact"), f"{wfname}/{jn}: {u.split('@')[0]} es ligera (runner propio)")
         else:
-            check(c.startswith("vars.HOSTED_RUNNERS != 'false'"), f"{wfname}/{jn}: runner alojado corre por defecto (vars.HOSTED_RUNNERS != 'false')")
+            if (wfname, jn) != ("ffmpeg-sidecar.yml", "release"):  # release: condición propia, comprobada abajo
+                check(c.startswith("vars.HOSTED_RUNNERS != 'false'"), f"{wfname}/{jn}: runner alojado corre por defecto (vars.HOSTED_RUNNERS != 'false')")
             check("[mac]" not in c, f"{wfname}/{jn}: sin gating por «[mac]» (repo público, D-38)")
+            # HOSTED_MAC apaga solo el Mac alojado: lo llevan los jobs macos-* alojados y ningún otro.
+            runs = str(j.get("runs-on", ""))
+            if runs.startswith("macos-"):
+                check(c == "vars.HOSTED_RUNNERS != 'false' && vars.HOSTED_MAC != 'false'", f"{wfname}/{jn}: Mac alojado se apaga solo con vars.HOSTED_MAC == 'false'")
+            elif jn != "release":
+                check("HOSTED_MAC" not in c, f"{wfname}/{jn}: HOSTED_MAC no apaga Linux ni Windows")
         wp = j.get("permissions", {})
         check(not wp or (wfname == "ffmpeg-sidecar.yml" and jn == "release" and wp == {"contents": "write"}),
               f"{wfname}/{jn}: contents: write solo en el job que publica el release")
-check(side_wf["jobs"]["release"]["runs-on"] == "ubuntu-latest" and set(side_wf["jobs"]["release"]["needs"]) == {"prepare", "macos", "windows"},
-      "sidecar: release en ubuntu y exige macos y windows")
+rel = side_wf["jobs"]["release"]
+check(rel["runs-on"] == "ubuntu-latest" and set(rel["needs"]) == {"prepare", "macos", "macos-propio", "windows"},
+      "sidecar: release en ubuntu, necesita prepare, windows y uno de los dos macOS")
+rc = cond(rel)
+check(rc.startswith("always()") and "needs.prepare.result == 'success'" in rc and "needs.windows.result == 'success'" in rc
+      and "(needs.macos.result == 'success' || needs.macos-propio.result == 'success')" in rc,
+      "sidecar: release acepta el macOS alojado o el propio y exige prepare y windows")
+mp = side_wf["jobs"]["macos-propio"]
+mpu = [st["with"]["name"] for st in mp["steps"] if str(st.get("uses", "")).startswith("actions/upload-artifact@")]
+hu = [st["with"]["name"] for st in side_wf["jobs"]["macos"]["steps"] if str(st.get("uses", "")).startswith("actions/upload-artifact@")]
+check(mpu == hu == ["ffmpeg-sidecar-macos"], "sidecar: macos y macos-propio suben el mismo artefacto (ffmpeg-sidecar-macos)")
+check(mp.get("env", {}).get("NCPU") == "4" and mp.get("needs") == "prepare", "sidecar macos-propio: NCPU=4 y depende de prepare")
+check(side_wf["jobs"]["windows"]["runs-on"] == "windows-latest" and "HOSTED_MAC" not in cond(side_wf["jobs"]["windows"]), "sidecar: windows sigue alojado")
+check(any("runner-preflight.sh" in st.get("run", "") for st in mp["steps"]) and any("tools/ffmpeg/build-macos.sh" in st.get("run", "") for st in mp["steps"]),
+      "sidecar macos-propio: preflight y la misma build-macos.sh")
+check(any(st.get("name", "").startswith("Pruebas de aceptación (slice arm64)") and "steps.slices.outputs.arm64" in st.get("if", "") for st in mp["steps"])
+      and any(st.get("name", "").startswith("Pruebas de aceptación (slice x86_64)") and "steps.slices.outputs.x86_64" in st.get("if", "") for st in mp["steps"]),
+      "sidecar macos-propio: aceptación por slice solo si el Mac puede ejecutarla")
+check(not any(side_wf["jobs"][j]["runs-on"] != "ubuntu-latest" for j in ("prepare", "release")), "sidecar: prepare y release en ubuntu alojado")
 eng_mp = eng_wf["jobs"]["mac-propio"]
 mpb = json.dumps(eng_mp, ensure_ascii=False)
 check(0 < int(eng_mp.get("env", {}).get("CARGO_BUILD_JOBS", 99)) <= 4, "engine mac-propio: CARGO_BUILD_JOBS <= 4")

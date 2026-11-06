@@ -50,6 +50,20 @@ fn es_and_en_have_identical_key_sets() {
 }
 
 #[test]
+fn dead_export_err_keys_are_gone() {
+    // el motor emite `err.container`, `err.threadpool` y `err.documents`; los `export.err.*` ya no los usa nadie
+    for lang in [Lang::Es, Lang::En] {
+        let keys = i18n::keys(lang);
+        for dead in ["export.err.container", "export.err.threadpool", "export.err.documents"] {
+            assert!(!keys.iter().any(|k| k == dead), "{dead} sigue en el diccionario");
+        }
+        for live in ["err.container", "err.threadpool", "err.documents"] {
+            assert!(keys.iter().any(|k| k == live), "{live} falta");
+        }
+    }
+}
+
+#[test]
 fn missing_key_is_visible_not_panic() {
     assert_eq!(t(Lang::Es, "nope"), "⟦nope⟧");
     assert_eq!(t(Lang::En, "nope"), "⟦nope⟧");

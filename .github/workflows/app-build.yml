@@ -69,6 +69,8 @@ jobs:
   macos:
     name: macos-15 · build
     needs: check
+    # Los minutos de macOS cuentan x10 en el plan gratuito: en ramas de trabajo solo con «[mac]» en el commit o a mano.
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[mac]')
     runs-on: macos-15
     timeout-minutes: 45
     steps:

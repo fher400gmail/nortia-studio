@@ -9,6 +9,7 @@ on:
     paths:
       - "engine/**"
       - ".github/workflows/engine-tests.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -46,7 +47,8 @@ jobs:
 
   macos:
     name: macos-15
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    # Los minutos de macOS cuentan x10 en el plan gratuito: en ramas de trabajo solo con «[mac]» en el commit o a mano.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[mac]')
     # 05/11/2026: macos-latest (arm64) sin capacidad, jobs sin adquirir; se usa macos-15 hasta que se recupere.
     runs-on: macos-15
     # La pasada de motor en macOS depende de que haya runner (macos-15 a veces no se adquiere y el

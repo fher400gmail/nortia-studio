@@ -30,11 +30,14 @@ Las licencias completas de las dependencias de Rust se regeneran en cada release
 6. **Marca y atribución**: se escribe "FFmpeg"; no se afirma propiedad de FFmpeg ni de LAME; no se usa el logo de FFmpeg.
 7. **Aviso visible** (hecho en «Acerca de»; pendiente web de descargas y EULA): la pantalla «Acerca de» de la app muestra la versión, el release del sidecar empaquetado, el aviso de licencias (texto de abajo, resumido y por i18n es/en) y el enlace a este documento. La web de descargas y el EULA lo incluirán cuando existan.
 8. **Verificación en el build**: el CI descarga el sidecar por etiqueta (`app/scripts/sidecar-tag.txt`, hoy `ffmpeg-sidecar-v7.1.5-3a21763`) y comprueba cada fichero contra el `SHA256SUMS` del release **y contra `app/scripts/sidecar-sha256.txt`** (fijado en el repositorio; falla si difieren) antes de usarlo; cambia la etiqueta en un solo sitio (y en `SIDECAR_RELEASE` de `mastercheck-bridge`; `check-wiring.py` y una prueba lo vigilan).
+9. **Marcas de plataformas** (D-31): master check nombra a Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube solo con su nombre en texto (uso referencial), sin logos ni glifos imitativos, y lo advierte en «Acerca de» y en el README de entrega. Investigación, decisión y salidas abiertas: [marcas-plataformas.md](marcas-plataformas.md).
 
 ## Texto para "Acerca de"
 
 > **Componentes de terceros**
 > master check usa **FFmpeg** (https://ffmpeg.org), licenciado bajo la GNU Lesser General Public License, versión 2.1 o posterior, y la biblioteca **LAME** (https://lame.sourceforge.io), licenciada bajo la LGPL 2. FFmpeg se distribuye como un programa aparte, compilado sin componentes GPL, y no se modifica. Puedes obtener el código fuente exacto, la línea de configuración y las licencias en: *{URL del release ffmpeg-sidecar-v…}*. La codificación H.264 la realizan los componentes del sistema operativo (VideoToolbox en macOS, Media Foundation en Windows). FFmpeg es una marca de Fabrice Bellard, originalmente creador del proyecto. Otras licencias: Tauri (Apache-2.0/MIT), flac-codec, ebur128, rubato, image (MIT/Apache-2.0) y la tipografía Hanken Grotesk (SIL OFL 1.1).
+
+> **Marcas.** Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.
 
 ## Pendiente de consulta legal (antes de vender)
 

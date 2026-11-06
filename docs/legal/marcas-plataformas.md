@@ -197,3 +197,18 @@ Motivos:
 - <https://brand.youtube> y <https://www.youtube.com/yt/brand/using-logo.html> (contenido dinámico; tamaños mínimos y espacio sin verificar).
 - No se encontraron brand kits públicos de Amazon Music, TIDAL, Deezer ni TuneCore. Podrían existir como kits de prensa bajo petición.
 - Un abogado debe confirmar el uso referencial de nombres de marca en España/UE y EE. UU., y las implicaciones de la marca «Apple Digital Masters».
+
+## 8. Decisión D-31 (06/11/2026): opción B
+
+**Decidido por el CEO, pendiente de ratificar con Fer en la revisión:** opción B. master check no muestra ningún logo, badge ni glifo imitativo de terceros. Cada plataforma aparece con su **nombre oficial en texto** y el punto de estado de la marca (variante V1 «solo nombre», por defecto); la variante V2 «gesto por grupo» (`data-chip-style="gesto"`) queda en una rama de estilo para elegir viendo las capturas.
+
+Aplicado en la tarea 8:
+- Fuera los glifos de `app/ui/app.js`. Nombres: Amazon Music, TIDAL, YouTube Music, YouTube (vídeo), Portada animada / Motion artwork.
+- El archivo de Apple pasa de `[Apple Digital Masters] 24bit-96kHz.wav` a `[Apple Music] 24bit-96kHz.wav` (contrato §4, con adenda en la spec). La subcarpeta `02 Apple Music/` no cambia.
+- «Apple Digital Masters» desaparece como nombre de ficha, archivo, carpeta y texto visible; el informe dice «Comprobación con las herramientas de Apple (AAC 256)». Un test falla si reaparecen «certificado», «aprobado por», «Ready», «optimizado para», «Mastered for» o «Digital Masters».
+- Aviso de marcas en «Acerca de» y al final del README de entrega: «Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.» (TuneCore se nombra solo como destino de distribuidora; si se quiere citar en el aviso, añadirlo a la vez en la interfaz y en el motor.)
+
+**Salidas abiertas:**
+1. **Uso por escrito de Spotify o YouTube** (permiso o acuerdo de partner): se pasa a la opción A **solo para esas fichas** (logo oficial según su guía, sobre fondo permitido, tamaños mínimos), sin tocar el resto.
+2. **Consulta a Apple** (`appledigitalmasters@apple.com`): si una herramienta de terceros puede nombrar «Apple Digital Masters» como especificación que comprueba. Hasta tener respuesta por escrito, el nombre no se usa en nada visible.
+3. Pendiente también: revisar la guía de Apple Music que no se pudo cargar (§7) y la confirmación del asesor antes de vender.

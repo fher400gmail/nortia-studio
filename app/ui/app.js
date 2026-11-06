@@ -228,7 +228,7 @@ const Views = (() => {
   const destName = id => { const k = 'chip.long.' + (Data.byPreset[id] || id), s = t(k); return s === k ? id : s; };
   const dest = id => {
     const why = Store.disabledReason(id), on = S.on.has(id) && !why, own = Store.own(id), title = chipTitle(id), acc = Store.awaiting(id);
-    const mono = own && own.thumb ? `<img class="mthumb" src="${esc(own.thumb)}" alt="">` : document.documentElement.dataset.chipStyle === 'gesto' ? Icons.gesture[Data.group[id]] : Icons.dot;
+    const mono = own && own.thumb ? `<img class="mthumb" src="${esc(own.thumb)}" alt=""><i class="dot sdot" aria-hidden="true"></i>` : document.documentElement.dataset.chipStyle === 'gesto' ? Icons.gesture[Data.group[id]] : Icons.dot;
     const btn = `<button class="chip glass ${on ? 'on' : ''} ${why ? 'dis' : ''} ${own ? 'has-media' : ''} ${acc ? 'acc' : ''}" role="switch" aria-checked="${on}" ${why ? 'aria-disabled="true"' : ''} ${title ? `title="${esc(title)}"` : ''} data-act="toggle" data-id="${id}"><span class="mono">${mono}</span><span class="cn">${esc(t('chip.' + id))}</span>${acc ? `<small class="dh">${esc(t('accept.drop'))}</small>` : ''}<i class="ck">${Icons.checkDraw}</i></button>`;
     if (!Data.media.has(id)) return btn;
     const clear = own ? `<span class="mx" role="button" tabindex="0" data-act="media-clear" data-mid="${id}" aria-label="${esc(t('media.clear', { name: own.name }))}" title="${esc(t('media.clear', { name: own.name }))}">${Icons.x}</span>` : '';

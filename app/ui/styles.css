@@ -418,6 +418,13 @@ body.still *,body.still *::before,body.still *::after{animation:none!important}
 .statusline .ic{width:15px;height:15px;flex:none;margin-top:1px;color:var(--amber-ink)}
 .statusline b{font-weight:600;color:var(--amber-ink)}
 
+/* ficha con miniatura de material propio: el punto de estado sigue visible, en la esquina de la miniatura
+   (anillo apagado, relleno de acento al seleccionar); lo que se atenúa y pasa a gris es la miniatura, no el punto */
+.chip.has-media>.mono{position:relative;opacity:1!important}
+.chip.has-media .sdot{position:absolute;right:3px;bottom:3px;width:11px;height:11px;background:var(--card);box-shadow:0 0 0 1.5px var(--card)}
+.chip.on.has-media .sdot{background:var(--brand);border-color:var(--brand)}
+.chip.has-media:not(.on) .mthumb{opacity:.55}
+
 /* ───────────── hito 3 · tarea 8: marcas de terceros (D-31, opción B) ─────────────
    V1 «solo nombre» (data-chip-style="nombre", por defecto): el nombre en texto y el punto de estado de la marca
    (anillo apagado, relleno de acento al seleccionar). Sin glifos ajenos, sin sombras, sin animación en bucle.

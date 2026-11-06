@@ -83,6 +83,19 @@ async function run(lang) {
   await page.waitForSelector('.chip[data-id=canvas].has-media');
   assert.equal(await page.locator('.chip[data-id=canvas]').getAttribute('aria-disabled'), null, `${lang}: Canvas habilitado con material propio`);
   assert.equal(await page.locator('.chip[data-id=canvas] .mthumb').count(), 1);
+  // el punto de estado sigue visible junto a la miniatura y distingue encendida de apagada
+  assert.equal(await page.locator('.chip[data-id=canvas] .sdot').count(), 1, `${lang}: punto de estado junto a la miniatura`);
+  const dotLook = () => page.evaluate(() => {
+    const c = document.querySelector('.chip[data-id=canvas]'), d = c.querySelector('.sdot'), cs = getComputedStyle(d), r = d.getBoundingClientRect();
+    return { on: c.getAttribute('aria-checked'), bg: cs.backgroundColor, vis: cs.display !== 'none' && cs.opacity !== '0' && r.width >= 8 && r.height >= 8, op: getComputedStyle(c.querySelector('.mono')).opacity };
+  });
+  const dot1 = await dotLook();
+  await page.click('.chip[data-id=canvas]');
+  await page.waitForTimeout(450); // la transición del punto dura 250 ms
+  const dot2 = await dotLook();
+  assert.notEqual(dot1.on, dot2.on, `${lang}: la ficha cambia de estado`);
+  assert.ok(dot1.vis && dot2.vis && dot1.op === '1' && dot2.op === '1', `${lang}: el punto de estado se ve en las dos posiciones ${JSON.stringify([dot1, dot2])}`);
+  assert.notEqual(dot1.bg, dot2.bg, `${lang}: el punto distingue encendida de apagada ${JSON.stringify([dot1, dot2])}`);
   assert.match(await page.locator('.chip[data-id=canvas]').getAttribute('title'), /bucle\.mp4/);
   assert.equal(await page.locator('.chip[data-id=ytv]').getAttribute('aria-disabled'), 'true', `${lang}: el resto sigue sin portada`);
   assert.equal(await page.locator('.chip[data-id=canvas] .dh').count(), 0, `${lang}: con material propio ya no hay pista`);

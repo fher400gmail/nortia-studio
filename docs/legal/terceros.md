@@ -6,7 +6,7 @@ Documento de cumplimiento de licencias. Se actualiza con cada cambio de dependen
 
 | Componente | Uso | Licencia | Cómo se distribuye |
 |---|---|---|---|
-| FFmpeg 7.x (libavcodec, libavformat, libavfilter, libswscale, libswresample; ejecutables `ffmpeg` y `ffprobe`) | Vídeo (Canvas, YouTube, Apple Motion), AAC y MP3 | LGPL 2.1 o posterior. Compilado con `--disable-gpl --disable-nonfree`, sin x264/x265/fdk-aac/openh264 | Ejecutable aparte (sidecar), invocado como proceso; nunca enlazado con la app. Construido en CI desde fuente |
+| FFmpeg 7.x (libavcodec, libavformat, libavfilter, libswscale, libswresample; ejecutables `ffmpeg` y `ffprobe`) | Vídeo (Canvas, YouTube, portada animada de Apple Music), AAC y MP3 | LGPL 2.1 o posterior. Compilado con `--disable-gpl --disable-nonfree`, sin x264/x265/fdk-aac/openh264 | Ejecutable aparte (sidecar), invocado como proceso; nunca enlazado con la app. Construido en CI desde fuente |
 | LAME 3.100 (libmp3lame) | Codificación MP3 dentro del sidecar | LGPL 2 o posterior | Enlazado estáticamente dentro del ejecutable ffmpeg |
 | VideoToolbox (macOS) / Media Foundation (Windows) | Codificación H.264 y HEVC del sistema operativo, a través de `h264_videotoolbox`/`hevc_videotoolbox` y `h264_mf`/`hevc_mf` | Componentes del SO (licencia del sistema) | No se distribuyen; los aporta el sistema operativo |
 | zlib | PNG dentro de ffmpeg | zlib | Librería del sistema (macOS) / enlazada estáticamente (Windows) |
@@ -37,7 +37,7 @@ Las licencias completas de las dependencias de Rust se regeneran en cada release
 > **Componentes de terceros**
 > master check usa **FFmpeg** (https://ffmpeg.org), licenciado bajo la GNU Lesser General Public License, versión 2.1 o posterior, y la biblioteca **LAME** (https://lame.sourceforge.io), licenciada bajo la LGPL 2. FFmpeg se distribuye como un programa aparte, compilado sin componentes GPL, y no se modifica. Puedes obtener el código fuente exacto, la línea de configuración y las licencias en: *{URL del release ffmpeg-sidecar-v…}*. La codificación H.264 la realizan los componentes del sistema operativo (VideoToolbox en macOS, Media Foundation en Windows). FFmpeg es una marca de Fabrice Bellard, originalmente creador del proyecto. Otras licencias: Tauri (Apache-2.0/MIT), flac-codec, ebur128, rubato, image (MIT/Apache-2.0) y la tipografía Hanken Grotesk (SIL OFL 1.1).
 
-> **Marcas.** Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.
+> **Marcas.** Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube y TuneCore son marcas de sus titulares. master check no está afiliado ni avalado por ellos.
 
 ## Pendiente de consulta legal (antes de vender)
 

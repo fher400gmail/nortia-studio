@@ -29,7 +29,7 @@ Precio: 9,99 € pago único en la Mac App Store. Sin cuenta, sin red, sin suscr
 ### 3.2 Columna central: datos y destinos
 - **Datos del tema** (6 campos visibles, el resto plegado): Título, Artista principal, Featuring, Versión (p. ej. "Radio Edit"), Año, ISRC (opcional, validado con formato CC-XXX-YY-NNNNN). Plegados: compositores, editorial, sello, ℗ y ©, UPC, género, idioma, explícito. Se recuerdan entre sesiones (último artista/sello).
 - **Portada** (opcional): arrastre de imagen; se muestra con su tamaño; aviso si < 3000×3000 o no cuadrada o no sRGB.
-- **Destinos** como tarjetas con interruptor, agrupadas: *Streaming* (Spotify, Apple Music / Apple Digital Masters, Amazon Music, Tidal, Deezer, YouTube Music), *Distribuidoras* (Estándar 16/44,1; Hi-Res 24/nativa; TuneCore 24/192), *Promo* (MP3 320), *Vídeo e imagen* (YouTube vídeo con imagen fija 1080p, Spotify Canvas 9:16, Portada 3000×3000 JPG+PNG). Cada tarjeta muestra: icono, nombre, el archivo que generará ("FLAC 24 bit · 96 kHz"), semáforo de loudness para ese destino (verde cumple / ámbar aviso / rojo no cumple, con el motivo en una línea: "TP −0,3 dBTP; Spotify recomienda ≤ −1") y un aviso si el máster no es apto (p. ej. ADM exige 24 bit nativo). Las tarjetas se animan al activarse y la vista previa de la carpeta se actualiza al instante.
+- **Destinos** como tarjetas con interruptor, agrupadas: *Streaming* (Spotify, Apple Music (comprobación con afclip), Amazon Music, TIDAL, Deezer, YouTube Music), *Distribuidoras* (Estándar 16/44,1; Hi-Res 24/nativa; TuneCore 24/192), *Promo* (MP3 320), *Vídeo e imagen* (YouTube vídeo con imagen fija 1080p, Spotify Canvas 9:16, Portada 3000×3000 JPG+PNG). Cada tarjeta muestra: icono, nombre, el archivo que generará ("FLAC 24 bit · 96 kHz"), semáforo de loudness para ese destino (verde cumple / ámbar aviso / rojo no cumple, con el motivo en una línea: "TP −0,3 dBTP; Spotify recomienda ≤ −1") y un aviso si el máster no es apto (p. ej. ADM exige 24 bit nativo). Las tarjetas se animan al activarse y la vista previa de la carpeta se actualiza al instante.
 - Botón "Preset": guardar/recuperar la selección de destinos ("Mi entrega estándar").
 
 ### 3.3 Columna derecha: salida
@@ -53,12 +53,13 @@ Precio: 9,99 € pago único en la Mac App Store. Sin cuenta, sin red, sin suscr
   08 Promo/{Artista} - {Título} [MP3 320].mp3
   09 Imagen/{Artista} - {Título} [Portada] 3000x3000.jpg (+ .png)
   09 Imagen/{Artista} - {Título} [Canvas] 1080x1920.mp4
+  02 Apple Music/{Artista} - {Título} [Portada animada] 3840x3840.mp4 · [Portada animada] 2048x2732.mp4   (en inglés: [Motion artwork])
   README.txt · informe-loudness.txt · ficha-lanzamiento.csv · ficha-lanzamiento.txt
 ```
 Reglas: caracteres inválidos en nombres sustituidos por `-`; la resolución del nombre refleja la real del archivo; las subcarpetas solo se crean si el destino está activo; los presets exactos (bits/kHz por destino) salen de la tabla verificada en `docs/investigacion/` y se actualizan sin tocar la interfaz.
 
 Regla de resolución por destino (decide qué se genera a partir del máster de entrada):
-- Si el destino pide "nativa" (Spotify, Apple, Amazon, Tidal, Hi-Res): se conservan los bits y kHz del máster; nunca se sube la resolución para estos destinos (Spotify y Apple lo desaconsejan). Si el máster es 16 bit, la tarjeta de Apple Digital Masters se desactiva con el motivo.
+- Si el destino pide "nativa" (Spotify, Apple, Amazon, TIDAL, Hi-Res): se conservan los bits y kHz del máster; nunca se sube la resolución para estos destinos (Spotify y Apple lo desaconsejan). Si el máster es 16 bit, la tarjeta de Apple Music se desactiva con el motivo.
 - Si el destino fija una resolución (Deezer 16/44,1, Distribuidora estándar 16/44,1, TuneCore 24/192, YouTube 48 kHz): se convierte a esa resolución; al bajar bits se aplica dither TPDF; al subir (p. ej. 48 → 192 para TuneCore) se permite y el README lo marca como upsampling sin ganancia de calidad.
 - Las resoluciones exactas de cada destino son datos de configuración (`presets.json` dentro de la app) con su fuente; un destino "por verificar" se muestra con la etiqueta "recomendación" hasta que se confirme.
 
@@ -69,7 +70,7 @@ Regla de resolución por destino (decide qué se genera a partir del máster de 
 - **Medición:** LUFS integrados, LRA y true peak según ITU-R BS.1770-4 / EBU R128 (gating −70 LUFS absoluto y −10 LU relativo; true peak con sobremuestreo 4×), implementado en Swift y verificado en tests contra referencias de la EBU y contra `ffmpeg -af ebur128`.
 - **MP3:** LAME enlazado dinámicamente (LGPL) a 320 kbps CBR, joint stereo, ID3v2.3 con título, artista, álbum, año, ISRC, compositor, editorial, copyright y portada.
 - **Vídeo:** AVAssetWriter; H.264 High, 1080p (y 4K opcional), GOP cerrado, audio AAC-LC 48 kHz 384 kbps, moov al inicio; imagen fija = portada centrada sobre fondo desenfocado. Canvas: recorte 9:16 de la portada con zoom lento de 6 s, 1080×1920, sin audio. Apple motion artwork (destino opcional en "Vídeo e imagen"): 1×1 de 3840×3840 y 3×4 de 2048×2732, 8–35 s, H.264, sin audio, primer fotograma igual a la portada, bucle suave, 45–100 Mbps, 23,976–30 fps (spec oficial de Apple, confirmada en ronda 2).
-- **Apple Digital Masters:** flujo oficial afconvert → CAF con Sound Check → AAC 256 → `afclip`; el resultado (sin clipping / n muestras con clipping) se muestra en la tarjeta de Apple y en el informe. Si `afclip` no está disponible en el sistema, la tarjeta lo indica y ofrece el enlace a las herramientas de Apple.
+- **Apple Music (comprobación con afclip):** flujo oficial afconvert → CAF con Sound Check → AAC 256 → `afclip`; el resultado (sin clipping / n muestras con clipping) se muestra en la tarjeta de Apple y en el informe. Si `afclip` no está disponible en el sistema, la tarjeta lo indica y ofrece el enlace a las herramientas de Apple.
 - **Metadatos incrustados:** BWF `bext` en WAV (Description con "Artista - Título", Originator "nortia. studio", fecha y hora; el chunk `bext` NO tiene campo ISRC según EBU Tech 3285, así que el ISRC va en `axml`/iXML si se confirma el esquema, y siempre en la ficha de lanzamiento); Vorbis comments en FLAC (TITLE, ARTIST, DATE, ISRC, COPYRIGHT); ID3v2.3 en MP3 (TIT2, TPE1, TALB, TYER, TCON, TSRC, TCOM, TPUB, TCOP, APIC tipo $03). Se omiten en el preset TuneCore (lo pide así).
 - **Paralelismo:** una tarea por destino con `TaskGroup`; límite de concurrencia = núcleos de rendimiento; progreso por archivo.
 - **Sin red.** Nada sale del Mac. Sandbox de App Store con acceso a archivos elegidos por el usuario (bookmarks de seguridad para la carpeta de salida).
@@ -110,7 +111,7 @@ Hito 1 (semana 1): motor de medición y conversión con tests, sin interfaz. Hit
 
 1. **Canal de venta: solo propio.** No se publica en la Mac App Store por ahora. Venta desde la web de nortia. con pasarela que actúa de vendedor (merchant of record) y entrega archivo + clave de licencia. Mac: build firmada con Developer ID y notarizada (obligatorio para que Gatekeeper la abra). Sección 8 ("tienda") y los puntos de sandbox/App Review de la sección 5 quedan anulados.
 2. **Plataformas: Mac primero, después Windows.** iPhone/iPad/Android fuera.
-3. **Stack: motor en Rust + interfaz Tauri 2** (HTML/CSS/JS en webview nativo), un solo código para Mac y Windows. Sustituye a SwiftUI/AVFoundation/Core Audio de la sección 5. Las piezas solo-Mac (afconvert/afclip para Apple Digital Masters) se activan solo en macOS; en Windows la tarjeta de Apple entrega el WAV 24 bit nativo y marca la validación AAC como "no disponible en Windows".
+3. **Stack: motor en Rust + interfaz Tauri 2** (HTML/CSS/JS en webview nativo), un solo código para Mac y Windows. Sustituye a SwiftUI/AVFoundation/Core Audio de la sección 5. Las piezas solo-Mac (afconvert/afclip para Apple Music (comprobación con afclip)) se activan solo en macOS; en Windows la tarjeta de Apple entrega el WAV 24 bit nativo y marca la validación AAC como "no disponible en Windows".
 4. **Fábrica: GitHub Actions** (runners macOS y Windows); tests del motor también en Linux. Fer no tiene Xcode.
 5. **Idioma: la app habla el idioma del sistema** (mínimo español e inglés en v1; textos externalizados). README, informe de loudness y ficha de lanzamiento se generan en ese idioma.
 6. **Mínimo macOS 14**; Windows 10 (1803+) / 11 con WebView2.

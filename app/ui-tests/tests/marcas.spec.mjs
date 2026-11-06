@@ -76,3 +76,54 @@ test('el_mock_no_habla_de_apple_digital_masters', () => {
   assert.match(src, /Apple Music asks for a 24-bit master or higher/);
   assert.match(src, /tag: 'Apple Music'/);
 });
+
+/* ───────── cobertura ampliada (revisión T8): docs, scripts de humo y CI ─────────
+   Fuera a propósito: docs/legal/marcas-plataformas.md (cita los términos como prohibidos),
+   docs/investigacion, docs/superpowers/reviews y plans, design/ (material histórico, ver design/README.md). */
+const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
+const rel = p => p.slice(ROOT.length);
+const DM = /Digital Masters/;
+
+test('sin_digital_masters_en_scripts_de_humo_y_ci', () => {
+  const files = [...walk(join(ROOT, 'app/scripts')), ...walk(join(ROOT, '.github/workflows'))].filter(f => /\.(py|sh|ps1|yml|yaml|txt)$/.test(f));
+  assert.ok(files.length > 3);
+  const bad = files.filter(f => DM.test(readFileSync(f, 'utf8'))).map(rel);
+  assert.deepEqual(bad, []);
+});
+
+test('sin_literales_de_aval_en_terceros_y_listas_de_pruebas', () => {
+  const files = [join(ROOT, 'docs/legal/terceros.md'), ...readdirSync(join(ROOT, 'docs/pruebas')).filter(f => f.endsWith('.md')).map(f => join(ROOT, 'docs/pruebas', f))];
+  const bad = [];
+  for (const f of files) {
+    const s = readFileSync(f, 'utf8');
+    bad.push(...offenders(rel(f), s));
+    if (/Apple [Mm]otion/.test(s)) bad.push(`${rel(f)}: Apple Motion`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('el_humo_lee_del_i18n_del_motor_lo_que_busca_en_el_informe', () => {
+  const src = readFileSync(join(ROOT, 'app/scripts/smoke_verify.py'), 'utf8');
+  assert.match(src, /report\.adm_unavailable/);
+  assert.match(src, /report\.adm_clipping/);
+  assert.match(src, /i18n/);
+  // el prefijo común del informe existe en las dos lenguas (es el que filtra el humo)
+  for (const l of ['es', 'en']) {
+    const pre = eng[l]['report.adm_unavailable'].split(':')[0];
+    assert.ok(eng[l]['report.adm_clipping'].startsWith(pre), `${l}: ${pre}`);
+  }
+});
+
+test('terceros_y_marcas_llevan_el_aviso_exacto_con_siete_marcas', () => {
+  const terceros = readFileSync(join(ROOT, 'docs/legal/terceros.md'), 'utf8');
+  const marcas = readFileSync(join(ROOT, 'docs/legal/marcas-plataformas.md'), 'utf8');
+  assert.ok(terceros.includes(ui.es['about.trademarks']));
+  assert.ok(marcas.includes(ui.es['about.trademarks']));
+  assert.ok(!/se nombra solo como destino/.test(marcas));
+});
+
+test('el_motor_dice_comprobacion_no_validacion', () => {
+  assert.deepEqual(Object.entries(eng.es).filter(([, v]) => /validaci[oó]n/i.test(v)).map(([k]) => k), []);
+  assert.deepEqual(Object.entries(eng.en).filter(([, v]) => /validation/i.test(v)).map(([k]) => k), []);
+});

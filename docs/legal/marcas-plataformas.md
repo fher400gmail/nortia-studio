@@ -206,7 +206,7 @@ Aplicado en la tarea 8:
 - Fuera los glifos de `app/ui/app.js`. Nombres: Amazon Music, TIDAL, YouTube Music, YouTube (vídeo), Portada animada / Motion artwork.
 - El archivo de Apple pasa de `[Apple Digital Masters] 24bit-96kHz.wav` a `[Apple Music] 24bit-96kHz.wav` (contrato §4, con adenda en la spec). La subcarpeta `02 Apple Music/` no cambia.
 - «Apple Digital Masters» desaparece como nombre de ficha, archivo, carpeta y texto visible; el informe dice «Comprobación con las herramientas de Apple (AAC 256)». Un test falla si reaparecen «certificado», «aprobado por», «Ready», «optimizado para», «Mastered for» o «Digital Masters».
-- Aviso de marcas en «Acerca de» y al final del README de entrega: «Spotify, Apple Music, Amazon Music, TIDAL, Deezer y YouTube son marcas de sus titulares. master check no está afiliado ni avalado por ellos.» (TuneCore se nombra solo como destino de distribuidora; si se quiere citar en el aviso, añadirlo a la vez en la interfaz y en el motor.)
+- Aviso de marcas en «Acerca de» y al final del README de entrega: «Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube y TuneCore son marcas de sus titulares. master check no está afiliado ni avalado por ellos.»
 
 **Salidas abiertas:**
 1. **Uso por escrito de Spotify o YouTube** (permiso o acuerdo de partner): se pasa a la opción A **solo para esas fichas** (logo oficial según su guía, sobre fondo permitido, tamaños mínimos), sin tocar el resto.

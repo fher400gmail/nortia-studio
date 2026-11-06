@@ -2,7 +2,7 @@
 
 Para Fer. Lo que el CI no puede mirar: oído, ojo y un Mac con las herramientas de Apple. Unos 35 minutos. Necesitas macOS 14 o superior y un máster real en WAV (24 bit, 44,1 o 48 kHz, de 3 a 5 minutos), una portada cuadrada (JPG o PNG) y otra NO cuadrada.
 
-Qué ya comprueba el CI y no hace falta repetir: el sidecar descargado coincide con su SHA256; `ffmpeg` y `ffprobe` van dentro de la app (universal); el humo exporta [Portada] 3000×3000, [Canvas] 1080×1920 sin audio, [YouTube] 1080p con AAC 48 kHz, [MP3 320] y Apple Motion; el tiempo de `capabilities()` queda anotado en `smoke-result.json` (artefacto `master-check-humo`).
+Qué ya comprueba el CI y no hace falta repetir: el sidecar descargado coincide con su SHA256; `ffmpeg` y `ffprobe` van dentro de la app (universal); el humo exporta [Portada] 3000×3000, [Canvas] 1080×1920 sin audio, [YouTube] 1080p con AAC 48 kHz, [MP3 320] y [Portada animada]; el tiempo de `capabilities()` queda anotado en `smoke-result.json` (artefacto `master-check-humo`).
 
 ## Antes de empezar
 
@@ -22,7 +22,7 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 
 ### 2. Los vídeos y el MP3 están disponibles
 - Haz: suelta tu máster. Mira las fichas de Extras.
-- Esperado: MP3 habilitada; Portada, Canvas, YouTube vídeo y Apple motion deshabilitadas con el aviso «Falta la portada…» y con borde discontinuo y la pista «Arrastra la portada» (también en oscuro). Ninguna dice «falta ffmpeg».
+- Esperado: MP3 habilitada; Portada, Canvas, YouTube (vídeo) y Portada animada deshabilitadas con el aviso «Falta la portada…» y con borde discontinuo y la pista «Arrastra la portada» (también en oscuro). Ninguna dice «falta ffmpeg».
 
 ### 3. Primer plan: tiempo de arranque
 - Haz: cierra la app, ábrela y cronometra desde que sueltas el máster hasta que aparece el resumen («N archivos · tamaño»). Es la primera vez que se sondean los codificadores de vídeo.
@@ -44,19 +44,19 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 - Haz: abre `06 YouTube/… [YouTube] 1080p.mp4` en QuickTime y salta al minuto 2.
 - Esperado: portada con audio de la canción, sonido sincronizado y sin chasquidos, empieza al instante (no tarda en cargar), dura lo mismo que el máster (±1 s).
 
-### 7. Apple Motion (apágalo y enciéndelo)
-- Haz: enciende la ficha **Apple motion** (nace apagada) y crea la carpeta.
-- Esperado: dos archivos en `02 Apple Music/`: `3840x3840.mp4` y `2048x2732.mp4`; ambos abren en QuickTime sin color apagado o verdoso.
+### 7. Portada animada (apágala y enciéndela)
+- Haz: enciende la ficha **Portada animada** (nace apagada) y crea la carpeta.
+- Esperado: dos archivos en `02 Apple Music/`: `… [Portada animada] 3840x3840.mp4` y `… [Portada animada] 2048x2732.mp4`; ambos abren en QuickTime sin color apagado o verdoso.
 
 ### 8. MP3 320
 - Haz: abre `08 Promo/… [MP3 320].mp3` en Música o VLC.
 - Esperado: suena igual que el máster, 320 kbps (Cmd + I → Más información), y muestra artista, título y la portada incrustada.
 
-### 9. Apple Digital Masters (obligatoria solo si el CI avisó de que falta afclip)
+### 9. Comprobación de Apple (afclip) (obligatoria solo si el CI avisó de que falta afclip)
 `afconvert` y `afclip` vienen con macOS (`/usr/bin`; el CI los encontró en macos-15 y el flujo real pasó). Si el CI no avisó, esta prueba es opcional y solo sirve para ver el informe con tu máster.
 - Haz: en Terminal, `which afclip`. Si responde una ruta (lo normal), sigue; si no responde nada, anótalo como «falla: no hay afclip» y salta el resto (instalar herramientas de Apple no entra en esta prueba). Con Apple Music activo, crea la carpeta con tu máster y abre `informe-loudness.txt`.
-- Esperado: una línea «Apple Digital Masters: N muestras con clipping en el AAC». Con un máster que supere −1 dBTP, N > 0; con uno limpio, 0.
-- Si ves «Apple Digital Masters: no disponible: no se entendió la respuesta de afclip», el formato de salida no es el que esperamos. Entonces pega en Terminal esto con tu máster (cámbiale la ruta) y envíame la salida completa:
+- Esperado: una línea «Comprobación con las herramientas de Apple (AAC 256): N muestras con clipping». Con un máster que supere −1 dBTP, N > 0; con uno limpio, 0.
+- Si ves «Comprobación con las herramientas de Apple: no disponible: no se entendió la respuesta de afclip», el formato de salida no es el que esperamos. Entonces pega en Terminal esto con tu máster (cámbiale la ruta) y envíame la salida completa:
   ```
   cd "$(mktemp -d)" && afconvert "/ruta/máster.wav" i.caf -d 0 -f caff --soundcheck-generate && afconvert i.caf f.m4a -d aac -f m4af -u pgcm 2 --soundcheck-read -b 256000 -q 127 -s 2 && afconvert f.m4a d.wav -d LEF32 -f WAVE && afclip d.wav
   ```

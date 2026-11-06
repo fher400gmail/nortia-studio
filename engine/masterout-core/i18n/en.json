@@ -105,10 +105,10 @@
   "reason.adm_tools_missing": "The Apple tools (afconvert and afclip) are missing. Install them from https://www.apple.com/apple-music/apple-digital-masters/",
   "reason.adm_parse": "The afclip output could not be understood.",
   "reason.adm_failed": "Apple's tools failed at the AAC conversion or at reading the clipping.",
-  "reason.adm_cancelled": "Validation cancelled.",
+  "reason.adm_cancelled": "Check cancelled.",
   "report.adm_clipping": "Check with Apple's tools (AAC 256): {n} clipped samples",
   "report.adm_unavailable": "Check with Apple's tools: not available: {reason}",
   "adm_clipping": "clips when encoded",
   "report.adm_clipping_one": "Check with Apple's tools (AAC 256): 1 clipped sample",
-  "err.adm_log": "The validation log could not be created."
+  "err.adm_log": "The check log could not be created."
 }

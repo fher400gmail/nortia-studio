@@ -26,6 +26,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::Duration;
 
@@ -209,7 +210,11 @@ pub fn probe_encoder_args(platform: Platform, hevc: bool) -> Vec<String> {
 }
 
 /// Conversión real a Rec.709 de rango limitado, YUV 4:2:0.
-const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p";
+///
+/// `setparams` marca los fotogramas con matriz, primarios, transferencia y rango: en ffmpeg
+/// reciente el codificador toma el etiquetado de los fotogramas, no de `-color_*`, y el
+/// codificador de Media Foundation (`h264_mf`) se quedaba sin etiqueta (ffprobe: `unknown`).
+const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv";
 
 fn color_tags() -> Vec<String> {
     [
@@ -288,7 +293,7 @@ pub fn build_canvas_args(
     a.extend(encoder_args(platform, Codec::H264));
     a.extend(["-b:v", "5M", "-pix_fmt", "yuv420p"].map(s));
     a.extend(color_tags());
-    a.extend(["-movflags", "+faststart"].map(s));
+    a.extend(["-movflags", "+faststart+write_colr"].map(s));
     a.push(out.to_string_lossy().into_owned());
     a
 }
@@ -399,7 +404,7 @@ pub fn build_youtube_args(
             "-use_editlist",
             "0",
             "-movflags",
-            "+faststart+negative_cts_offsets",
+            "+faststart+write_colr+negative_cts_offsets",
             "-shortest",
         ]
         .map(s),
@@ -457,7 +462,7 @@ pub fn build_apple_motion_args(
         s("yuv420p"),
     ]);
     a.extend(color_tags());
-    a.extend(["-movflags", "+faststart"].map(s));
+    a.extend(["-movflags", "+faststart+write_colr"].map(s));
     a.push(out.to_string_lossy().into_owned());
     a
 }
@@ -503,9 +508,28 @@ pub fn classify_failure(stderr: &str) -> AudioError {
     }
 }
 
+/// Mata a ffmpeg y a todo su árbol de procesos. En Windows, `ffmpeg` puede ser un *shim*
+/// (chocolatey, scoop) que lanza al ffmpeg real como hijo: `TerminateProcess` sobre el shim
+/// dejaba al hijo vivo, con el stderr abierto, y el trabajo seguía hasta el final.
 fn kill(child: &mut Child) {
+    #[cfg(windows)]
+    {
+        let mut tk = Command::new("taskkill");
+        tk.args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        no_window(&mut tk);
+        let _ = tk.status();
+    }
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// Espera el stderr recogido por el lector, como mucho `wait`: si un proceso nieto heredó la
+/// tubería, el lector no termina y no debe bloquear la cancelación ni el plazo.
+fn collect_stderr(rx: &Receiver<String>, wait: Duration) -> String {
+    rx.recv_timeout(wait).unwrap_or_default()
 }
 
 // DIAG-TEMP
@@ -617,14 +641,17 @@ pub fn run_ffmpeg_with_deadline(
         &format!("spawn pid={} exe={}", child.id(), sidecar.ffmpeg.display()),
     );
     let pipe = child.stderr.take();
-    let reader = thread::spawn(move || pipe.map(drain_tail).unwrap_or_default());
+    let (tx, reader) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(pipe.map(drain_tail).unwrap_or_default());
+    });
     let status = loop {
         if cancel() {
             dtrace(started, "cancel detectado");
             kill(&mut child);
             dtrace(started, "tras kill+wait");
-            let _ = reader.join();
-            dtrace(started, "tras reader.join");
+            let _ = collect_stderr(&reader, Duration::from_millis(500));
+            dtrace(started, "tras recoger stderr");
             cleanup();
             return Err(AudioError::Cancelled);
         }
@@ -642,13 +669,13 @@ pub fn run_ffmpeg_with_deadline(
             Ok(None) => thread::sleep(Duration::from_millis(100)),
             Err(e) => {
                 kill(&mut child);
-                let _ = reader.join();
+                let _ = collect_stderr(&reader, Duration::from_millis(500));
                 cleanup();
                 return Err(AudioError::Io(e));
             }
         }
     };
-    let stderr = reader.join().unwrap_or_default();
+    let stderr = collect_stderr(&reader, Duration::from_secs(5));
     if !status.success() {
         cleanup();
         return Err(classify_failure(&stderr));

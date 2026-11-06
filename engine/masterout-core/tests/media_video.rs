@@ -31,7 +31,7 @@ const TAGS: [&str; 6] = [
     "-colorspace",
     "bt709",
 ];
-const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p";
+const BT709: &str = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv";
 const ALL: [Platform; 3] = [Platform::MacOS, Platform::Windows, Platform::Linux];
 
 fn enc(p: Platform) -> Vec<String> {
@@ -119,7 +119,7 @@ fn canvas_args_from_cover_golden() {
             enc(p),
             v(&["-b:v", "5M", "-pix_fmt", "yuv420p"]),
             v(&TAGS),
-            v(&["-movflags", "+faststart", "o.mp4"]),
+            v(&["-movflags", "+faststart+write_colr", "o.mp4"]),
         ]);
         assert_eq!(got, want, "{p:?}");
     }
@@ -139,7 +139,7 @@ fn canvas_args_from_user_video_trims_to_8s() {
         enc(Platform::Linux),
         v(&["-b:v", "5M", "-pix_fmt", "yuv420p"]),
         v(&TAGS),
-        v(&["-movflags", "+faststart", "o.mp4"]),
+        v(&["-movflags", "+faststart+write_colr", "o.mp4"]),
     ]);
     assert_eq!(got, want);
     // 3..=8 s: sin recorte ni bucle; < 3 s: bucle hasta 3 s
@@ -210,7 +210,7 @@ fn youtube_golden(p: Platform) -> Vec<String> {
             "-use_editlist",
             "0",
             "-movflags",
-            "+faststart+negative_cts_offsets",
+            "+faststart+write_colr+negative_cts_offsets",
             "-shortest",
             "o.mp4",
         ]),
@@ -306,7 +306,7 @@ fn apple_motion_args_golden() {
                 codec,
                 v(&["-b:v", "60M", "-pix_fmt", "yuv420p"]),
                 v(&TAGS),
-                v(&["-movflags", "+faststart", "o.mp4"]),
+                v(&["-movflags", "+faststart+write_colr", "o.mp4"]),
             ]);
             assert_eq!(got, want, "{p:?} square={square}");
         }
@@ -751,6 +751,19 @@ fn apple_motion_square_hevc_runs_where_available() {
         );
         return;
     }
+    // Sin extensión HEVC (runner de Windows sin «HEVC Video Extensions», Mac sin codificador)
+    // el motor degrada: el plan omite el cuadrado 3840² (`hevc_skipped`) y avisa. Aquí se salta
+    // por la misma capacidad que usa el plan, no por la plataforma.
+    let hevc = {
+        let _g = CAPS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        masterout_core::media::capabilities(&sc, Platform::current()).hevc
+    };
+    if !hevc {
+        eprintln!(
+            "SKIP: este equipo no tiene codificador HEVC (media::capabilities().hevc = false)"
+        );
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let (png, out) = (d.path().join("c.png"), d.path().join("a.mp4"));
     make_png(&sc, &png, "3000x3000");
@@ -1055,6 +1068,40 @@ fn cancel_kills_a_video_job_and_leaves_no_part_file() {
     assert!(matches!(e, AudioError::Cancelled));
     assert!(!out.exists() && !d.path().join("v.mp4.part").exists());
     assert!(!pid_alive(&std::fs::read_to_string(&pidfile).unwrap()));
+}
+
+/// Regresión del bug de Windows: `choco install ffmpeg` pone un *shim* que lanza al ffmpeg real
+/// como hijo; matar solo al shim dejaba al hijo con la tubería de stderr abierta y la
+/// cancelación esperaba a que acabara el trabajo entero. Aquí el «ffmpeg» deja un nieto vivo
+/// (`sleep`) con el stderr heredado: cancelar debe volver en seguida igualmente.
+#[cfg(unix)]
+#[test]
+fn cancel_returns_promptly_even_if_a_grandchild_keeps_stderr_open() {
+    use masterout_core::media::video::run_ffmpeg;
+    let d = tempfile::tempdir().unwrap();
+    let sc = script_sidecar(d.path(), "sleep 20 &\nwait");
+    let out = d.path().join("v.mp4");
+    let args = vec![
+        "-i".to_string(),
+        "a".into(),
+        out.to_string_lossy().into_owned(),
+    ];
+    let t = std::time::Instant::now();
+    let r = run_with_hard_cap(
+        Duration::from_secs(15),
+        "cancelar con nieto vivo",
+        move || {
+            run_ffmpeg(&sc, &args, &|| {
+                t.elapsed() > std::time::Duration::from_millis(300)
+            })
+        },
+    );
+    assert!(matches!(r, Err(AudioError::Cancelled)), "{r:?}");
+    assert!(
+        t.elapsed() < Duration::from_secs(3),
+        "tardó {:?}",
+        t.elapsed()
+    );
 }
 
 #[cfg(unix)]

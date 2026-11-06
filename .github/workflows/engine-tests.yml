@@ -104,16 +104,15 @@ jobs:
           TAGS="-color_primaries bt709 -color_trc bt709 -colorspace bt709"
           SRC="-f lavfi -i testsrc=s=640x360:r=30:d=1"
           probe() { ffprobe -v error -show_streams -select_streams v:0 "$1" | grep -E "^(color_|pix_fmt|profile)"; ffprobe -v trace "$1" 2>&1 | grep -ci "colr" ; }
-          echo "== A: como el motor"
-          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -c:v h264_mf -profile:v 100 -f mp4 a.mp4 2>&1 | tail -15; probe a.mp4
-          echo "== B: +write_colr"
-          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -c:v h264_mf -profile:v 100 -movflags +write_colr -f mp4 b.mp4 2>&1 | tail -5; probe b.mp4
-          echo "== C: bsf h264_metadata"
-          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -c:v h264_mf -profile:v 100 -bsf:v "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0" -f mp4 c.mp4 2>&1 | tail -5; probe c.mp4
-          echo "== D: bsf + write_colr + color_range"
-          ffmpeg -hide_banner -y $SRC -vf "$VF" $TAGS -color_range tv -c:v h264_mf -profile:v 100 -bsf:v "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0" -movflags +write_colr -f mp4 d.mp4 2>&1 | tail -5; probe d.mp4
-          echo "== E: libx264 presente?"
-          ffmpeg -hide_banner -encoders | grep -c libx264
+          SP="scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv"
+          echo "== F: setparams sin write_colr"
+          ffmpeg -hide_banner -y $SRC -vf "$SP" $TAGS -c:v h264_mf -profile:v 100 -f mp4 f.mp4 2>&1 | grep -E "Stream #0:0: Video: h264"; probe f.mp4
+          echo "== G: setparams + write_colr (lo que lleva el motor)"
+          ffmpeg -hide_banner -y $SRC -vf "$SP" $TAGS -c:v h264_mf -profile:v 100 -movflags +faststart+write_colr -f mp4 g.mp4 2>&1 | grep -E "Stream #0:0: Video: h264"; probe g.mp4
+          echo "== H: setparams + write_colr + bsf h264_metadata"
+          ffmpeg -hide_banner -y $SRC -vf "$SP" $TAGS -c:v h264_mf -profile:v 100 -movflags +write_colr -bsf:v "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0" -f mp4 h.mp4 2>&1 | grep -E "Stream #0:0: Video: h264"; probe h.mp4
+          echo "== I: hevc_mf"
+          ffmpeg -hide_banner -y $SRC -vf "$SP" -c:v hevc_mf -profile:v 1 -tag:v hvc1 -f mp4 i.mp4 2>&1 | tail -4
       - name: Diagnóstico cancelación (traza)
         shell: bash
         continue-on-error: true

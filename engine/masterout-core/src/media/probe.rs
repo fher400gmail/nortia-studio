@@ -230,8 +230,7 @@ pub fn probe(sidecar: &SidecarPaths, path: &Path) -> Result<MediaInfo, AudioErro
         match child.try_wait() {
             Ok(Some(st)) => break st,
             Ok(None) if started.elapsed() >= PROBE_DEADLINE => {
-                let _ = child.kill();
-                let _ = child.wait();
+                super::video::kill(&mut child);
                 return Err(AudioError::UnsupportedFormat(format!(
                     "err.ffmpeg_timeout: {}",
                     sidecar.ffprobe.display()
@@ -239,8 +238,7 @@ pub fn probe(sidecar: &SidecarPaths, path: &Path) -> Result<MediaInfo, AudioErro
             }
             Ok(None) => std::thread::sleep(std::time::Duration::from_millis(20)),
             Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                super::video::kill(&mut child);
                 return Err(AudioError::Io(e));
             }
         }

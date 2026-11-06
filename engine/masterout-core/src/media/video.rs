@@ -514,7 +514,7 @@ pub fn classify_failure(stderr: &str) -> AudioError {
 /// Mata a ffmpeg y a todo su árbol de procesos. En Windows, `ffmpeg` puede ser un *shim*
 /// (chocolatey, scoop) que lanza al ffmpeg real como hijo: `TerminateProcess` sobre el shim
 /// dejaba al hijo vivo, con el stderr abierto, y el trabajo seguía hasta el final.
-fn kill(child: &mut Child) {
+pub(crate) fn kill(child: &mut Child) {
     #[cfg(windows)]
     {
         let mut tk = Command::new("taskkill");

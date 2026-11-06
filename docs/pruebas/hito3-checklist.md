@@ -34,11 +34,11 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 
 ### 5. Canvas
 - Haz: con portada, crea la carpeta con Canvas activo. Abre `[Canvas] 1080x1920.mp4` con QuickTime.
-- Esperado: vídeo vertical de unos 8 s sin audio, movimiento suave de la portada, sin parpadeos ni saltos al repetirse.
+- Esperado: vídeo vertical de 6 s sin audio, movimiento suave de la portada, sin parpadeos ni saltos al repetirse.
 
 ### 5b. Material propio en Canvas
-- Haz: suelta un vídeo tuyo (MP4/MOV) sobre la ficha **«Canvas»** (en Extras) y crea la carpeta.
-- Esperado: la ficha muestra su miniatura y una ×; el Canvas resultante es tu vídeo recodificado a 1080×1920.
+- Haz: suelta un vídeo tuyo (MP4/MOV; si tienes uno en ProRes, mejor) sobre la ficha **«Canvas»** (en Extras) y crea la carpeta.
+- Esperado: la ficha muestra su miniatura, una × y un punto de estado (relleno de color si está encendida, solo anillo si la apagas con un clic); el Canvas resultante es tu vídeo recodificado a 1080×1920 y dura como mucho 8 s (3 s mínimo: si el tuyo es más corto, se repite en bucle).
 
 ### 6. Vídeo de YouTube
 - Haz: abre `06 YouTube/… [YouTube] 1080p.mp4` en QuickTime y salta al minuto 2.

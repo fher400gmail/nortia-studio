@@ -173,7 +173,7 @@ async function run(lang) {
   const about = await page.textContent('#pop-about');
   assert.match(about, /0\.1\.0-mock/, `${lang}: versión`);
   assert.match(about, /FFmpeg/); assert.match(about, /LGPL/); assert.match(about, /LAME/);
-  assert.match(about, /ffmpeg-sidecar-v7\.1\.5-3a21763/, `${lang}: release del componente`);
+  assert.match(about, /ffmpeg-sidecar-v7\.1\.5-c74d220/, `${lang}: release del componente`);
   await page.click('#pop-about [data-act=legal]');
   assert.equal(await page.evaluate(async () => (await import('./backend.js')).backend.legalOpened), 1, `${lang}: abre licencias`);
   await page.keyboard.press('Escape');

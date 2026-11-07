@@ -17,7 +17,7 @@ Responde con una línea por prueba: **funciona** o **falla: qué viste** (con ca
 
 ### 1. Acerca de
 - Haz: pulsa **Acerca de** en la barra superior.
-- Esperado: versión `0.1.0`, el componente «Vídeo y MP3» con `ffmpeg-sidecar-v7.1.5-3a21763` (no «No disponible»), el texto de licencias (FFmpeg LGPL, LAME) y el enlace **Licencias y código fuente**. Esc lo cierra.
+- Esperado: versión `0.1.0`, el componente «Vídeo y MP3» con `ffmpeg-sidecar-v7.1.5-c74d220` (no «No disponible»), el texto de licencias (FFmpeg LGPL, LAME) y el enlace **Licencias y código fuente**. Esc lo cierra.
 - Pulsa **Licencias y código fuente**: se abre `terceros.txt` en TextEdit con la tabla de componentes.
 
 ### 2. Los vídeos y el MP3 están disponibles

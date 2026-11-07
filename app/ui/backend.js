@@ -126,7 +126,7 @@ export function createMock({ fast = false, lang = 'es', sidecar = true, defaultO
     kind: 'mock',
     async setLang(l) { curLang = l === 'es' ? 'es' : 'en'; },
     async systemLang() { return curLang; },
-    async appInfo() { return { version, os, sidecar_available: sidecar, sidecar_release: sidecar ? 'ffmpeg-sidecar-v7.1.5-3a21763' : '', default_on: PRESETS.map(p => p.id).filter(id => !defaultOff.includes(id)), default_out_root: MOCK_FOLDERS[curLang][0] }; },
+    async appInfo() { return { version, os, sidecar_available: sidecar, sidecar_release: sidecar ? 'ffmpeg-sidecar-v7.1.5-c74d220' : '', default_on: PRESETS.map(p => p.id).filter(id => !defaultOff.includes(id)), default_out_root: MOCK_FOLDERS[curLang][0] }; },
 
     async analyze(path, bins = 600) {
       const file = baseName(path);

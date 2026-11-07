@@ -30,7 +30,7 @@ pub fn os_name() -> &'static str {
 
 /// Release del sidecar ffmpeg que empaqueta esta versión (el mismo que descarga el CI;
 /// `app/scripts/sidecar-tag.txt`). Lo muestra «Acerca de».
-pub const SIDECAR_RELEASE: &str = "ffmpeg-sidecar-v7.1.5-3a21763";
+pub const SIDECAR_RELEASE: &str = "ffmpeg-sidecar-v7.1.5-c74d220";
 
 /// Respuesta del comando `app_info`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

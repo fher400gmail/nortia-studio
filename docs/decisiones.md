@@ -84,8 +84,11 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 - **Regla de proceso:** antes de fusionar una rama a `main` se lanza a mano un run con `[mac]` (humo de macOS con `ADM=required` incluido) y no se fusiona sin verlo en verde. Es lo que habría cazado antes un fallo como el de `setparams`, que solo se ve con el sidecar real.
 - Complemento: `engine/masterout-core/tests/sidecar_allowlist.rs` ata los argumentos de ffmpeg del motor a la lista blanca del sidecar sin necesidad de CI. Sigue pendiente (hito 4) ejecutar los tests de vídeo de macOS y Windows con el sidecar del release en vez del ffmpeg de brew/choco.
 
-## D-33 · Cierre del hito 3
-- **Pendiente.** Se escribe al fusionar `hito3-media` en `main` (estado del sidecar nuevo, runs de CI en verde, diferidos al hito 4).
+## D-33 · Cierre del hito 3 (07/11/2026 12:10)
+- 07/11/2026 · **CEO.** `hito3-media` fusionada en `main` (b82cb01) tras la revisión final (`docs/superpowers/reviews/hito3/final-review.md`, veredicto «fusionar tras corregir» cumplido) y CI verde en Linux, macOS y Windows: motor (run 42365001733) y app con humo de macOS (comprobación real con afclip: 0 muestras con clipping) y de Windows (run 42365607876), ambos con el sidecar nuevo `ffmpeg-sidecar-v7.1.5-c74d220` (setparams + prores).
+- Qué hay: portada conformada, Canvas, vídeo de YouTube, portada animada (H.264 y HEVC donde existe), MP3 320 por ffmpeg, comprobación con las herramientas de Apple, fichas con material propio, ffmpeg LGPL propio empaquetado y verificado por hash doble, «Acerca de» con licencias y aviso de marcas, cancelación que mata procesos en las tres plataformas, sonda de capacidades con plazo, 14 mejoras del hito 2, marca ferboix. studio opción C aplicada, sin logos de terceros (D-31). 281+ tests del motor, 54 de la UI.
+- Diferidos al hito 4 (`docs/pruebas/huecos.md` y revisión final): acciones de CI por tag (rust-toolchain, rust-cache, setup-node); humo a través de Tauri; tests `.cmd` de cancelación en Windows; cobertura real de hevc_mf; TCON en MP3; renombrar el repo a `ferboix-studio`; borrar las skills obsoletas (`nortia-brand`, `ceo-ingresos-fer`).
+- Siguiente para Fer: pasar `docs/pruebas/hito3-checklist.md` con el `.dmg` del run de `main` (Actions → artefacto `master-check-macos`).
 
 ---
 

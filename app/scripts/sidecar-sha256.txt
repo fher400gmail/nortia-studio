@@ -1,0 +1,10 @@
+# SHA256 de los binarios del release ffmpeg-sidecar-v7.1.5-c74d220 (copiados de su SHA256SUMS).
+# fetch-sidecar.sh exige que coincidan con esto Y con el SHA256SUMS del release: un release
+# manipulado (binario y lista a la vez) ya no pasa. Al cambiar sidecar-tag.txt, actualiza este fichero.
+bfe4a52dc4645385f356a8e83cc54216a293e3b6f1cb4f79f5fc0277abf937fd  COPYING.LGPL
+246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30  LICENSE.LGPLv2.1
+7a40cbd8818c57e5285e83c772a459a996d1662c824a879836b97b473c07cae4  LICENSE.lame
+e424b9dcd07f73faba93ee4e5f6f8e3808a8f583af8107400182e155a985c6dd  ffmpeg-universal-apple-darwin
+a92bb9d1ec0bfffce7147d370dbc7c153e7083224ae68842bcd89a097f07e61e  ffmpeg-x86_64-pc-windows-msvc.exe
+7acc13d5ad492b5ea12fb573df8342410b630c872124ca553cbe560080559398  ffprobe-universal-apple-darwin
+b1bacef1ca5245c4e66517ea0bfb71a3d39d565fe89bacd082b0590e94469916  ffprobe-x86_64-pc-windows-msvc.exe

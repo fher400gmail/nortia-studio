@@ -1,4 +1,4 @@
-/* nortia. studio · master check · D5 (diseño final)
+/* ferboix. studio · master check · D5 (diseño final) · marca opción C «Instrumento» (D-37)
    La ventana ES la tarjeta. Materiales: Liquid Glass (backdrop-filter, borde especular de 1 px,
    brillo que sigue al puntero). Todos los valores salen de los tokens de :root / [data-theme=dark]
    (espejo en tokens.json, que viene de brand/tokens.json). */
@@ -7,20 +7,20 @@
 
 @property --sheen{syntax:'<number>';inherits:false;initial-value:0}
 
-/* ───────────── tokens · claro (nortia. studio, naranja #FF5A00) ───────────── */
+/* ───────────── tokens · claro (ferboix. studio, acento cian #0097B8) ───────────── */
 :root{
   color-scheme:light;
   --bg:#F4F3F0; --bg-deep:#ECEBE7;
   --ink:#111111; --ink-2:#4A4843; --ink-3:#6A6863;
-  --brand:#FF5A00; --brand-ink:#B84100;
+  --brand:#0097B8; --brand-ink:#00728B;
   --amber:#E0A100; --amber-ink:#7A5600;
   --ok:#1E7F4F; --err:#B42318;
   /* superficies del kit (tarjeta, relleno, filete) */
   --card:#FFFFFF; --fill:#ECEBE7; --line:#E2E0DB; --on-brand:#111111;
-  /* botón primario: naranja plano (btn-hi = btn-lo) con relieve de cristal por encima */
-  --btn-hi:#FF5A00; --btn-lo:#FF5A00; --on-btn:#111111; --btn-glow:rgba(255,90,0,0.4);
-  /* ambiente detrás del vidrio: neutros cálidos + un velo de naranja */
-  --orb-1:rgba(255,90,0,0.12); --orb-2:rgba(17,17,17,0.03); --orb-3:rgba(0,0,0,0);
+  /* botón primario: tinta (claro) / papel (oscuro), plano (btn-hi = btn-lo) */
+  --btn-hi:#111111; --btn-lo:#111111; --on-btn:#F4F3F0; --btn-glow:rgba(0,0,0,0.3);
+  /* ambiente detrás del vidrio: neutros cálidos (velos de tinta) */
+  --orb-1:rgba(17,17,17,0.05); --orb-2:rgba(17,17,17,0.03); --orb-3:rgba(0,0,0,0);
   /* vidrio */
   --g-bg:rgba(255,255,255,.62); --g-bg-hover:rgba(255,255,255,.82); --g-bg-strong:rgba(255,255,255,.92);
   --g-line:rgba(17,17,17,.09); --g-spec:rgba(255,255,255,.75);
@@ -28,9 +28,9 @@
   --g-shadow:0 1px 1px rgba(17,17,17,.04),0 10px 26px -14px rgba(17,17,17,.22);
   --g-shadow-lift:0 1px 1px rgba(17,17,17,.05),0 16px 32px -14px rgba(17,17,17,.30);
   --g-blur:22px; --pop-bg:rgba(255,255,255,.96);
-  --on-bg:rgba(255,90,0,0.13);
-  --on-line:rgba(255,90,0,0.6); --on-glow:0 10px 24px -14px rgba(255,90,0,0.5);
-  --focus:rgba(255,90,0,0.3); --ctl:#85837E;
+  --on-bg:rgba(0,151,184,0.13);
+  --on-line:rgba(0,151,184,0.6); --on-glow:0 10px 24px -14px rgba(0,0,0,0.35);
+  --focus:rgba(0,151,184,0.3); --ctl:#85837E;
   /* onda */
   --wv:#C9C7C2; --wv-on:#111111;
   --win-edge:rgba(17,17,17,.14); --win-r:26px;
@@ -49,15 +49,15 @@
   color-scheme:dark;
   --bg:#111111; --bg-deep:#111111;
   --ink:#F4F3F0; --ink-2:#BDBBB6; --ink-3:#9A9893;
-  --brand:#FF5A00; --brand-ink:#FF5A00;
+  --brand:#0097B8; --brand-ink:#0097B8;
   --amber:#F2B93B; --amber-ink:#F5C65A;
   --ok:#5FCF96; --err:#FF8A7D;
   /* superficies del kit (tarjeta, relleno, filete) */
   --card:#1A1A1A; --fill:#222222; --line:#2B2B2B; --on-brand:#111111;
-  /* botón primario: naranja plano (btn-hi = btn-lo) con relieve de cristal por encima */
-  --btn-hi:#FF5A00; --btn-lo:#FF5A00; --on-btn:#111111; --btn-glow:rgba(255,90,0,0.4);
-  /* ambiente detrás del vidrio: neutros cálidos + un velo de naranja */
-  --orb-1:rgba(255,90,0,0.1); --orb-2:rgba(244,243,240,0.03); --orb-3:rgba(0,0,0,0);
+  /* botón primario: tinta (claro) / papel (oscuro), plano (btn-hi = btn-lo) */
+  --btn-hi:#F4F3F0; --btn-lo:#F4F3F0; --on-btn:#111111; --btn-glow:rgba(0,0,0,0.5);
+  /* ambiente detrás del vidrio: neutros cálidos (velos de tinta) */
+  --orb-1:rgba(244,243,240,0.04); --orb-2:rgba(244,243,240,0.03); --orb-3:rgba(0,0,0,0);
   /* vidrio */
   --g-bg:rgba(255,255,255,.055); --g-bg-hover:rgba(255,255,255,.095); --g-bg-strong:rgba(30,30,30,.90);
   --g-line:rgba(0,0,0,.45); --g-spec:rgba(255,255,255,.10);
@@ -65,9 +65,9 @@
   --g-shadow:0 1px 1px rgba(0,0,0,.30),0 14px 30px -14px rgba(0,0,0,.65);
   --g-shadow-lift:0 1px 1px rgba(0,0,0,.35),0 20px 38px -14px rgba(0,0,0,.75);
   --g-blur:26px; --pop-bg:rgba(26,26,26,.96);
-  --on-bg:rgba(255,90,0,0.2);
-  --on-line:rgba(255,90,0,0.6); --on-glow:0 10px 24px -14px rgba(255,90,0,0.5);
-  --focus:rgba(255,90,0,0.3); --ctl:#7A7873;
+  --on-bg:rgba(0,151,184,0.2);
+  --on-line:rgba(0,151,184,0.6); --on-glow:0 10px 24px -14px rgba(0,0,0,0.55);
+  --focus:rgba(0,151,184,0.3); --ctl:#7A7873;
   /* onda */
   --wv:#4A4945; --wv-on:#F4F3F0;
   --win-edge:rgba(255,255,255,.14);
@@ -112,6 +112,7 @@ html[data-native=true] .lights{display:none}
 html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .wm{display:inline-flex;align-items:center;flex:none;line-height:0}
 .wmk{display:block;height:17px;width:auto;overflow:visible}
+.wsym{display:block;width:19px;height:19px;margin-right:9px;flex:none}
 .appn{padding-left:12px;margin-left:2px;border-left:1px solid var(--line);color:var(--ink-2);font-weight:500;font-size:13px;letter-spacing:-.005em;white-space:nowrap}
 .tb-sp{flex:1;align-self:stretch}
 .tbtn{height:30px;padding:0 11px;border-radius:99px;font-size:12.5px;font-weight:500;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px;transition:background var(--t-base) var(--ease),color var(--t-base) var(--ease),transform var(--t-spring) var(--spring)}
@@ -129,6 +130,7 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .winctl svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:1}
 :root[data-os=win] .tbtn.ico{margin-right:6px}
 :root[data-os=win] .wmk{height:15px}
+:root[data-os=win] .wsym{width:17px;height:17px;margin-right:8px}
 
 /* cuerpo */
 .body{flex:1;min-height:0;display:flex;flex-direction:column;gap:var(--gap);padding:2px var(--pad) var(--pad)}
@@ -187,7 +189,6 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .dzone .mk{display:flex}
 .dzone .mk svg{width:auto;height:clamp(40px,8vh,68px)}
 @keyframes breathe{0%,100%{box-shadow:0 0 0 0 transparent,inset 0 0 0 0 transparent;border-color:var(--ctl)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--brand) 9%,transparent),inset 0 0 34px color-mix(in srgb,var(--brand) 8%,transparent);border-color:color-mix(in srgb,var(--brand) 65%,var(--ctl))}}
-@keyframes mkb{50%{transform:translateY(-4px)}}
 .dzone:hover,.hero.over .dzone{animation:none;border-color:var(--brand);background:color-mix(in srgb,var(--brand) 7%,transparent);transform:scale(1.004)}
 .dzone:active{transform:scale(.995);transition-duration:90ms}
 .hero.over .dzone{border-style:solid;box-shadow:0 0 0 5px color-mix(in srgb,var(--brand) 14%,transparent),0 0 40px 2px color-mix(in srgb,var(--brand) 26%,transparent),inset 0 0 36px color-mix(in srgb,var(--brand) 10%,transparent)}
@@ -230,28 +231,27 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .gh .sp{flex:1}
 .tiles{display:grid;gap:var(--tgap);grid-template-columns:repeat(6,1fr)}
 .row2{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--tgap)}
-.row2>.d1{grid-column:1}.row2>.d3{grid-column:3/span 3}
+.row2>.d1{grid-column:1}.row2>.d3{grid-column:2/span 5}
 .row2 .tiles{grid-template-columns:repeat(var(--n,1),1fr)}
 .chip{height:var(--chip-h);border-radius:var(--r-chip);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:var(--ink-3);min-width:0;padding:0 4px;
   transition:transform var(--t-spring) var(--spring),background var(--t-base) var(--ease),box-shadow var(--t-base) var(--ease),color var(--t-base) var(--ease)}
 .chip .cn{font-size:12px;font-weight:500;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .chip .mono{--tc:color-mix(in srgb,var(--ink) 8%,transparent);width:clamp(32px,4.6vh,40px);aspect-ratio:1;border-radius:12px;background:var(--tc);color:var(--ink-3);display:grid;place-items:center;transition:background .25s var(--ease),color .25s var(--ease),transform var(--t-spring) var(--spring),box-shadow .25s var(--ease)}
-.chip .mono svg{width:58%;height:58%}
-.chip:not(.on) .ac{stroke:currentColor}
+.chip .mono svg{width:24px;height:24px}
 /* apagada: filete --line y contenido al 45 % */
 .chip::after{background:var(--line);padding:1px}
 .chip:not(.on)>:not(.ck){opacity:.45;transition:opacity var(--t-base) var(--ease)}
 .chip:not(.on):hover>:not(.ck){opacity:.8}
-/* hover: halo naranja suave + 2,5 % de escala */
+/* hover: halo cian suave + 2,5 % de escala */
 .chip:hover{transform:scale(1.025);background:var(--g-bg-hover);box-shadow:var(--g-shadow-lift),0 0 0 4px color-mix(in srgb,var(--brand) 16%,transparent)}
 .chip:hover .mono{transform:scale(1.06)}
 .chip:active{transform:scale(.975);transition-duration:90ms}
-/* activa: fondo --card neutro, borde tinta 1,3 px; el único naranja es el badge de check */
+/* activa: fondo --card neutro, borde tinta 1,3 px; el único cian es el badge de check */
 .chip.on{background:var(--card);box-shadow:var(--g-shadow);color:var(--ink)}
 .chip.on:hover{background:var(--card);box-shadow:var(--g-shadow-lift),0 0 0 4px color-mix(in srgb,var(--brand) 16%,transparent)}
 .chip.on::after{background:var(--ink);padding:1.3px}
-.chip.on .mono{--tc:var(--ink);color:var(--bg);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),0 6px 12px -8px rgba(17,17,17,.5)}
-.chip .ck{position:absolute;top:7px;right:7px;width:17px;height:17px;border-radius:50%;background:var(--brand);color:var(--on-btn);display:grid;place-items:center;transform:scale(0);transition:transform var(--t-spring) var(--spring);box-shadow:0 2px 6px -1px rgba(255,90,0,.5)}
+.chip.on .mono{--tc:var(--ink);color:var(--bg)}
+.chip .ck{position:absolute;top:7px;right:7px;width:17px;height:17px;border-radius:50%;background:var(--brand);color:var(--on-brand);display:grid;place-items:center;transform:scale(0);transition:transform var(--t-spring) var(--spring)}
 :root[data-theme=dark] .chip .ck{background:var(--brand)}
 .chip .ck svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
 .chip .ck path{stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset .24s var(--ease) 0s}
@@ -272,20 +272,22 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .sum[aria-expanded=true] .ic{transform:rotate(180deg)}
 .sumw{position:relative}
 
-/* ───────────── botón único: naranja plano con relieve de cristal sutil ───────────── */
-.go,.play,.bb.pri{position:relative;isolation:isolate;overflow:hidden;color:var(--on-btn);background:linear-gradient(180deg,var(--btn-hi),var(--btn-lo));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.34),inset 0 -1px 0 rgba(17,17,17,.12),0 1px 2px rgba(17,17,17,.22),0 10px 22px -12px var(--btn-glow);
+/* ───────────── botón primario: TINTA plana (papel con texto tinta en oscuro). El cian queda para estados (play, check, lectura) ───────────── */
+.go,.bb.pri,.play{position:relative;isolation:isolate;overflow:hidden;color:var(--on-btn);background:var(--btn-hi);
+  box-shadow:0 1px 2px rgba(17,17,17,.22),0 10px 22px -14px var(--btn-glow);
   transition:transform var(--t-spring) var(--spring),box-shadow var(--t-base) var(--ease),background var(--t-base) var(--ease)}
-.go::before,.play::before,.bb.pri::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;background:radial-gradient(240px circle at var(--mx,50%) var(--my,-30%),rgba(255,232,214,.30),transparent 60%);opacity:0;transition:opacity .25s var(--ease)}
-.go::after,.play::after,.bb.pri::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 46%);mix-blend-mode:soft-light;padding:0;-webkit-mask:none;mask:none}
-.go:hover::before,.play:hover::before,.bb.pri:hover::before{opacity:1}
-/* hover: 8 % de tinta mezclada */
-.go:hover,.play:hover,.bb.pri:hover{background:linear-gradient(180deg,color-mix(in srgb,var(--btn-hi) 92%,var(--ink)),color-mix(in srgb,var(--btn-lo) 92%,var(--ink)))}
+/* play: relleno cian de estado, con el texto/triángulo sobre cian */
+.play{color:var(--on-brand);background:var(--brand)}
+.go::before,.bb.pri::before{content:"";position:absolute;inset:0;border-radius:inherit;z-index:-1;pointer-events:none;background:radial-gradient(240px circle at var(--mx,50%) var(--my,-30%),var(--g-spec),transparent 60%);opacity:0;transition:opacity .25s var(--ease)}
+.go:hover::before,.bb.pri:hover::before{opacity:.5}
+/* hover: 12 % del color contrario mezclado (plano, sin brillo) */
+.go:hover,.bb.pri:hover{background:color-mix(in srgb,var(--btn-hi) 88%,var(--on-btn))}
+.play:hover{background:color-mix(in srgb,var(--brand) 88%,var(--ink))}
 .go{height:var(--go-h);width:100%;flex:none;border-radius:var(--r-btn);font-size:16px;font-weight:600;letter-spacing:-.005em;display:flex;align-items:center;justify-content:center;gap:10px}
 .go .ic{width:20px;height:20px;transition:transform var(--t-spring) var(--spring)}
-.go:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 -1px 0 rgba(17,17,17,.12),0 1px 2px rgba(17,17,17,.24),0 18px 30px -14px var(--btn-glow)}
+.go:hover{transform:translateY(-2px);box-shadow:0 1px 2px rgba(17,17,17,.24),0 18px 30px -16px var(--btn-glow)}
 .go:hover .ic{transform:translateY(-1px) rotate(-6deg) scale(1.06)}
-.go:active,.play:active,.bb.pri:active{transform:translateY(0) scale(.98);transition-duration:90ms;box-shadow:inset 0 1px 0 rgba(255,255,255,.26),inset 0 -1px 0 rgba(17,17,17,.12),0 6px 14px -10px var(--btn-glow)}
+.go:active,.play:active,.bb.pri:active{transform:translateY(0) scale(.98);transition-duration:90ms;box-shadow:0 6px 14px -12px var(--btn-glow)}
 .play:hover{transform:scale(1.08)}.play:active{transform:scale(.95)}
 .go.busy{background:var(--g-bg);color:var(--brand-ink);box-shadow:var(--g-shadow);cursor:default;font-size:15px;transform:none;-webkit-backdrop-filter:blur(var(--g-blur));backdrop-filter:blur(var(--g-blur))}
 .go.busy::after{background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);background-size:220% 100%;mix-blend-mode:normal;animation:shim 1.8s linear infinite;opacity:.55}
@@ -308,9 +310,10 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 @keyframes rowin{0%{opacity:0;transform:translateX(-8px)}100%{opacity:1;transform:none}}
 .donebox{flex:1.15 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:clamp(12px,2.4vh,22px);min-height:0}
 .donebox h1{font-size:clamp(18px,2.4vh,21px);font-weight:600;letter-spacing:-.014em;line-height:1.3;max-width:560px}
-.markdone{width:28px;height:56px;filter:drop-shadow(0 10px 16px rgba(255,90,0,.24))}
-.markdone .t{animation:tN .7s var(--spring) both}.markdone .b{animation:tS .7s var(--spring) both}
-@keyframes tN{from{transform:translateY(-26px);opacity:0}}@keyframes tS{from{transform:translateY(26px);opacity:0}}
+.markdone{width:56px;height:56px;overflow:visible}
+.markdone .t{animation:tN .5s var(--ease) both;transform-origin:50px 50px}
+.markdone .tk{transform:rotate(35deg);transform-origin:50px 50px;animation:tK .8s var(--spring) .15s both}
+@keyframes tN{from{transform:scale(.6);opacity:0}}@keyframes tK{from{transform:rotate(-55deg)}}
 .acts{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
 .bb{height:46px;padding:0 22px;border-radius:var(--r-btn);font-weight:600;font-size:14.5px;display:inline-flex;align-items:center;gap:9px;transition:transform var(--t-spring) var(--spring),background var(--t-base) var(--ease),box-shadow var(--t-base) var(--ease)}
 .bb .ic{width:18px;height:18px}
@@ -331,6 +334,11 @@ html[data-native=true][data-os=mac] .titlebar{padding-left:88px}
 .kv:first-of-type{border-top:0}.kv span{color:var(--ink-2)}.kv b{font-weight:600;text-align:right}
 :root[data-theme=dark] .kv{border-top-color:rgba(255,255,255,.08)}
 #pop-adv{top:calc(var(--tb-h) - 2px);right:14px;width:350px;--o:top right}
+#pop-about{top:calc(var(--tb-h) - 2px);right:14px;width:380px;--o:top right}
+#pop-about .abt-tm{font-size:11.5px;color:var(--ink-3)}
+#pop-about .abt-mk{font-size:11.5px;color:var(--ink-3);margin:8px 0 0}
+#pop-about .kv b.mono{font-family:var(--mono,ui-monospace,monospace);font-size:11.5px;font-weight:500;word-break:break-all}
+#pop-about .lnk{margin-top:4px}
 #pop-detail{width:300px;--o:top right}
 #pop-tree{bottom:calc(100% + 10px);right:0;width:min(470px,calc(100vw - 2*var(--pad)));max-height:min(320px,42vh);overflow:auto;--o:bottom right;padding:10px 12px;transform:translateY(8px) scale(.94)}
 #pop-more{top:calc(100% + 12px);left:-98px;width:min(600px,calc(100vw - 2*var(--pad)));display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px}
@@ -379,3 +387,62 @@ body.still *,body.still *::before,body.still *::after{animation:none!important}
 .banner{flex:none;margin:0;font-size:12.5px;line-height:1.4;font-weight:500;color:var(--err);text-align:center}
 .warnline{margin:0;font-size:12.5px;line-height:1.45;color:var(--err);max-width:560px}
 .warnline b{font-weight:600}
+
+/* ───────────── hito 3: fichas con material propio ───────────── */
+/* la ficha que acepta soltar va en un envoltorio (los controles no pueden anidarse en el botón) */
+.chipw{position:relative;display:block;min-width:0}
+.chipw>.chip{width:100%}
+.chip .mthumb{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.chip.has-media .mono,.chip.on.has-media .mono{background:var(--fill);padding:0;overflow:hidden;box-shadow:inset 0 0 0 1px var(--g-line)}
+.chip.has-media:not(.on) .mthumb{filter:grayscale(1)}
+.chipw .mx,.chipw .mp{position:absolute;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;z-index:3;cursor:pointer;background:var(--card);color:var(--ink-2);box-shadow:0 0 0 1px var(--line),var(--g-shadow);transition:opacity var(--t-base) var(--ease),transform var(--t-spring) var(--spring),background var(--t-fast) var(--ease),color var(--t-fast) var(--ease)}
+.chipw .mx .ic,.chipw .mp .ic{width:11px;height:11px}
+.chipw .mx{top:7px;left:7px}
+.chipw .mp{right:7px;bottom:7px;opacity:0;transform:scale(.8)}
+.chipw:hover .mp,.chipw:focus-within .mp,.chipw .mp:focus-visible{opacity:1;transform:none}
+.chipw .mx:hover,.chipw .mp:hover{background:var(--ink);color:var(--bg)}
+.chipw .mx:focus-visible,.chipw .mp:focus-visible{outline:2px solid var(--brand-ink);outline-offset:2px}
+/* sin material ni portada: el hueco del icono invita a soltar */
+.chipw .chip.dis:not(.has-media) .mono{outline:1.5px dashed var(--ctl);outline-offset:-1.5px}
+/* arrastrando encima: halo de acento y la ficha se despierta aunque esté deshabilitada */
+.chipw.over .chip{transform:scale(1.045);background:var(--card);box-shadow:var(--g-shadow-lift),0 0 0 3px var(--brand),0 0 26px 2px color-mix(in srgb,var(--brand) 28%,transparent)}
+.chipw.over .chip.dis>:not(.ck){opacity:1!important}
+.chipw.over .chip .mono{transform:scale(1.08)}
+/* avisos del motor en el estado listo (calma: ámbar, nunca el acento) */
+.noteline{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-2);max-width:560px}
+.noteline b{font-weight:600;color:var(--amber-ink)}
+
+/* ───────────── hito 3 · tarea 7 ───────────── */
+/* ficha apagada solo por falta de material que acepta soltar: borde discontinuo sutil + pista corta */
+.chipw .chip.acc{outline:1.5px dashed color-mix(in srgb,var(--ctl) 80%,transparent);outline-offset:-3px;gap:4px}
+.chip .dh{font-size:10.5px;line-height:1;font-weight:500;color:var(--ink-3);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.chip.dis .dh{opacity:1!important}
+.chipw.over .chip .dh{color:var(--brand-ink)}
+/* veredicto final de un destino tras exportar (aviso de estado: ocre, con icono y palabra; nunca el acento) */
+.statusline{margin:0;display:flex;align-items:flex-start;gap:7px;font-size:12.5px;line-height:1.45;color:var(--ink-2);max-width:560px;text-align:left}
+.statusline .ic{width:15px;height:15px;flex:none;margin-top:1px;color:var(--amber-ink)}
+.statusline b{font-weight:600;color:var(--amber-ink)}
+
+/* ficha con miniatura de material propio: el punto de estado sigue visible, en la esquina de la miniatura
+   (anillo apagado, relleno de acento al seleccionar); lo que se atenúa y pasa a gris es la miniatura, no el punto */
+.chip.has-media>.mono{position:relative;opacity:1!important}
+.chip.has-media .sdot{position:absolute;right:3px;bottom:3px;width:11px;height:11px;background:var(--card);box-shadow:0 0 0 1.5px var(--card)}
+.chip.on.has-media .sdot{background:var(--brand);border-color:var(--brand)}
+.chip.has-media:not(.on) .mthumb{opacity:.55}
+
+/* ───────────── hito 3 · tarea 8: marcas de terceros (D-31, opción B) ─────────────
+   V1 «solo nombre» (data-chip-style="nombre", por defecto): el nombre en texto y el punto de estado de la marca
+   (anillo apagado, relleno de acento al seleccionar). Sin glifos ajenos, sin sombras, sin animación en bucle.
+   V2 «gesto por grupo» (data-chip-style="gesto"): un gesto propio por grupo (punto / barra / dos puntos), 24 px. */
+:root[data-chip-style=nombre] .chip .cn{font-size:13px;font-weight:600;color:var(--ink);white-space:normal;line-height:1.15;text-align:center;text-wrap:balance;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+:root[data-chip-style=nombre] .chip:not(.on) .cn{color:var(--ink-2)}
+:root[data-chip-style=nombre] .chip .mono:not(:has(.mthumb)){width:auto;aspect-ratio:auto;height:12px;background:none;border-radius:0}
+:root[data-chip-style=nombre] .chip.on .mono:not(:has(.mthumb)){background:none}
+:root[data-chip-style=nombre] .chip .ck{display:none}
+.chip .dot{display:block;width:10px;height:10px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--ctl);background:transparent;transition:background .25s var(--ease),border-color .25s var(--ease)}
+.chip.on .dot{background:var(--brand);border-color:var(--brand)}
+/* el punto no se atenúa con la ficha (anillo --ctl ≥ 3:1 sobre papel y tinta, también apagado y deshabilitado);
+   lo que baja de intensidad es el nombre. Deshabilitada: sin outline cuadrado en el hueco del icono */
+:root[data-chip-style=nombre] .chip:not(.on)>.mono:not(:has(.mthumb)),:root[data-chip-style=nombre] .chip.dis>.mono:not(:has(.mthumb)){opacity:1!important}
+:root[data-chip-style=nombre] .chipw .chip.dis:not(.has-media) .mono{outline:0}
+:root[data-chip-style=nombre] .chip:hover .mono{transform:none}

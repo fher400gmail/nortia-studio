@@ -9,6 +9,9 @@ on:
       - ".github/workflows/app-build.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: app-${{ github.ref }}
   cancel-in-progress: true
@@ -17,39 +20,52 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Barato: detecta errores de compilación de src-tauri antes de gastar minutos de macOS.
+  # Runners de GitHub por defecto (repo público, D-38; se apagan con HOSTED_RUNNERS == 'false').
+  # Opción: Mac propio (D-35, docs/runner-mac.md) con la variable SELF_HOSTED == 'true'.
+  # Si GitHub no da runners de Mac: HOSTED_MAC=false apaga solo el macOS alojado (Linux y Windows siguen).
+  # Artefactos del Mac propio: master-check-macos-propio, master-check-humo-propio y afclip-raw-propio
+  # (con sufijo -propio, para no chocar con los del alojado si corren los dos).
   check:
+    if: vars.HOSTED_RUNNERS != 'false'
     name: linux · check + clippy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      - name: Dependencias de Tauri (Linux)
+      - name: "Scripts de CI (descarga verificada del sidecar, cableado de externalBin)"
+        run: |
+          bash app/scripts/tests/test-fetch-sidecar.sh
+          python3 -I app/scripts/check-wiring.py
+      - name: "Marcadores del sidecar (externalBin exige los ficheros al compilar con la feature app)"
+        run: |
+          HOST=$(rustc -vV | sed -n 's/^host: //p')
+          bash app/scripts/fetch-sidecar.sh --placeholder "$HOST" app/src-tauri
+      - name: "Dependencias de Tauri (Linux)"
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - name: cargo check (feature app)
+      - name: "cargo check (feature app)"
         working-directory: app/src-tauri
         run: cargo check -p mastercheck-app --features app
-      - name: clippy (feature app)
+      - name: "clippy (feature app)"
         working-directory: app/src-tauri
         run: cargo clippy -p mastercheck-app --features app --all-targets -- -D warnings
-      - name: cargo fmt --check (src-tauri)
+      - name: "cargo fmt --check (src-tauri)"
         working-directory: app/src-tauri
         run: cargo fmt --check
-      - name: tests de la lógica pura
+      - name: "tests de la lógica pura"
         working-directory: app/src-tauri
         run: cargo test --no-default-features
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: tests de la UI (node)
+      - name: "tests de la UI (node)"
         working-directory: app
         run: |
           npm ci || npm install
@@ -58,20 +74,25 @@ jobs:
   macos:
     name: macos-15 · build
     needs: check
+    if: vars.HOSTED_RUNNERS != 'false' && vars.HOSTED_MAC != 'false'
     runs-on: macos-15
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      - name: Build universal (sin firma ni notarización)
+      - name: "Sidecar ffmpeg (descarga del release por tag y verificación SHA256)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash app/scripts/fetch-sidecar.sh macos app/src-tauri
+      - name: "Build universal (sin firma ni notarización)"
         working-directory: app
         run: npx --yes @tauri-apps/cli@2.12.4 build --target universal-apple-darwin
-      - name: Empaquetar el .app en zip
+      - name: "Empaquetar el .app en zip"
         run: |
           B=app/src-tauri/target/universal-apple-darwin/release/bundle
           find "$B" -maxdepth 3 | head -50
@@ -79,7 +100,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$B/macos/master check.app" "out/master-check-macos-app.zip"
           cp "$B"/dmg/*.dmg out/
           ls -la out
-      - name: Verificar el .app (Info.plist, binario, arquitecturas)
+      - name: "Verificar el .app (Info.plist, binario, arquitecturas)"
         run: |
           APP="app/src-tauri/target/universal-apple-darwin/release/bundle/macos/master check.app"
           P="$APP/Contents/Info.plist"
@@ -89,14 +110,57 @@ jobs:
           EXE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$P")
           echo "LSMinimumSystemVersion=$MIN CFBundleIdentifier=$ID CFBundleExecutable=$EXE"
           test "$MIN" = "14.0"
-          test "$ID" = "studio.nortia.mastercheck"
+          test "$ID" = "studio.ferboix.mastercheck"
           test -x "$APP/Contents/MacOS/$EXE"
           lipo -archs "$APP/Contents/MacOS/$EXE"
+          # sidecar y licencias empaquetados (externalBin + resources)
+          for b in ffmpeg ffprobe; do
+            test -x "$APP/Contents/MacOS/$b"
+            echo "$b: $(lipo -archs "$APP/Contents/MacOS/$b")"
+            "$APP/Contents/MacOS/$b" -version | head -1
+          done
+          for f in terceros.txt LICENSE.LGPLv2.1 COPYING.LGPL LICENSE.lame; do test -s "$APP/Contents/Resources/legal/$f"; done
           du -sh "$APP" out/*
-      - name: Humo headless (analizar + planificar + exportar con el binario real)
+      # Apple Music (afclip): afconvert y afclip vienen con macOS (/usr/bin; comprobado en macos-15).
+      # Si algún día falta afclip en el runner, NO se instala nada: aviso visible y el caso pasa al
+      # checklist de Fer (docs/pruebas/hito3-checklist.md, prueba 9).
+      - name: "Detectar afclip (Apple Music)"
+        id: adm
+        run: |
+          if AFCLIP=$(command -v afclip) && command -v afconvert >/dev/null; then
+            echo "afclip: $AFCLIP"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::afclip no está en este runner: la comprobación de Apple Music (afclip) no se ha ejecutado. Pasa el caso por el Mac de Fer: docs/pruebas/hito3-checklist.md, prueba 9."
+          fi
+      # El enlace va en el mensaje reason.adm_tools_missing: si deja de responder 200 se avisa, sin romper el build.
+      - name: "La página de las herramientas de Apple Music (afclip) responde 200"
+        run: |
+          URL="https://www.apple.com/apple-music/apple-digital-masters/"
+          CODE=$(curl -sSIL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15" -o /dev/null -w '%{http_code}' "$URL" || echo 000)
+          echo "$URL -> $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "::warning::$URL devuelve $CODE: el enlace de reason.adm_tools_missing (engine/masterout-core/i18n) puede estar roto"
+          fi
+      - name: "Apple Music (afclip) real (afconvert, AAC; −1 dBTP → 0 clips, +1 dBTP → más de 0)"
+        if: steps.adm.outputs.present == 'true'
+        env:
+          MASTEROUT_REQUIRE_ADM: "1"
+          MASTEROUT_ADM_LOG_DIR: ${{ runner.temp }}/adm
+        run: cargo test --manifest-path engine/Cargo.toml -p masterout-core --test media_adm real_tools -- --nocapture
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && steps.adm.outputs.present == 'true'
+        with:
+          name: afclip-raw
+          path: ${{ runner.temp }}/adm/afclip-raw-*.txt
+          if-no-files-found: warn
+      - name: "Humo headless (analizar + planificar + exportar con el binario real, con portada y vídeo)"
+        env:
+          ADM: ${{ steps.adm.outputs.present == 'true' && 'required' || 'any' }}
         run: |
           app/scripts/smoke-mac.sh "$PWD/app/src-tauri/target/universal-apple-darwin/release/bundle/macos/master check.app" "$RUNNER_TEMP/humo"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: master-check-humo
@@ -104,7 +168,7 @@ jobs:
             ${{ runner.temp }}/humo/listado.txt
             ${{ runner.temp }}/humo/salida humo/smoke-result.json
           if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: master-check-macos
           path: out/*
@@ -113,20 +177,231 @@ jobs:
   windows:
     name: windows-latest · build
     needs: check
+    if: vars.HOSTED_RUNNERS != 'false'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      - name: Build (sin firma)
+      - name: "Sidecar ffmpeg (descarga del release por tag y verificación SHA256)"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash app/scripts/fetch-sidecar.sh windows app/src-tauri
+      - name: "Build (sin firma)"
         working-directory: app
         run: npx --yes @tauri-apps/cli@2.12.4 build
-      - uses: actions/upload-artifact@v4
+      - name: "Instalar el instalador NSIS en silencio (la distribución real: sidecar junto al ejecutable)"
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem app/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1
+          $dir = Join-Path $env:RUNNER_TEMP 'master-check-instalado'
+          Write-Host "instalando $($setup.Name) en $dir"
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$dir" -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw 'el instalador no terminó en 5 minutos' }
+          Get-ChildItem $dir | Format-Table Name, Length | Out-String | Write-Host
+          # el nombre lo fija mainBinaryName: se descubre, y debe haber exactamente uno
+          $exes = @(Get-ChildItem $dir -Filter *.exe | Where-Object { $_.Name -notmatch '^(uninstall|ffmpeg|ffprobe)' })
+          if ($exes.Count -ne 1) { throw "se esperaba un único ejecutable de la app en $dir y hay $($exes.Count): $($exes.Name -join ', ')" }
+          Write-Host "ejecutable de la app: $($exes[0].Name)"
+          "APP_EXE=$($exes[0].FullName)" >> $env:GITHUB_ENV
+      - name: "Humo headless en Windows (portada, Canvas, YouTube, MP3, HEVC y rutas extendidas del sistema de archivos)"
+        shell: pwsh
+        run: ./app/scripts/smoke-win.ps1 -Exe $env:APP_EXE -Work "$env:RUNNER_TEMP\humo"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: master-check-humo-windows
+          path: |
+            ${{ runner.temp }}\humo\listado.txt
+            ${{ runner.temp }}\humo\salida humo\smoke-result.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: master-check-windows
           path: |
             app/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+  # --- Mac propio (opción) ---
+  check-propio:
+    name: mac propio · check + clippy
+    if: vars.SELF_HOSTED == 'true'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: "4"
+    steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # target/ persiste entre runs (compilación incremental): no se borra.
+          clean: false
+      - name: Limpiar el espacio de trabajo (conserva target/)
+        run: git clean -ffdx --exclude=target
+      - name: Preflight del runner
+        run: tools/ci/runner-preflight.sh --cmd cargo --cmd rustc --cmd node --cmd npm --cmd gh --target aarch64-apple-darwin --target x86_64-apple-darwin
+      # check-wiring.py importa yaml; el python3 de las Command Line Tools no lo trae. Se crea un venv
+      # persistente en ~/.cache (una sola vez, tarda segundos) y se antepone al PATH.
+      - name: "PyYAML para check-wiring.py"
+        run: |
+          if ! python3 -c 'import yaml' 2>/dev/null; then
+            [ -x "$HOME/.cache/mastercheck-venv/bin/python3" ] || python3 -m venv "$HOME/.cache/mastercheck-venv"
+            "$HOME/.cache/mastercheck-venv/bin/pip" install -q pyyaml==6.0.2
+            echo "$HOME/.cache/mastercheck-venv/bin" >> "$GITHUB_PATH"
+          fi
+      - name: "Scripts de CI (descarga verificada del sidecar, cableado de externalBin)"
+        run: |
+          bash app/scripts/tests/test-fetch-sidecar.sh
+          python3 -I app/scripts/check-wiring.py
+      - name: "Marcadores del sidecar (externalBin exige los ficheros al compilar con la feature app)"
+        run: |
+          HOST=$(rustc -vV | sed -n 's/^host: //p')
+          bash app/scripts/fetch-sidecar.sh --placeholder "$HOST" app/src-tauri
+      - name: "cargo check (feature app)"
+        working-directory: app/src-tauri
+        run: cargo check -p mastercheck-app --features app
+      - name: "clippy (feature app)"
+        working-directory: app/src-tauri
+        run: cargo clippy -p mastercheck-app --features app --all-targets -- -D warnings
+      - name: "cargo fmt --check (src-tauri)"
+        working-directory: app/src-tauri
+        run: cargo fmt --check
+      - name: "tests de la lógica pura"
+        working-directory: app/src-tauri
+        run: cargo test --no-default-features
+      - name: "tests de la UI (node)"
+        working-directory: app
+        run: |
+          npm ci || npm install
+          npm test
+
+  macos-propio:
+    name: mac propio · build universal
+    needs: check-propio
+    if: vars.SELF_HOSTED == 'true'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 90
+    env:
+      CARGO_BUILD_JOBS: "4"
+    steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # target/ persiste entre runs (compilación incremental): no se borra.
+          clean: false
+      - name: Limpiar el espacio de trabajo (conserva target/)
+        run: git clean -ffdx --exclude=target
+      - name: Preflight del runner
+        run: tools/ci/runner-preflight.sh --cmd cargo --cmd rustc --cmd node --cmd npm --cmd gh --cmd lipo --cmd ditto --target aarch64-apple-darwin --target x86_64-apple-darwin
+      - name: "tauri-cli 2.12.4 (solo si falta)"
+        run: |
+          if command -v cargo-tauri >/dev/null && cargo tauri --version | grep -q '2\.12\.4'; then
+            cargo tauri --version
+          else
+            cargo install tauri-cli --version 2.12.4 --locked --force
+          fi
+      - name: "Sidecar ffmpeg (descarga del release por tag y verificación SHA256)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash app/scripts/fetch-sidecar.sh macos app/src-tauri
+      - name: "Build universal (sin firma ni notarización)"
+        working-directory: app
+        run: |
+          # Solo se borra el bundle de runs anteriores (no la caché de compilación): evita .dmg viejos en out/.
+          rm -rf src-tauri/target/universal-apple-darwin/release/bundle
+          cargo tauri build --target universal-apple-darwin
+      - name: "Empaquetar el .app en zip"
+        run: |
+          B=app/src-tauri/target/universal-apple-darwin/release/bundle
+          find "$B" -maxdepth 3 | head -50
+          rm -rf out; mkdir -p out
+          ditto -c -k --sequesterRsrc --keepParent "$B/macos/master check.app" "out/master-check-macos-app.zip"
+          cp "$B"/dmg/*.dmg out/
+          ls -la out
+      - name: "Verificar el .app (Info.plist, binario, arquitecturas)"
+        run: |
+          APP="app/src-tauri/target/universal-apple-darwin/release/bundle/macos/master check.app"
+          P="$APP/Contents/Info.plist"
+          ls -la "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          MIN=$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$P")
+          ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$P")
+          EXE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$P")
+          echo "LSMinimumSystemVersion=$MIN CFBundleIdentifier=$ID CFBundleExecutable=$EXE"
+          test "$MIN" = "14.0"
+          test "$ID" = "studio.ferboix.mastercheck"
+          test -x "$APP/Contents/MacOS/$EXE"
+          lipo -archs "$APP/Contents/MacOS/$EXE"
+          # sidecar y licencias empaquetados (externalBin + resources)
+          for b in ffmpeg ffprobe; do
+            test -x "$APP/Contents/MacOS/$b"
+            echo "$b: $(lipo -archs "$APP/Contents/MacOS/$b")"
+            "$APP/Contents/MacOS/$b" -version | head -1
+          done
+          for f in terceros.txt LICENSE.LGPLv2.1 COPYING.LGPL LICENSE.lame; do test -s "$APP/Contents/Resources/legal/$f"; done
+          du -sh "$APP" out/*
+      # Apple Music (afclip): afconvert y afclip vienen con macOS (/usr/bin).
+      # Si falta afclip en el Mac, NO se instala nada: aviso visible y el caso pasa al
+      # checklist de Fer (docs/pruebas/hito3-checklist.md, prueba 9).
+      - name: "Detectar afclip (Apple Music)"
+        id: adm
+        run: |
+          if AFCLIP=$(command -v afclip) && command -v afconvert >/dev/null; then
+            echo "afclip: $AFCLIP"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::afclip no está en este runner: la comprobación de Apple Music (afclip) no se ha ejecutado. Pasa el caso por el Mac de Fer: docs/pruebas/hito3-checklist.md, prueba 9."
+          fi
+      # El enlace va en el mensaje reason.adm_tools_missing: si deja de responder 200 se avisa, sin romper el build.
+      - name: "La página de las herramientas de Apple Music (afclip) responde 200"
+        run: |
+          URL="https://www.apple.com/apple-music/apple-digital-masters/"
+          CODE=$(curl -sSIL -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Safari/605.1.15" -o /dev/null -w '%{http_code}' "$URL" || echo 000)
+          echo "$URL -> $CODE"
+          if [ "$CODE" != "200" ]; then
+            echo "::warning::$URL devuelve $CODE: el enlace de reason.adm_tools_missing (engine/masterout-core/i18n) puede estar roto"
+          fi
+      - name: "Apple Music (afclip) real (afconvert, AAC; −1 dBTP → 0 clips, +1 dBTP → más de 0)"
+        if: steps.adm.outputs.present == 'true'
+        env:
+          MASTEROUT_REQUIRE_ADM: "1"
+          MASTEROUT_ADM_LOG_DIR: ${{ runner.temp }}/adm
+        run: cargo test --manifest-path engine/Cargo.toml -p masterout-core --test media_adm real_tools -- --nocapture
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && steps.adm.outputs.present == 'true'
+        with:
+          name: afclip-raw-propio
+          path: ${{ runner.temp }}/adm/afclip-raw-*.txt
+          if-no-files-found: warn
+      - name: "Humo headless (analizar + planificar + exportar con el binario real, con portada y vídeo)"
+        env:
+          ADM: ${{ steps.adm.outputs.present == 'true' && 'required' || 'any' }}
+        run: |
+          app/scripts/smoke-mac.sh "$PWD/app/src-tauri/target/universal-apple-darwin/release/bundle/macos/master check.app" "$RUNNER_TEMP/humo"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: master-check-humo-propio
+          path: |
+            ${{ runner.temp }}/humo/listado.txt
+            ${{ runner.temp }}/humo/salida humo/smoke-result.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: master-check-macos-propio
+          path: out/*
           if-no-files-found: error

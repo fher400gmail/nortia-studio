@@ -1,13 +1,17 @@
 //! Comandos Tauri: capa finísima sobre `mastercheck-bridge`.
 
-use mastercheck_bridge::app_support::{self, busy_error, is_image_path, AppInfo};
+use mastercheck_bridge::app_support::{
+    self, busy_error, check_reveal, is_media_path, last_delivery, AppInfo,
+};
 use mastercheck_bridge::dto::{
     DeliveryDto, ExportRequestDto, MasterDto, PlanDto, ReleaseMetaDto, WaveformDto,
 };
 use mastercheck_bridge::errors::BridgeError;
-use mastercheck_bridge::{analysis, exporting, planning};
+use mastercheck_bridge::{analysis, exporting, planning, thumbnail};
 use masterout_core::i18n::Lang;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -24,6 +28,9 @@ pub struct LangState(pub Mutex<Lang>);
 #[derive(Default)]
 pub struct ExportState {
     pub cancel: Mutex<Option<Arc<AtomicBool>>>,
+    /// Carpeta de la última entrega que conoce el backend: `open_path` solo revela esa carpeta o
+    /// algo dentro de ella.
+    pub last_delivery: Mutex<Option<PathBuf>>,
 }
 
 #[derive(Serialize)]
@@ -59,14 +66,28 @@ pub async fn analyze(
     Ok(res)
 }
 
+/// El plan puede sondear los codificadores (ffmpeg, con plazo) la primera vez: va en un hilo
+/// aparte para no congelar la ventana.
 #[tauri::command]
-pub fn plan(
+pub async fn plan(
     lang: State<'_, LangState>,
     master: MasterDto,
     meta: ReleaseMetaDto,
     active_ids: Vec<String>,
-) -> PlanDto {
-    planning::plan(&master, &meta, &active_ids, current_lang(&lang))
+    media_inputs: Option<HashMap<String, String>>,
+) -> Result<PlanDto, BridgeError> {
+    let lang = current_lang(&lang);
+    tauri::async_runtime::spawn_blocking(move || {
+        planning::plan(
+            &master,
+            &meta,
+            &active_ids,
+            &media_inputs.unwrap_or_default(),
+            lang,
+        )
+    })
+    .await
+    .map_err(|e| internal(lang, e.to_string()))
 }
 
 #[tauri::command]
@@ -99,6 +120,14 @@ pub async fn export(
     .await
     .map_err(|e| internal(lang, e.to_string()))
     .and_then(|r| r);
+    if let Ok(d) = &result {
+        if let Some(folder) = last_delivery(d) {
+            *state
+                .last_delivery
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(folder);
+        }
+    }
     *state.cancel.lock().unwrap_or_else(|e| e.into_inner()) = None;
     result
 }
@@ -128,15 +157,16 @@ pub async fn pick_folder(app: AppHandle) -> Option<String> {
 }
 
 /// Selector de archivo (el `<input type=file>` del webview no da la ruta real).
-/// `kind`: `"audio"` (WAV) o `"image"`.
+/// `kind`: `"audio"` (WAV), `"image"` (portada) o `"media"` (imagen o vídeo de una ficha).
 #[tauri::command]
 pub async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
     let dialog = app.dialog().file();
-    let image = kind == "image";
-    let dialog = if image {
-        dialog.add_filter("image", &["jpg", "jpeg", "png"])
-    } else {
-        dialog.add_filter("audio", &["wav", "wave"])
+    let dialog = match kind.as_str() {
+        "image" => dialog.add_filter("image", &["jpg", "jpeg", "png"]),
+        "media" => dialog
+            .add_filter("image", &["jpg", "jpeg", "png", "webp"])
+            .add_filter("video", &["mp4", "mov", "m4v", "mkv", "webm"]),
+        _ => dialog.add_filter("audio", &["wav", "wave"]),
     };
     let path = dialog.blocking_pick_file().and_then(to_string_path)?;
     // Lo elegido en el selector se puede mostrar o reproducir; el resto del disco, no.
@@ -144,14 +174,15 @@ pub async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
     Some(path)
 }
 
-/// Autoriza ver una imagen arrastrada (portada). Solo `.png`, `.jpg` y `.jpeg`.
+/// Autoriza ver una imagen o un vídeo arrastrado (portada o ficha). Solo imágenes y vídeos
+/// admitidos (`.png`, `.jpg`, `.jpeg`, `.webp`, `.mp4`, `.mov`, `.m4v`, `.mkv`, `.webm`).
 #[tauri::command]
 pub fn allow_asset(
     app: AppHandle,
     lang: State<'_, LangState>,
     path: String,
 ) -> Result<(), BridgeError> {
-    if !is_image_path(&path) {
+    if !is_media_path(&path) {
         return Err(BridgeError::from_key(
             "err.generic",
             current_lang(&lang),
@@ -163,16 +194,52 @@ pub fn allow_asset(
         .map_err(|e| BridgeError::from_key("err.io", current_lang(&lang), Some(e.to_string())))
 }
 
-/// Revela la carpeta (o archivo) en el explorador del sistema.
+/// Miniatura (data URL de 160 px) de una imagen o del primer fotograma de un vídeo. Puede
+/// lanzar ffmpeg, así que va en un hilo aparte.
+#[tauri::command]
+pub async fn media_thumbnail(
+    lang: State<'_, LangState>,
+    path: String,
+) -> Result<String, BridgeError> {
+    let lang = current_lang(&lang);
+    tauri::async_runtime::spawn_blocking(move || thumbnail::media_thumbnail(&path, lang))
+        .await
+        .map_err(|e| internal(lang, e.to_string()))?
+}
+
+/// Revela la carpeta (o un archivo) de la última entrega en el explorador del sistema. Cualquier
+/// otra ruta se rechaza con `err.internal`: la interfaz no puede pedir que se revele cualquier cosa.
 #[tauri::command]
 pub fn open_path(
     app: AppHandle,
     lang: State<'_, LangState>,
+    state: State<'_, ExportState>,
     path: String,
 ) -> Result<(), BridgeError> {
+    let last = state
+        .last_delivery
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    // se revela la ruta canónica ya validada, no el texto recibido
+    let checked = check_reveal(&path, last.as_deref(), current_lang(&lang))?;
     app.opener()
-        .reveal_item_in_dir(&path)
+        .reveal_item_in_dir(mastercheck_bridge::app_support::plain_path(&checked))
         .map_err(|e| BridgeError::from_key("err.io", current_lang(&lang), Some(e.to_string())))
+}
+
+/// Abre el documento de licencias y fuentes (`legal/terceros.txt`, empaquetado como recurso)
+/// con el programa del sistema. Ruta fija: la interfaz no puede pedir otra.
+#[tauri::command]
+pub fn open_legal(app: AppHandle, lang: State<'_, LangState>) -> Result<(), BridgeError> {
+    let lang = current_lang(&lang);
+    let path = app
+        .path()
+        .resolve("legal/terceros.txt", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| BridgeError::from_key("err.io", lang, Some(e.to_string())))?;
+    app.opener()
+        .open_path(path.to_string_lossy(), None::<&str>)
+        .map_err(|e| BridgeError::from_key("err.io", lang, Some(e.to_string())))
 }
 
 #[tauri::command]
@@ -212,7 +279,6 @@ pub fn frontend_ready(window: WebviewWindow) {
 }
 
 pub fn run_app() {
-    crate::prepare_lame_path(&crate::exe_dir());
     let locale = tauri_plugin_os::locale().unwrap_or_default();
     let lang = mastercheck_bridge::lang::Lang::from_locale(&locale);
     tauri::Builder::default()
@@ -240,7 +306,9 @@ pub fn run_app() {
             pick_folder,
             pick_file,
             allow_asset,
+            media_thumbnail,
             open_path,
+            open_legal,
             system_lang,
             set_lang,
             app_info,

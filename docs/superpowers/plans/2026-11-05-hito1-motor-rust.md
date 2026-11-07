@@ -18,7 +18,7 @@
 - Loudness según ITU-R BS.1770-4/EBU R128: bloques 400 ms, solape 75 %, gate abs −70 LUFS, rel −10 LU; LRA (Tech 3342) ventanas 3 s, paso 100 ms, gate −20 LU, P10–P95; true peak con sobremuestreo 4× (2× basta a 96 kHz; 4× siempre válido). Tolerancias de test: ±0,1 LU (I), ±1 LU (LRA), +0,2/−0,4 dB (TP) frente a Tech 3341/3342; ±0,15 LU y ±0,3 dB frente a ffmpeg en másters reales.
 - Regla de resolución por destino (spec §4): destinos "nativa" (Spotify, Apple, Amazon, Tidal, Hi-Res) conservan bits y kHz del máster, nunca suben; destinos "fija" (Deezer 16/44,1, Distribuidora estándar 16/44,1, TuneCore 24/192, YouTube 48 kHz) convierten. Si el máster es 16 bit, el destino Apple Digital Masters queda `Disabled { reason }`.
 - Contrato de nombres (spec §4), exacto: carpeta `{Artista} - {Título}{ (Versión)}/`, subcarpetas `01 Spotify/ … 09 Imagen/`, archivo `{Artista} - {Título} [Etiqueta] {bits}bit-{kHz}kHz.{ext}` (p. ej. `Vera Alcón - Luz de Noviembre [Spotify] 24bit-96kHz.flac`); kHz se escribe `44kHz`, `48kHz`, `96kHz`, `192kHz`; caracteres `/ \ : * ? " < > |` → `-`; sin espacios ni puntos finales; acentos se conservan; nombre de archivo ≤ 200 bytes UTF-8.
-- Metadatos: WAV lleva `bext` (Description "Artista - Título", Originator "nortia. studio", OriginatorReference vacío, fecha/hora) y `LIST/INFO` (`INAM`, `IART`, `IPRD`, `ICRD` año, `ISFT` "Master Out"); el ISRC NO va en `INFO/ISRC`. FLAC: Vorbis comments `TITLE`, `ARTIST`, `ALBUM`, `DATE`, `ISRC`, `COPYRIGHT`. MP3: ID3v2.3 `TIT2`, `TPE1`, `TALB`, `TYER`, `TSRC`, `TCOM`, `TPUB`, `TCOP`, `APIC` ($03). Preset TuneCore: sin metadatos incrustados.
+- Metadatos: WAV lleva `bext` (Description "Artista - Título", Originator "ferboix. studio", OriginatorReference vacío, fecha/hora) y `LIST/INFO` (`INAM`, `IART`, `IPRD`, `ICRD` año, `ISFT` "Master Out"); el ISRC NO va en `INFO/ISRC`. FLAC: Vorbis comments `TITLE`, `ARTIST`, `ALBUM`, `DATE`, `ISRC`, `COPYRIGHT`. MP3: ID3v2.3 `TIT2`, `TPE1`, `TALB`, `TYER`, `TSRC`, `TCOM`, `TPUB`, `TCOP`, `APIC` ($03). Preset TuneCore: sin metadatos incrustados.
 - Idioma: toda cadena visible al usuario pasa por `i18n::t(lang, key)`; `es` y `en` obligatorios; `Lang::from_system()` elige por `LANG`/locale y cae a `en`.
 - Licencias: nada GPL. Sin red.
 - Los nombres de fixtures reales no se suben al repo (`*.wav` en `.gitignore`); los tests que los usan se saltan con mensaje si falta `MASTEROUT_FIXTURES`.
@@ -120,7 +120,7 @@ Cargo usa el proxy de la sesión (`~/.cargo/config.toml` ya configurado). Commit
 - Consumes: `AudioBuffer`, `AudioError` (Task 1).
 - Produces:
   ```rust
-  pub struct WavMetadata { pub title: String, pub artist: String, pub album: Option<String>, pub year: Option<u16>, pub bext_description: String, pub bext_originator: String /* "nortia. studio" */, pub origination: Option<chrono-free (u16,u8,u8,u8,u8,u8)> }
+  pub struct WavMetadata { pub title: String, pub artist: String, pub album: Option<String>, pub year: Option<u16>, pub bext_description: String, pub bext_originator: String /* "ferboix. studio" */, pub origination: Option<chrono-free (u16,u8,u8,u8,u8,u8)> }
   pub struct WavWriteOptions { pub bits: u16 /* 16 | 24 */, pub metadata: Option<WavMetadata> }
   pub fn wav::write(path: &Path, samples_i32: &[Vec<i32>], sample_rate: u32, opts: &WavWriteOptions) -> Result<(), AudioError>
   ```

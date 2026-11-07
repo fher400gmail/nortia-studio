@@ -1,57 +1,59 @@
 #!/usr/bin/env bash
 # Humo headless de master check en macOS. Uso: smoke-mac.sh "<ruta al .app>" "<carpeta de trabajo>"
+# Ejecuta el binario real (analizar + planificar + exportar) con portada sintética y comprueba
+# [Portada], [Canvas], [YouTube], [MP3 320] y portada animada con el ffprobe del propio sidecar
+# empaquetado en Contents/MacOS. Variables:
+#   ADM=required   exige «0 muestras con clipping» de la comprobación de Apple en el informe
+#   (lo pone el job solo si instaló afclip; si no, el informe dirá «no disponible» y hay aviso)
 # Fuerza el idioma a español (LANG) para que los documentos se llamen README.txt e
 # informe-loudness.txt aunque el runner de CI esté en inglés.
 set -euo pipefail
 APP="$1"; WORK="$2"
-EXE="$APP/Contents/MacOS/mastercheck-app"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# El nombre del ejecutable lo fija mainBinaryName (tauri.conf.json): se lee del Info.plist.
+NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Contents/Info.plist")
+EXE="$APP/Contents/MacOS/$NAME"
 test -x "$EXE" || { echo "no existe el ejecutable: $EXE"; ls -la "$APP/Contents/MacOS" || true; exit 2; }
+# el sidecar empaquetado (externalBin) va junto al ejecutable, sin sufijo de triple
+for b in ffmpeg ffprobe; do
+  test -x "$APP/Contents/MacOS/$b" || { echo "::error::falta $b junto al ejecutable (externalBin)"; ls -la "$APP/Contents/MacOS"; exit 2; }
+  echo "$b: $(lipo -archs "$APP/Contents/MacOS/$b")"
+done
 mkdir -p "$WORK"
 WAV="$WORK/máster de prueba.wav"
+COVER="$WORK/portada de prueba.png"
 OUT="$WORK/salida humo"
 rm -rf "$OUT"
 
-# WAV de 10 s, 24 bit, 48 kHz, estéreo: seno de 1 kHz a -12 dBFS (sin dependencias).
-python3 - "$WAV" <<'PY'
-import math, struct, sys, wave
-rate, secs = 48000, 10
-w = wave.open(sys.argv[1], "wb")
-w.setnchannels(2); w.setsampwidth(3); w.setframerate(rate)
-amp = int(8388607 * 0.25)
-buf = bytearray()
-for n in range(rate * secs):
-    v = int(amp * math.sin(2 * math.pi * 1000 * n / rate))
-    b = struct.pack("<i", v)[:3]
-    buf += b + b
-w.writeframes(bytes(buf)); w.close()
-PY
-ls -la "$WAV"
+python3 -I "$HERE/smoke_assets.py" wav "$WAV"
+python3 -I "$HERE/smoke_assets.py" cover "$COVER"
+ls -la "$WAV" "$COVER"
 
 set +e
-LANG=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 MASTERCHECK_SMOKE="$WAV;$OUT" "$EXE" &
+LANG=es_ES.UTF-8 LC_ALL=es_ES.UTF-8 MASTERCHECK_SMOKE_COVER="$COVER" MASTERCHECK_SMOKE="$WAV;$OUT" "$EXE" &
 PID=$!
-( sleep 60; kill -9 "$PID" 2>/dev/null ) &
+# Vigilante de 15 minutos que termina solo cuando la app acaba (sin kill: así no hay
+# «Terminated» en el log ni un sleep huérfano).
+( for _ in $(seq 900); do kill -0 "$PID" 2>/dev/null || exit 0; sleep 1; done; echo "::error::el humo superó los 15 minutos"; kill -9 "$PID" 2>/dev/null ) &
 WATCHDOG=$!
 wait "$PID"
 CODE=$?
-kill "$WATCHDOG" 2>/dev/null
+wait "$WATCHDOG" 2>/dev/null
 set -e
 echo "código de salida: $CODE"
 test "$CODE" -eq 0
 
 RESULT="$OUT/smoke-result.json"
 test -f "$RESULT"
-python3 - "$RESULT" <<'PY'
+# tiempo de capabilities() y avisos: también al resumen del job si GitHub lo ofrece
+python3 -I - "$RESULT" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-assert d["cancelled"] is False, "cancelled"
-assert d["failed"] == [], d["failed"]
-assert d["files"], "sin archivos"
-print("entrega:", d["folder"], "-", len(d["files"]), "archivos")
+c = (d.get("smoke") or {}).get("capabilities") or {}
+print("capabilities() en frío (macOS):", c)
 PY
 
 find "$OUT" -type f | sort | tee "$WORK/listado.txt"
 find "$OUT" -type f -path "*/01 Spotify/*" -name "* [[]Spotify[]] 24bit-48kHz.flac" | grep -q .
-find "$OUT" -type f -name "README.txt" | grep -q .
-find "$OUT" -type f -name "informe-loudness.txt" | grep -q .
+python3 -I "$HERE/smoke_verify.py" --out "$OUT" --platform mac --adm "${ADM:-any}"
 echo "HUMO OK"

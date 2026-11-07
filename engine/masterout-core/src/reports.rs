@@ -2,7 +2,8 @@
 
 use crate::i18n::{t, tf, Lang};
 use crate::loudness::Verdict;
-use crate::plan::{Job, MasterInfo, ReleaseMeta, Resolved};
+use crate::media::adm::{AdmReport, AdmStatus};
+use crate::plan::{Job, MasterInfo, MediaKind, ReleaseMeta, Resolved};
 use crate::presets::Container;
 
 pub struct DeliverySummary<'a> {
@@ -42,6 +43,26 @@ fn container_label(j: &Job) -> String {
     j.container.extension().to_uppercase()
 }
 
+/// Ficha técnica de un destino para el README (audio, MP3, imagen y vídeo).
+fn job_spec(lang: Lang, j: &Job) -> String {
+    match j.media {
+        Some(MediaKind::Cover) => "JPG + PNG · 3000×3000 · sRGB".to_string(),
+        Some(MediaKind::Canvas) => "MP4 · 1080×1920 · H.264".to_string(),
+        Some(MediaKind::YoutubeVideo) => format!(
+            "MP4 · 1080p · H.264 + AAC 384 kbps · {} kHz",
+            khz(lang, j.sample_rate)
+        ),
+        Some(MediaKind::AppleMotion) => "MP4 · 3840×3840 (HEVC) + 2048×2732 (H.264)".to_string(),
+        None if j.container == Container::Mp3 => "MP3 320 kbps".to_string(),
+        None => format!(
+            "{} bit · {} kHz · {}",
+            j.bits,
+            khz(lang, j.sample_rate),
+            container_label(j)
+        ),
+    }
+}
+
 fn verdict_text(lang: Lang, v: &Verdict) -> String {
     match v {
         Verdict::Ok => t(lang, "verdict.ok"),
@@ -73,21 +94,18 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
     for r in s.jobs {
         match r {
             Resolved::Job(j) => {
-                let spec = if j.container == Container::Mp3 {
-                    "MP3 320 kbps".to_string()
-                } else {
-                    format!(
-                        "{} bit · {} kHz · {}",
-                        j.bits,
-                        khz(lang, j.sample_rate),
-                        container_label(j)
-                    )
-                };
+                let spec = job_spec(lang, j);
                 out.push_str(&format!("{}/  →  {}  ({})", j.subfolder, j.file_name, spec));
                 if j.is_upsampling {
                     out.push_str(&format!("  ⚠ {}", t(lang, "readme.upsampling")));
                 }
                 out.push('\n');
+                for extra in &j.extra_files {
+                    out.push_str(&format!("{}/  →  {}\n", j.subfolder, extra));
+                }
+                for w in &j.warnings {
+                    out.push_str(&format!("    ⚠ {}\n", t(lang, w)));
+                }
             }
             Resolved::Disabled {
                 preset_id,
@@ -111,10 +129,63 @@ pub fn readme(lang: Lang, s: &DeliverySummary) -> String {
         &[("version", s.app_version), ("date", &s.created_at)],
     ));
     out.push('\n');
+    // aviso de marcas de terceros (D-31): al final, igual que en «Acerca de»
+    out.push('\n');
+    out.push_str(&t(lang, "readme.trademarks"));
+    out.push('\n');
     out
 }
 
+/// Veredicto de un destino con el resultado de Apple Music (AAC 256, afclip): si el AAC tiene clipping,
+/// el destino `apple_adm` pasa a `Warn("adm_clipping")` (un `Fail` previo se conserva).
+pub fn verdict_with_adm(preset_id: &str, v: &Verdict, adm: Option<&AdmReport>) -> Verdict {
+    match adm {
+        Some(a)
+            if preset_id == "apple_adm"
+                && a.status == AdmStatus::Clipping
+                && !matches!(v, Verdict::Fail(_)) =>
+        {
+            Verdict::Warn("adm_clipping".into())
+        }
+        _ => v.clone(),
+    }
+}
+
+/// Línea del informe para el resultado de Apple Music (AAC 256, afclip).
+pub fn adm_line(lang: Lang, a: &AdmReport) -> String {
+    match &a.status {
+        AdmStatus::Unavailable { reason_key } => {
+            // minúscula inicial: va detrás de los dos puntos
+            let reason = t(lang, reason_key);
+            let mut cs = reason.chars();
+            let reason = match cs.next() {
+                Some(c) => c.to_lowercase().chain(cs).collect(),
+                None => reason,
+            };
+            tf(lang, "report.adm_unavailable", &[("reason", &reason)])
+        }
+        _ => tf(
+            lang,
+            if a.clipped_samples == 1 {
+                "report.adm_clipping_one"
+            } else {
+                "report.adm_clipping"
+            },
+            &[("n", &a.clipped_samples.to_string())],
+        ),
+    }
+}
+
 pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
+    loudness_report_with_adm(lang, s, None)
+}
+
+/// Informe de loudness con el resultado de la validación Apple Music (AAC 256, afclip) (si se hizo).
+pub fn loudness_report_with_adm(
+    lang: Lang,
+    s: &DeliverySummary,
+    adm: Option<&AdmReport>,
+) -> String {
     let l = &s.master.loudness;
     let mut out = String::new();
     out.push_str(&format!("{}\n{}\n\n", t(lang, "report.title"), header(s)));
@@ -147,11 +218,17 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
     out.push('\n');
     for r in s.jobs {
         match r {
+            // La imagen y el vídeo sin audio no tienen veredicto de loudness.
+            Resolved::Job(j)
+                if matches!(
+                    j.media,
+                    Some(MediaKind::Cover | MediaKind::Canvas | MediaKind::AppleMotion)
+                ) => {}
             Resolved::Job(j) => out.push_str(&format!(
                 "{}: [{}] {}\n",
                 preset_name(lang, &j.preset_id),
-                verdict_prefix(lang, &j.verdict),
-                verdict_text(lang, &j.verdict)
+                verdict_prefix(lang, &verdict_with_adm(&j.preset_id, &j.verdict, adm)),
+                verdict_text(lang, &verdict_with_adm(&j.preset_id, &j.verdict, adm))
             )),
             Resolved::Disabled {
                 preset_id,
@@ -162,6 +239,11 @@ pub fn loudness_report(lang: Lang, s: &DeliverySummary) -> String {
                 t(lang, reason_key)
             )),
         }
+    }
+    if let Some(a) = adm {
+        out.push('\n');
+        out.push_str(&adm_line(lang, a));
+        out.push('\n');
     }
     out
 }

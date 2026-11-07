@@ -104,13 +104,13 @@ def text_outline(spec, text, size, x, y, fill, track=None, kern=None, weight=Non
 
 
 def wordmark(spec, size, x, y, ink, accent, suffix=None, suffix_ink=None, dot_shape="circle", pill=1.0, suffix_op=1.0):
-    """'nortia.' con punto a medida. y = baseline. Devuelve Mark.
+    """'ferboix.' con punto a medida. y = baseline. Devuelve Mark.
     spec: font, axes, track, kern, dot_k (diámetro/asta), dot_gap (em), dotless_i (bool)."""
     f = font(spec["font"], **spec["axes"])
     upm = f["head"].unitsPerEm
     s = size / upm
     track, kern = spec.get("track", 0), spec.get("kern", {})
-    letters = "nortia"
+    letters = spec.get("letters", "ferboix")
     cx = x
     parts = []
     xh = f["OS/2"].sxHeight * s

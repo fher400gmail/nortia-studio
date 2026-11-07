@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test ui-tests/tests/backend.spec.mjs",
+    "test": "node --test ui-tests/tests/backend.spec.mjs ui-tests/tests/marcas.spec.mjs ui-tests/tests/formats.spec.mjs",
     "check": "node ui-tests/scripts/ui-check.mjs",
-    "capturas": "node ui-tests/scripts/capturas.mjs"
+    "capturas": "node ui-tests/scripts/capturas.mjs",
+    "capturas:marca": "node ui-tests/scripts/capturas-marca.mjs"
   }
 }

@@ -50,6 +50,27 @@ fn es_and_en_have_identical_key_sets() {
 }
 
 #[test]
+fn dead_export_err_keys_are_gone() {
+    // el motor emite `err.container`, `err.threadpool` y `err.documents`; los `export.err.*` ya no los usa nadie
+    for lang in [Lang::Es, Lang::En] {
+        let keys = i18n::keys(lang);
+        for dead in [
+            "export.err.container",
+            "export.err.threadpool",
+            "export.err.documents",
+        ] {
+            assert!(
+                !keys.iter().any(|k| k == dead),
+                "{dead} sigue en el diccionario"
+            );
+        }
+        for live in ["err.container", "err.threadpool", "err.documents"] {
+            assert!(keys.iter().any(|k| k == live), "{live} falta");
+        }
+    }
+}
+
+#[test]
 fn missing_key_is_visible_not_panic() {
     assert_eq!(t(Lang::Es, "nope"), "⟦nope⟧");
     assert_eq!(t(Lang::En, "nope"), "⟦nope⟧");
@@ -66,7 +87,12 @@ fn lang_from_tag() {
 #[test]
 fn readme_lists_each_active_job_once_in_order() {
     let (m, ms) = (meta(), master(96000, 24));
-    let jobs = plan::resolve(&ms, &m, &["mp3_promo", "deezer", "spotify"]);
+    let jobs = plan::resolve(
+        &ms,
+        &m,
+        &["mp3_promo", "deezer", "spotify"],
+        &Default::default(),
+    );
     for lang in [Lang::Es, Lang::En] {
         let r = readme(lang, &summary(&m, &ms, &jobs));
         assert!(r.starts_with("Vera Alcón - Luz de Noviembre\n"));
@@ -88,15 +114,31 @@ fn readme_lists_each_active_job_once_in_order() {
 }
 
 #[test]
+fn readme_ends_with_the_trademark_notice() {
+    let (m, ms) = (meta(), master(96000, 24));
+    let jobs = plan::resolve(&ms, &m, &["spotify", "apple_adm"], &Default::default());
+    for lang in [Lang::Es, Lang::En] {
+        let r = readme(lang, &summary(&m, &ms, &jobs));
+        let notice = t(lang, "readme.trademarks");
+        assert!(notice.contains("master check"), "{notice}");
+        assert_eq!(r.matches(&notice).count(), 1);
+        assert!(r.trim_end().ends_with(&notice), "{r}");
+        // la carpeta y el archivo de Apple llevan «Apple Music», no el programa Digital Masters
+        assert!(r.contains("[Apple Music] 24bit-96kHz.wav"), "{r}");
+        assert!(!r.contains("Digital Masters"));
+    }
+}
+
+#[test]
 fn readme_marks_upsampling_and_disabled() {
     let m = meta();
     let ms = master(44100, 24);
-    let jobs = plan::resolve(&ms, &m, &["youtube_music"]);
+    let jobs = plan::resolve(&ms, &m, &["youtube_music"], &Default::default());
     let r = readme(Lang::Es, &summary(&m, &ms, &jobs));
     assert!(r.contains(&t(Lang::Es, "readme.upsampling")));
 
     let ms16 = master(44100, 16);
-    let jobs = plan::resolve(&ms16, &m, &["apple_adm"]);
+    let jobs = plan::resolve(&ms16, &m, &["apple_adm"], &Default::default());
     let r = readme(Lang::En, &summary(&m, &ms16, &jobs));
     assert!(r.contains(&t(Lang::En, "readme.disabled")));
     assert!(r.contains(&t(Lang::En, "apple_needs_24bit")));
@@ -105,7 +147,7 @@ fn readme_marks_upsampling_and_disabled() {
 #[test]
 fn loudness_report_has_numbers_with_comma_in_es_and_dot_in_en() {
     let (m, ms) = (meta(), master(96000, 24));
-    let jobs = plan::resolve(&ms, &m, &["spotify"]);
+    let jobs = plan::resolve(&ms, &m, &["spotify"], &Default::default());
     let es = loudness_report(Lang::Es, &summary(&m, &ms, &jobs));
     let en = loudness_report(Lang::En, &summary(&m, &ms, &jobs));
     assert!(es.contains("−9,1 LUFS"), "{es}");
@@ -120,7 +162,7 @@ fn csv_has_fixed_header_and_one_row() {
     m.title = "Luz, de \"Noviembre\"".into();
     m.isrc = Some("ESABC2600001".into());
     let ms = master(96000, 24);
-    let jobs = plan::resolve(&ms, &m, &["spotify"]);
+    let jobs = plan::resolve(&ms, &m, &["spotify"], &Default::default());
     let csv = release_sheet_csv(&summary(&m, &ms, &jobs));
     let lines: Vec<&str> = csv.lines().collect();
     assert_eq!(lines.len(), 2);
@@ -134,7 +176,7 @@ fn csv_has_fixed_header_and_one_row() {
 #[test]
 fn release_sheet_txt_in_both_languages_no_missing_keys() {
     let (m, ms) = (meta(), master(44100, 24));
-    let jobs = plan::resolve(&ms, &m, &["spotify", "cover"]);
+    let jobs = plan::resolve(&ms, &m, &["spotify", "cover"], &Default::default());
     for lang in [Lang::Es, Lang::En] {
         let s = summary(&m, &ms, &jobs);
         assert!(!release_sheet_txt(lang, &s).contains('⟦'));
@@ -146,7 +188,12 @@ fn release_sheet_txt_in_both_languages_no_missing_keys() {
 #[test]
 fn english_documents_are_fully_localized() {
     let (m, ms) = (meta(), master(96000, 24));
-    let jobs = plan::resolve(&ms, &m, &["distributor_std", "spotify", "apple_adm"]);
+    let jobs = plan::resolve(
+        &ms,
+        &m,
+        &["distributor_std", "spotify", "apple_adm"],
+        &Default::default(),
+    );
     let sm = summary(&m, &ms, &jobs);
     let en = loudness_report(Lang::En, &sm);
     assert!(en.contains("Standard distributor"), "{en}");
@@ -159,4 +206,35 @@ fn english_documents_are_fully_localized() {
     assert!(!rd.contains("estándar"), "{rd}");
     let es = loudness_report(Lang::Es, &sm);
     assert!(es.contains("Distribuidora estándar"), "{es}");
+}
+
+#[test]
+fn readme_lists_the_skipped_hevc_size() {
+    use masterout_core::media::MediaCaps;
+    use masterout_core::plan::MediaInputs;
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    image::RgbImage::from_pixel(3000, 3000, image::Rgb([9, 9, 9]))
+        .save(&cover)
+        .unwrap();
+    let media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    let (m, ms) = (meta(), master(44100, 24));
+    let jobs = plan::resolve_in(
+        &ms,
+        &m,
+        &["apple_motion"],
+        &media,
+        Lang::Es,
+        Some(MediaCaps {
+            h264: true,
+            hevc: false,
+        }),
+    );
+    let rd = readme(Lang::Es, &summary(&m, &ms, &jobs));
+    assert!(rd.contains("2048x2732.mp4"), "{rd}");
+    assert!(!rd.contains("3840x3840"), "{rd}");
+    assert!(rd.contains("no tiene codificador HEVC"), "{rd}");
 }

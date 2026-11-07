@@ -1,6 +1,6 @@
-# nortia. studio · Master Out — Especificación de diseño
+# ferboix. studio · Master Out — Especificación de diseño
 
-Fecha: 05/11/2026 · Estado: borrador para aprobación de Fer · Autores: Fer y Claude (CEOs de nortia.)
+Fecha: 05/11/2026 · Estado: borrador para aprobación de Fer · Autores: Fer y Claude (CEOs de ferboix. studio)
 
 ## 1. Qué es y para quién
 
@@ -22,14 +22,14 @@ Precio: 9,99 € pago único en la Mac App Store. Sin cuenta, sin red, sin suscr
 ## 3. Pantalla única (tres columnas, ventana mínima 1100×700, modo claro y oscuro)
 
 ### 3.1 Columna izquierda: el máster
-- Zona de arrastre grande con el símbolo de nortia. studio. Acepta WAV, AIFF, FLAC, CAF, ALAC. Rechaza con mensaje claro MP3/AAC como fuente ("Un máster con pérdida no sirve para distribuir; exporta WAV o FLAC desde tu DAW").
+- Zona de arrastre grande con el símbolo de ferboix. studio (el potenciómetro). Acepta WAV, AIFF, FLAC, CAF, ALAC. Rechaza con mensaje claro MP3/AAC como fuente ("Un máster con pérdida no sirve para distribuir; exporta WAV o FLAC desde tu DAW").
 - Al soltar: forma de onda que se dibuja de izquierda a derecha (overview por picos), y debajo la ficha técnica: formato, bits, kHz, canales, duración, tamaño, LUFS integrados, LRA, true peak máximo (dBTP), y un semáforo general.
 - Botón "Cambiar máster" y "Escuchar" (reproducción simple con posición en la onda).
 
 ### 3.2 Columna central: datos y destinos
 - **Datos del tema** (6 campos visibles, el resto plegado): Título, Artista principal, Featuring, Versión (p. ej. "Radio Edit"), Año, ISRC (opcional, validado con formato CC-XXX-YY-NNNNN). Plegados: compositores, editorial, sello, ℗ y ©, UPC, género, idioma, explícito. Se recuerdan entre sesiones (último artista/sello).
 - **Portada** (opcional): arrastre de imagen; se muestra con su tamaño; aviso si < 3000×3000 o no cuadrada o no sRGB.
-- **Destinos** como tarjetas con interruptor, agrupadas: *Streaming* (Spotify, Apple Music / Apple Digital Masters, Amazon Music, Tidal, Deezer, YouTube Music), *Distribuidoras* (Estándar 16/44,1; Hi-Res 24/nativa; TuneCore 24/192), *Promo* (MP3 320), *Vídeo e imagen* (YouTube vídeo con imagen fija 1080p, Spotify Canvas 9:16, Portada 3000×3000 JPG+PNG). Cada tarjeta muestra: icono, nombre, el archivo que generará ("FLAC 24 bit · 96 kHz"), semáforo de loudness para ese destino (verde cumple / ámbar aviso / rojo no cumple, con el motivo en una línea: "TP −0,3 dBTP; Spotify recomienda ≤ −1") y un aviso si el máster no es apto (p. ej. ADM exige 24 bit nativo). Las tarjetas se animan al activarse y la vista previa de la carpeta se actualiza al instante.
+- **Destinos** como tarjetas con interruptor, agrupadas: *Streaming* (Spotify, Apple Music (comprobación con afclip), Amazon Music, TIDAL, Deezer, YouTube Music), *Distribuidoras* (Estándar 16/44,1; Hi-Res 24/nativa; TuneCore 24/192), *Promo* (MP3 320), *Vídeo e imagen* (YouTube vídeo con imagen fija 1080p, Spotify Canvas 9:16, Portada 3000×3000 JPG+PNG). Cada tarjeta muestra: icono, nombre, el archivo que generará ("FLAC 24 bit · 96 kHz"), semáforo de loudness para ese destino (verde cumple / ámbar aviso / rojo no cumple, con el motivo en una línea: "TP −0,3 dBTP; Spotify recomienda ≤ −1") y un aviso si el máster no es apto (p. ej. ADM exige 24 bit nativo). Las tarjetas se animan al activarse y la vista previa de la carpeta se actualiza al instante.
 - Botón "Preset": guardar/recuperar la selección de destinos ("Mi entrega estándar").
 
 ### 3.3 Columna derecha: salida
@@ -43,9 +43,9 @@ Precio: 9,99 € pago único en la Mac App Store. Sin cuenta, sin red, sin suscr
 ```
 {Artista} - {Título}{ (Versión)}/
   01 Spotify/{Artista} - {Título} [Spotify] 24bit-96kHz.flac
-  02 Apple Music/{Artista} - {Título} [Apple Digital Masters] 24bit-96kHz.wav
+  02 Apple Music/{Artista} - {Título} [Apple Music] 24bit-96kHz.wav
   03 Amazon Music/{Artista} - {Título} [Amazon Music] 24bit-96kHz.flac
-  04 Tidal/{Artista} - {Título} [Tidal] 24bit-96kHz.flac
+  04 TIDAL/{Artista} - {Título} [TIDAL] 24bit-96kHz.flac
   05 Deezer/{Artista} - {Título} [Deezer] 16bit-44kHz.wav
   06 YouTube/{Artista} - {Título} [YouTube] 1080p.mp4
   07 Distribuidora/{Artista} - {Título} [Distribuidora] 16bit-44kHz.wav
@@ -53,12 +53,13 @@ Precio: 9,99 € pago único en la Mac App Store. Sin cuenta, sin red, sin suscr
   08 Promo/{Artista} - {Título} [MP3 320].mp3
   09 Imagen/{Artista} - {Título} [Portada] 3000x3000.jpg (+ .png)
   09 Imagen/{Artista} - {Título} [Canvas] 1080x1920.mp4
+  02 Apple Music/{Artista} - {Título} [Portada animada] 3840x3840.mp4 · [Portada animada] 2048x2732.mp4   (en inglés: [Motion artwork])
   README.txt · informe-loudness.txt · ficha-lanzamiento.csv · ficha-lanzamiento.txt
 ```
 Reglas: caracteres inválidos en nombres sustituidos por `-`; la resolución del nombre refleja la real del archivo; las subcarpetas solo se crean si el destino está activo; los presets exactos (bits/kHz por destino) salen de la tabla verificada en `docs/investigacion/` y se actualizan sin tocar la interfaz.
 
 Regla de resolución por destino (decide qué se genera a partir del máster de entrada):
-- Si el destino pide "nativa" (Spotify, Apple, Amazon, Tidal, Hi-Res): se conservan los bits y kHz del máster; nunca se sube la resolución para estos destinos (Spotify y Apple lo desaconsejan). Si el máster es 16 bit, la tarjeta de Apple Digital Masters se desactiva con el motivo.
+- Si el destino pide "nativa" (Spotify, Apple, Amazon, TIDAL, Hi-Res): se conservan los bits y kHz del máster; nunca se sube la resolución para estos destinos (Spotify y Apple lo desaconsejan). Si el máster es 16 bit, la tarjeta de Apple Music se desactiva con el motivo.
 - Si el destino fija una resolución (Deezer 16/44,1, Distribuidora estándar 16/44,1, TuneCore 24/192, YouTube 48 kHz): se convierte a esa resolución; al bajar bits se aplica dither TPDF; al subir (p. ej. 48 → 192 para TuneCore) se permite y el README lo marca como upsampling sin ganancia de calidad.
 - Las resoluciones exactas de cada destino son datos de configuración (`presets.json` dentro de la app) con su fuente; un destino "por verificar" se muestra con la etiqueta "recomendación" hasta que se confirme.
 
@@ -69,8 +70,8 @@ Regla de resolución por destino (decide qué se genera a partir del máster de 
 - **Medición:** LUFS integrados, LRA y true peak según ITU-R BS.1770-4 / EBU R128 (gating −70 LUFS absoluto y −10 LU relativo; true peak con sobremuestreo 4×), implementado en Swift y verificado en tests contra referencias de la EBU y contra `ffmpeg -af ebur128`.
 - **MP3:** LAME enlazado dinámicamente (LGPL) a 320 kbps CBR, joint stereo, ID3v2.3 con título, artista, álbum, año, ISRC, compositor, editorial, copyright y portada.
 - **Vídeo:** AVAssetWriter; H.264 High, 1080p (y 4K opcional), GOP cerrado, audio AAC-LC 48 kHz 384 kbps, moov al inicio; imagen fija = portada centrada sobre fondo desenfocado. Canvas: recorte 9:16 de la portada con zoom lento de 6 s, 1080×1920, sin audio. Apple motion artwork (destino opcional en "Vídeo e imagen"): 1×1 de 3840×3840 y 3×4 de 2048×2732, 8–35 s, H.264, sin audio, primer fotograma igual a la portada, bucle suave, 45–100 Mbps, 23,976–30 fps (spec oficial de Apple, confirmada en ronda 2).
-- **Apple Digital Masters:** flujo oficial afconvert → CAF con Sound Check → AAC 256 → `afclip`; el resultado (sin clipping / n muestras con clipping) se muestra en la tarjeta de Apple y en el informe. Si `afclip` no está disponible en el sistema, la tarjeta lo indica y ofrece el enlace a las herramientas de Apple.
-- **Metadatos incrustados:** BWF `bext` en WAV (Description con "Artista - Título", Originator "nortia. studio", fecha y hora; el chunk `bext` NO tiene campo ISRC según EBU Tech 3285, así que el ISRC va en `axml`/iXML si se confirma el esquema, y siempre en la ficha de lanzamiento); Vorbis comments en FLAC (TITLE, ARTIST, DATE, ISRC, COPYRIGHT); ID3v2.3 en MP3 (TIT2, TPE1, TALB, TYER, TCON, TSRC, TCOM, TPUB, TCOP, APIC tipo $03). Se omiten en el preset TuneCore (lo pide así).
+- **Apple Music (comprobación con afclip):** flujo oficial afconvert → CAF con Sound Check → AAC 256 → `afclip`; el resultado (sin clipping / n muestras con clipping) se muestra en la tarjeta de Apple y en el informe. Si `afclip` no está disponible en el sistema, la tarjeta lo indica y ofrece el enlace a las herramientas de Apple.
+- **Metadatos incrustados:** BWF `bext` en WAV (Description con "Artista - Título", Originator "ferboix. studio", fecha y hora; el chunk `bext` NO tiene campo ISRC según EBU Tech 3285, así que el ISRC va en `axml`/iXML si se confirma el esquema, y siempre en la ficha de lanzamiento); Vorbis comments en FLAC (TITLE, ARTIST, DATE, ISRC, COPYRIGHT); ID3v2.3 en MP3 (TIT2, TPE1, TALB, TYER, TCON, TSRC, TCOM, TPUB, TCOP, APIC tipo $03). Se omiten en el preset TuneCore (lo pide así).
 - **Paralelismo:** una tarea por destino con `TaskGroup`; límite de concurrencia = núcleos de rendimiento; progreso por archivo.
 - **Sin red.** Nada sale del Mac. Sandbox de App Store con acceso a archivos elegidos por el usuario (bookmarks de seguridad para la carpeta de salida).
 
@@ -88,9 +89,9 @@ Ajuste automático de loudness (nunca por defecto; quizá como herramienta apart
 
 ## 8. Marca, nombre y tienda
 
-- Marca: "nortia. studio" (minúsculas, punto), símbolo N2 de nortia. en el color propio de studio (a elegir entre dos propuestas) y wordmark "nortia. studio". Icono de app en el mismo sistema.
+- Marca: "ferboix. studio" (minúsculas, punto), opción C «Instrumento» (D-37): símbolo potenciómetro con marca cian y wordmark "ferboix. studio". Icono de app en el mismo sistema (`brand/`).
 - Nombre de la app: provisional "Master Out"; se eligen 3 opciones (comprobadas en App Store y dominios) antes de enviar.
-- App Store: publicada desde la cuenta de desarrollador de Fer. El nombre del vendedor que muestra Apple es el titular de la cuenta; para que aparezca "nortia." haría falta cuenta de empresa (D-U-N-S). Decisión pendiente, no bloquea el desarrollo.
+- App Store: publicada desde la cuenta de desarrollador de Fer. El nombre del vendedor que muestra Apple es el titular de la cuenta; para que aparezca "ferboix. studio" haría falta cuenta de empresa (D-U-N-S). Decisión pendiente, no bloquea el desarrollo.
 - Textos de la ficha en español e inglés; 5 capturas; vídeo de 15 s.
 
 ## 9. Riesgos y cómo se mitigan
@@ -108,9 +109,9 @@ Hito 1 (semana 1): motor de medición y conversión con tests, sin interfaz. Hit
 
 ## Adenda 05/11/2026 14:30 — cambios de alcance decididos por los CEOs (sustituyen a lo que contradigan arriba)
 
-1. **Canal de venta: solo propio.** No se publica en la Mac App Store por ahora. Venta desde la web de nortia. con pasarela que actúa de vendedor (merchant of record) y entrega archivo + clave de licencia. Mac: build firmada con Developer ID y notarizada (obligatorio para que Gatekeeper la abra). Sección 8 ("tienda") y los puntos de sandbox/App Review de la sección 5 quedan anulados.
+1. **Canal de venta: solo propio.** No se publica en la Mac App Store por ahora. Venta desde la web de ferboix. studio con pasarela que actúa de vendedor (merchant of record) y entrega archivo + clave de licencia. Mac: build firmada con Developer ID y notarizada (obligatorio para que Gatekeeper la abra). Sección 8 ("tienda") y los puntos de sandbox/App Review de la sección 5 quedan anulados.
 2. **Plataformas: Mac primero, después Windows.** iPhone/iPad/Android fuera.
-3. **Stack: motor en Rust + interfaz Tauri 2** (HTML/CSS/JS en webview nativo), un solo código para Mac y Windows. Sustituye a SwiftUI/AVFoundation/Core Audio de la sección 5. Las piezas solo-Mac (afconvert/afclip para Apple Digital Masters) se activan solo en macOS; en Windows la tarjeta de Apple entrega el WAV 24 bit nativo y marca la validación AAC como "no disponible en Windows".
+3. **Stack: motor en Rust + interfaz Tauri 2** (HTML/CSS/JS en webview nativo), un solo código para Mac y Windows. Sustituye a SwiftUI/AVFoundation/Core Audio de la sección 5. Las piezas solo-Mac (afconvert/afclip para Apple Music (comprobación con afclip)) se activan solo en macOS; en Windows la tarjeta de Apple entrega el WAV 24 bit nativo y marca la validación AAC como "no disponible en Windows".
 4. **Fábrica: GitHub Actions** (runners macOS y Windows); tests del motor también en Linux. Fer no tiene Xcode.
 5. **Idioma: la app habla el idioma del sistema** (mínimo español e inglés en v1; textos externalizados). README, informe de loudness y ficha de lanzamiento se generan en ese idioma.
 6. **Mínimo macOS 14**; Windows 10 (1803+) / 11 con WebView2.
@@ -131,8 +132,18 @@ Sustituye a "Master Check" (15:50) y a "Master Out". Crate interno pasará a `ma
 
 ## Adenda 05/11/2026 15:52 — nombre definitivo: **master check** (en minúsculas, Fer)
 
-Sustituye a las adendas de 15:50 y 15:51. Se escribe siempre en minúsculas, como la marca ("nortia. studio · master check"). Crate interno pasará a `mastercheck-core` al cerrar el hito 1. Pendiente: dominio y conflictos de marca.
+Sustituye a las adendas de 15:50 y 15:51. Se escribe siempre en minúsculas, como la marca ("ferboix. studio · master check"). Crate interno pasará a `mastercheck-core` al cerrar el hito 1. Pendiente: dominio y conflictos de marca.
 
 ## Adenda 05/11/2026 17:50 — límite de 96 kHz (Fer)
 
 master check **no admite másters por encima de 96 kHz**: la app los rechaza al analizar con el mensaje "master check admite másters de hasta 96 kHz" (clave `err.rate_over_96k`). Desaparece cualquier ruta de 192 kHz: el preset TuneCore pasa a 24 bit a la frecuencia nativa del máster (sin metadatos incrustados). Sin notas en el README al respecto. La regla de resolución de §4 se completa: los destinos "nativa" nunca superan 96 kHz porque la entrada no puede superarlos.
+
+## Adenda 06/11/2026 — marcas de terceros: opción B, sin logos ajenos (D-31, CEO; pendiente de ratificar con Fer)
+
+Base: `docs/legal/marcas-plataformas.md` (investigación T8a: Apple Digital Masters está vedado a terceros no autorizados; Amazon, TIDAL, Deezer y TuneCore exigen permiso escrito o no publican guía; Spotify y YouTube prohíben parecerse a su marca). Sustituye a lo que contradiga arriba:
+
+1. **Ningún logo ni glifo imitativo de terceros.** Las fichas llevan el nombre oficial de la plataforma en texto (Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube Music, YouTube (vídeo), Portada animada) y el punto de estado de la marca (variante V1 «solo nombre», por defecto). La variante V2 «gesto por grupo» (`data-chip-style="gesto"`) usa un gesto propio por grupo (punto, barra, dos puntos), no imitativo.
+2. **Contrato de nombres (§4):** el archivo del destino de Apple pasa de `[Apple Digital Masters] 24bit-96kHz.wav` a **`[Apple Music] 24bit-96kHz.wav`**. La subcarpeta `02 Apple Music/` se mantiene. El preset `apple_adm` conserva su id; su nombre y su etiqueta son «Apple Music».
+3. **Textos sin aval.** Se retiran «Apple Digital Masters» como nombre de ficha, archivo o carpeta, y cualquier «certificado», «aprobado por», «Ready», «optimizado para», «Mastered for». El mensaje de 16 bit es «Apple Music pide un máster de 24 bit o más». El informe de loudness dice «Comprobación con las herramientas de Apple (AAC 256): n muestras con clipping» (las claves internas `adm_*` no cambian). Un test falla si esas cadenas reaparecen en la interfaz o en el i18n del motor.
+4. **Aviso de marcas** en «Acerca de» y al final del README de entrega: «Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube y TuneCore son marcas de sus titulares. master check no está afiliado ni avalado por ellos.»
+5. **Remate (06/11/2026, CEO):** grafía oficial también en archivos y carpetas: etiqueta `[TIDAL]` y carpeta `04 TIDAL` (es/en). La portada animada deja de llamarse «Apple Motion» (es una app de Apple): el archivo pasa a `[Portada animada] 3840x3840.mp4` / `[Portada animada] 2048x2732.mp4` en español y `[Motion artwork] …` en inglés (clave `tag.motion`); subcarpeta `02 Apple Music/`. TuneCore se añade al aviso de marcas.

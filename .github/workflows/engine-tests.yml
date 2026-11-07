@@ -9,6 +9,10 @@ on:
     paths:
       - "engine/**"
       - ".github/workflows/engine-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: engine-${{ github.ref }}
@@ -18,66 +22,136 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Runners de GitHub por defecto (repo público, D-38; se apagan con la variable de repo HOSTED_RUNNERS == 'false').
+  # Opción: Mac propio de Fer (D-35, docs/runner-mac.md), solo si la variable de repo SELF_HOSTED == 'true'.
+  mac-propio:
+    name: mac propio
+    if: vars.SELF_HOSTED == 'true'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      # Mac personal: nunca más de 4 compilaciones en paralelo.
+      CARGO_BUILD_JOBS: "4"
+    steps:
+      - name: PATH del runner (el servicio no carga .zshrc)
+        run: |
+          for d in "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin; do
+            [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"
+          done
+          exit 0
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # El target/ del motor persiste entre runs (compilación incremental): no se borra.
+          clean: false
+      - name: Limpiar el espacio de trabajo (conserva target/)
+        run: git clean -ffdx --exclude=target
+      - name: Preflight del runner
+        run: tools/ci/runner-preflight.sh --cmd cargo --cmd rustc --cmd ffmpeg --cmd ffprobe --target x86_64-pc-windows-gnu
+      - name: Versiones
+        run: |
+          rustc -vV; cargo -V; cargo fmt --version; cargo clippy --version; ffmpeg -version | head -1
+      - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
+      - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - name: Clippy cruzado para Windows (imports solo-unix y cfg)
+        run: cargo clippy --manifest-path engine/Cargo.toml --all-targets --target x86_64-pc-windows-gnu -- -D warnings
+      # Fixtures reales (másters de Fer) en ~/mastercheck-fixtures. Si no existe la carpeta no se
+      # define MASTEROUT_FIXTURES y los tests que la necesitan se saltan solos (tests/common/mod.rs:
+      # «skip: MASTEROUT_FIXTURES no definido»).
+      - name: Fixtures (si existen en el runner)
+        run: |
+          if [ -d "$HOME/mastercheck-fixtures" ]; then
+            echo "MASTEROUT_FIXTURES=$HOME/mastercheck-fixtures" >> "$GITHUB_ENV"
+            echo "fixtures: $HOME/mastercheck-fixtures"
+          else
+            echo "::notice::No hay ~/mastercheck-fixtures: los tests con másters reales se omiten."
+          fi
+      - run: cargo test --manifest-path engine/Cargo.toml --all-features
+      # Apple Music (afclip) real: afconvert y afclip vienen con macOS (/usr/bin).
+      - name: Detectar afclip (Apple Music)
+        id: adm
+        run: |
+          if AFCLIP=$(command -v afclip) && command -v afconvert >/dev/null; then
+            echo "afclip: $AFCLIP"
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::afclip/afconvert no están en este Mac: la prueba real de Apple Music no se ha ejecutado."
+          fi
+      - name: Apple Music (afclip) real (MASTEROUT_REQUIRE_ADM=1)
+        if: steps.adm.outputs.present == 'true'
+        env:
+          MASTEROUT_REQUIRE_ADM: "1"
+        run: cargo test --manifest-path engine/Cargo.toml -p masterout-core --test media_adm real_tools -- --nocapture
+
   linux:
     name: ubuntu-latest
+    if: vars.HOSTED_RUNNERS != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: x86_64-pc-windows-gnu
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Instalar lame y ffmpeg
+      - name: Instalar ffmpeg (pruebas de MP3, imagen y vídeo)
         timeout-minutes: 8
         continue-on-error: true
-        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y lame ffmpeg
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y ffmpeg
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
+      - name: Clippy cruzado para Windows (imports solo-unix y cfg)
+        run: cargo clippy --manifest-path engine/Cargo.toml --all-targets --target x86_64-pc-windows-gnu -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features
 
   macos:
     name: macos-15
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    # HOSTED_MAC == 'false' apaga solo este job (GitHub sin runners de Mac); el motor se prueba entonces en mac-propio.
+    if: vars.HOSTED_RUNNERS != 'false' && vars.HOSTED_MAC != 'false'
     # 05/11/2026: macos-latest (arm64) sin capacidad, jobs sin adquirir; se usa macos-15 hasta que se recupere.
     runs-on: macos-15
+    # La pasada de motor en macOS depende de que haya runner (macos-15 a veces no se adquiere y el
+    # job se cancela sin ejecutar nada): el tope evita colas eternas; la app sí pasa sus pruebas
+    # reales de ADM en el job macOS de app-build.yml.
     timeout-minutes: 30
+    continue-on-error: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Instalar lame y ffmpeg
+      - name: Instalar ffmpeg (pruebas de MP3, imagen y vídeo)
         timeout-minutes: 8
         continue-on-error: true
-        run: brew install lame ffmpeg
+        run: brew install ffmpeg
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features
 
   windows:
     name: windows-latest
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito')
+    if: vars.HOSTED_RUNNERS != 'false' && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/hito'))
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Instalar lame y ffmpeg
+      - name: Instalar ffmpeg (pruebas de MP3, imagen y vídeo)
         timeout-minutes: 8
         continue-on-error: true
         shell: bash
-        run: choco install lame ffmpeg -y
+        run: choco install ffmpeg -y
       - run: cargo fmt --all --check --manifest-path engine/Cargo.toml
       - run: cargo clippy --manifest-path engine/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path engine/Cargo.toml --all-features

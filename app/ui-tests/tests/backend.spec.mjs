@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMock, detect, suggestFromName } from '../../ui/backend.js';
+import { createMock, detect, suggestFromName, MOCK_THUMB } from '../../ui/backend.js';
 import { fmtLufs, fmtDbtp, fmtDuration, fmtRate, fmtSpec, fmtBytes, fmtNumber, shortPath } from '../../ui/format.js';
 import { setDict, t, tn } from '../../ui/i18n.js';
-import { isCancelled } from '../../ui/flow.js';
+import { isCancelled, resolveDefaults, SAFE_OFF, cancelOnFirstEvent, awaitingMaterial, finalNotes } from '../../ui/flow.js';
 import { readFileSync } from 'node:fs';
 
 const SAMPLE = '/m/Vera Alcón - Luz de Noviembre (master v3).wav';
-const ALL = ['spotify', 'apple_adm', 'amazon', 'tidal', 'deezer', 'youtube_music', 'distributor_std', 'mp3_promo', 'cover', 'canvas'];
+const ALL = ['spotify', 'apple_adm', 'amazon', 'tidal', 'deezer', 'youtube_music', 'distributor_std', 'mp3_promo', 'cover', 'canvas', 'youtube_video', 'apple_motion'];
+const MEDIA = ['cover', 'canvas', 'youtube_video', 'apple_motion'];
 const meta = { artist: 'Vera Alcón', title: 'Luz de Noviembre' };
 
 test('mock_analyze_returns_bins_and_master', async () => {
@@ -102,10 +103,10 @@ test('tauri_backend_calls_commands_with_exact_names', async () => {
   await be.plan({ x: 1 }, { artist: 'a' }, ['spotify']);
   const seen = [];
   await be.export({ master_path: '/a.wav' }, e => seen.push(e.kind));
-  await be.cancelExport(); await be.pickFolder(); await be.openPath('/x'); await be.systemLang(); await be.appInfo();
-  assert.deepEqual(calls.map(c => c[0]), ['analyze', 'plan', 'export', 'cancel_export', 'pick_folder', 'open_path', 'system_lang', 'app_info']);
+  await be.cancelExport(); await be.pickFolder(); await be.openPath('/x'); await be.systemLang(); await be.appInfo(); await be.openLegal();
+  assert.deepEqual(calls.map(c => c[0]), ['analyze', 'plan', 'export', 'cancel_export', 'pick_folder', 'open_path', 'system_lang', 'app_info', 'open_legal']);
   assert.deepEqual(calls[0][1], { path: '/a.wav', bins: 600 });
-  assert.deepEqual(calls[1][1], { master: { x: 1 }, meta: { artist: 'a' }, activeIds: ['spotify'] });
+  assert.deepEqual(calls[1][1], { master: { x: 1 }, meta: { artist: 'a' }, activeIds: ['spotify'], mediaInputs: {} });
   assert.deepEqual(calls[2][1], { req: { master_path: '/a.wav' } });
   assert.deepEqual(seen, ['finished']);
   assert.equal(Object.keys(listeners).length, 0, 'se desuscribe al terminar');
@@ -174,4 +175,228 @@ test('tauri_allow_asset_command', async () => {
   const be = detect({ location: { search: '' }, __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke: async (c, a) => { calls.push([c, a]); } } } });
   await be.allowAsset('/x/cover.png');
   assert.deepEqual(calls, [['allow_asset', { path: '/x/cover.png' }]]);
+});
+
+const byId = plan => Object.fromEntries(plan.jobs.map(j => [j.preset_id, j]));
+
+test('mock_plan_media_chips_need_a_cover_or_their_own_file', async () => {
+  const be = createMock({ lang: 'es' });
+  const { master } = await be.analyze(SAMPLE, 10);
+  // sin portada ni material: las cuatro fichas, deshabilitadas con el motivo del motor
+  let j = byId(await be.plan(master, meta, ALL));
+  for (const id of MEDIA) { assert.equal(j[id].enabled, false, id); assert.match(j[id].disabled_reason, /Falta la portada/); }
+  // con portada: todas habilitadas; la portada trae su PNG y portada animada sus dos tamaños
+  j = byId(await be.plan(master, { ...meta, cover_path: '/m/portada.jpg' }, ALL));
+  for (const id of MEDIA) assert.equal(j[id].enabled, true, id);
+  assert.match(j.cover.file_name, /\[Portada\] 3000x3000\.jpg$/);
+  assert.match(j.cover.extra_files[0], /\.png$/);
+  assert.match(j.canvas.file_name, /\[Canvas\] 1080x1920\.mp4$/);
+  assert.match(j.youtube_video.file_name, /\[YouTube\] 1080p\.mp4$/);
+  assert.match(j.apple_motion.extra_files[0], /\[Portada animada\] 2048x2732\.mp4$/);
+  assert.equal(j.apple_motion.subfolder, '02 Apple Music');
+  // un vídeo propio habilita Canvas aunque no haya portada
+  j = byId(await be.plan(master, meta, ALL, { canvas: '/v/mio.mp4' }));
+  assert.equal(j.canvas.enabled, true);
+  assert.equal(j.cover.enabled, false);
+  assert.equal(j.youtube_video.enabled, false);
+});
+
+test('mock_plan_cover_warnings_and_totals', async () => {
+  const be = createMock({ lang: 'en' });
+  const { master } = await be.analyze(SAMPLE, 10);
+  const plan = await be.plan(master, { ...meta, cover_path: '/m/portada-rect.jpg' }, ['cover', 'canvas']);
+  const j = byId(plan);
+  assert.equal(j.cover.warnings.length, 2);
+  assert.match(j.cover.warnings[0], /cropped/);
+  assert.match(j.cover.file_name, /\[Cover\] 3000x3000/);
+  assert.equal(j.canvas.warnings.length, 0);
+  assert.equal(plan.total_files, 3 + 4, 'JPG + PNG + Canvas + 4 documentos');
+});
+
+test('mock_without_sidecar_disables_mp3_and_video_only', async () => {
+  const be = createMock({ sidecar: false });
+  assert.equal((await be.appInfo()).sidecar_available, false);
+  const { master } = await be.analyze(SAMPLE, 10);
+  const j = byId(await be.plan(master, { ...meta, cover_path: '/m/p.jpg' }, ALL));
+  for (const id of ['mp3_promo', 'canvas', 'youtube_video', 'apple_motion']) { assert.equal(j[id].enabled, false, id); assert.match(j[id].disabled_reason, /ffmpeg/); }
+  for (const id of ['spotify', 'cover']) assert.equal(j[id].enabled, true, id);
+});
+
+test('mock_export_lists_extra_files_and_thumbnail_is_a_tiny_png', async () => {
+  const be = createMock({ fast: true });
+  const d = await be.export({ master_path: SAMPLE, out_root: '/out', meta: { ...meta, cover_path: '/m/p.jpg' }, active_ids: ['cover', 'apple_motion'], media_inputs: {} });
+  assert.equal(d.files.length, 2 + 2 + 4);
+  assert.ok(d.files.some(([p]) => p.endsWith('2048x2732.mp4')));
+  const th = await be.mediaThumbnail('/x/video.mp4');
+  assert.equal(th, MOCK_THUMB);
+  assert.match(th, /^data:image\/png;base64,/);
+  assert.ok(th.length < 6000);
+});
+
+test('fmt_spec_for_media_presets', () => {
+  assert.equal(fmtSpec({ preset_id: 'cover', container: 'jpg' }, 'es'), 'JPG + PNG · 3000×3000');
+  assert.equal(fmtSpec({ preset_id: 'canvas', container: 'mp4' }, 'en'), 'MP4 · 1080×1920');
+  assert.equal(fmtSpec({ preset_id: 'apple_motion', container: 'mp4' }, 'en'), 'MP4 · 3840×3840 + 2048×2732');
+});
+
+test('tauri_backend_passes_media_inputs_and_thumbnail_command', async () => {
+  const calls = [];
+  const g = { location: { search: '' }, __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke: async (c, a) => { calls.push([c, a]); return null; }, convertFileSrc: p => p }, event: { listen: async () => () => {} } } };
+  const be = detect(g);
+  await be.plan({ x: 1 }, { artist: 'a' }, ['canvas'], { canvas: '/v/mio.mp4' });
+  await be.mediaThumbnail('/v/mio.mp4');
+  await be.pickFile('media');
+  assert.deepEqual(calls, [
+    ['plan', { master: { x: 1 }, meta: { artist: 'a' }, activeIds: ['canvas'], mediaInputs: { canvas: '/v/mio.mp4' } }],
+    ['media_thumbnail', { path: '/v/mio.mp4' }],
+    ['pick_file', { kind: 'media' }]
+  ]);
+});
+
+test('mock_app_info_default_on_follows_presets_and_can_be_overridden', async () => {
+  const d = (await createMock().appInfo()).default_on;
+  assert.equal(d.length, ALL.length - 1);
+  assert.ok(!d.includes('apple_motion') && d.includes('spotify') && d.includes('cover'));
+  const d2 = (await createMock({ defaultOff: ['tidal', 'apple_motion'] }).appInfo()).default_on;
+  assert.ok(!d2.includes('tidal') && d2.includes('amazon'));
+});
+
+test('open_legal_failure_rejects_so_the_ui_can_show_it', async () => {
+  const be = createMock();
+  be.legalFails = true;
+  await assert.rejects(() => be.openLegal());
+  assert.equal(be.legalOpened, 0);
+});
+
+test('about_info_and_legal_link_in_both_backends', async () => {
+  const be = createMock();
+  const info = await be.appInfo();
+  assert.match(info.sidecar_release, /^ffmpeg-sidecar-v\d+\.\d+\.\d+-[0-9a-f]+$/);
+  assert.equal(be.legalOpened, 0);
+  await be.openLegal();
+  assert.equal(be.legalOpened, 1);
+  // sin sidecar: el release no se anuncia
+  assert.equal((await createMock({ sidecar: false }).appInfo()).sidecar_release, '');
+});
+
+test('about_texts_exist_in_both_languages_and_name_the_licenses', () => {
+  for (const lang of ['es', 'en']) {
+    const d = JSON.parse(readFileSync(new URL(`../../ui/i18n/${lang}.json`, import.meta.url)));
+    for (const k of ['about.title', 'about.version', 'about.component', 'about.component.none', 'about.licenses', 'about.others', 'about.legal', 'about.maker']) assert.ok(d[k], `${lang}: ${k}`);
+    assert.match(d['about.licenses'], /FFmpeg/);
+    assert.match(d['about.licenses'], /LGPL/);
+    assert.match(d['about.licenses'], /LAME/);
+  }
+});
+
+/* ───────────── tarea 7: mejoras de la revisión final del hito 2 ───────────── */
+
+test('safe_off_matches_the_default_on_false_presets_of_the_engine', () => {
+  const presets = JSON.parse(readFileSync(new URL('../../../engine/masterout-core/presets.json', import.meta.url), 'utf8'));
+  const list = Array.isArray(presets) ? presets : (presets.presets || Object.values(presets));
+  const off = list.filter(p => p.default_on === false).map(p => p.id).sort();
+  assert.ok(list.length > 5, 'se leyeron los presets');
+  assert.deepEqual([...SAFE_OFF].sort(), off, 'SAFE_OFF debe coincidir con presets.json');
+});
+
+test('default_on_missing_falls_back_to_the_safe_set_and_warns', () => {
+  const all = ['spotify', 'apple_adm', 'cover', 'apple_motion'];
+  const warns = [];
+  const safe = resolveDefaults(undefined, all, m => warns.push(m));
+  assert.deepEqual([...safe].sort(), ['apple_adm', 'cover', 'spotify']);
+  assert.ok(!safe.has('apple_motion') && SAFE_OFF.includes('apple_motion'));
+  assert.equal(warns.length, 1, 'se registra el aviso');
+  // lista vacía válida del motor: se respeta; una lista del motor manda sobre el conjunto seguro
+  assert.equal(resolveDefaults([], all, m => warns.push(m)).size, 0);
+  assert.deepEqual([...resolveDefaults(['spotify', 'apple_motion'], all)], ['spotify', 'apple_motion']);
+  assert.equal(warns.length, 1);
+  for (const bad of [null, 'spotify', 7, {}]) assert.ok(!resolveDefaults(bad, all, () => {}).has('apple_motion'));
+});
+
+test('cancel_pressed_before_the_export_registers_is_forwarded_on_the_first_event', async () => {
+  const sent = [];
+  let canceling = false;
+  const on = cancelOnFirstEvent(() => canceling, async () => { sent.push('cancel'); });
+  canceling = true; // el usuario pulsa antes de que el motor registre la exportación
+  on({ kind: 'analyzed' });
+  on({ kind: 'planned' });
+  assert.deepEqual(sent, ['cancel'], 'una sola vez, con el primer evento');
+  // sin cancelación pedida no se reenvía nada
+  const quiet = []; const on2 = cancelOnFirstEvent(() => false, async () => { quiet.push(1); });
+  on2({ kind: 'analyzed' }); on2({ kind: 'job_started' });
+  assert.deepEqual(quiet, []);
+  // un error al reenviar no rompe el progreso
+  const on3 = cancelOnFirstEvent(() => true, async () => { throw new Error('x'); });
+  assert.doesNotThrow(() => on3({ kind: 'analyzed' }));
+});
+
+test('mock_export_emits_preparing_with_a_fraction_before_the_first_job', async () => {
+  const be = createMock({ fast: true });
+  const events = [];
+  await be.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['spotify', 'deezer'] }, e => events.push(e));
+  const prep = events.filter(e => e.kind === 'preparing');
+  assert.ok(prep.length >= 1);
+  assert.ok(prep.every(e => e.fraction > 0 && e.fraction <= 1));
+  assert.equal(prep.at(-1).fraction, 1);
+  assert.ok(events.indexOf(prep.at(-1)) < events.findIndex(e => e.kind === 'job_started'));
+});
+
+test('delivery_verdicts_carry_the_final_adm_verdict_for_apple', async () => {
+  const be = createMock({ fast: true, adm: 'clip' });
+  const d = await be.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['spotify', 'apple_adm'] }, () => {});
+  const v = Object.fromEntries(d.verdicts.map(x => [x.preset_id, x]));
+  assert.equal(v.apple_adm.verdict, 'warn');
+  assert.match(v.apple_adm.verdict_text, /0 dB/);
+  assert.equal(v.spotify.verdict, 'warn', 'el mock da pico real > 0 a los destinos con pérdida');
+  const en = createMock({ fast: true, lang: 'en', adm: 'clip' });
+  const d2 = await en.export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['apple_adm'] }, () => {});
+  assert.equal(d2.verdicts[0].verdict_text, 'clips when encoded');
+  const plain = await createMock({ fast: true }).export({ master_path: SAMPLE, out_root: '/out', meta, active_ids: ['apple_adm'] }, () => {});
+  assert.equal(plain.verdicts[0].verdict, 'ok');
+});
+
+test('final_notes_list_only_verdicts_that_got_worse_than_the_plan_with_the_chip_name', () => {
+  setDict('es', JSON.parse(readFileSync(new URL('../../ui/i18n/es.json', import.meta.url))));
+  const byPreset = { apple_adm: 'apple', spotify: 'spotify' };
+  const notes = finalNotes([
+    { preset_id: 'apple_adm', verdict: 'warn', verdict_text: 'pasa de 0 dB al codificar' },
+    { preset_id: 'spotify', verdict: 'warn', verdict_text: 'El pico real supera 0 dBTP' },
+    { preset_id: 'cover', verdict: 'ok', verdict_text: '' }
+  ], byPreset, t, { apple_adm: '', spotify: 'El pico real supera 0 dBTP' });
+  assert.deepEqual(notes, [{ id: 'apple', preset_id: 'apple_adm', name: 'Apple Music', text: 'pasa de 0 dB al codificar' }]);
+  // máster caliente: el plan ya avisaba en Apple (mismo nivel, otro texto) y el AAC además pasa de 0 dB
+  const hot = finalNotes([{ preset_id: 'apple_adm', verdict: 'warn', verdict_text: 'pasa de 0 dB al codificar' }], byPreset, t, { apple_adm: 'El pico real supera 0 dBTP' });
+  assert.equal(hot.length, 1);
+  assert.equal(hot[0].text, 'pasa de 0 dB al codificar');
+  assert.deepEqual(finalNotes(undefined, byPreset, t), []);
+});
+
+test('chip_awaits_material_only_when_it_accepts_a_drop_and_has_none', () => {
+  const base = { media: new Set(['portada', 'canvas']), id: 'canvas', disabled: true, own: false, cover: false, sidecar: true };
+  assert.equal(awaitingMaterial(base), true);
+  assert.equal(awaitingMaterial({ ...base, id: 'spotify' }), false, 'no acepta soltar');
+  assert.equal(awaitingMaterial({ ...base, disabled: false }), false);
+  assert.equal(awaitingMaterial({ ...base, own: true }), false);
+  assert.equal(awaitingMaterial({ ...base, cover: true }), false, 'con portada no espera material: el motivo es otro');
+  assert.equal(awaitingMaterial({ ...base, sidecar: false }), false, 'sin ffmpeg soltar no sirve');
+  assert.equal(awaitingMaterial({ ...base, id: 'portada', sidecar: false }), true, 'la portada no necesita ffmpeg');
+});
+
+test('app_js_has_no_user_visible_literals_outside_i18n', () => {
+  const src = readFileSync(new URL('../../ui/app.js', import.meta.url), 'utf8');
+  for (const bad of ["' %'", "'0 %'", "'×'", '&lt;1 KB', "'32 bit float'", ' bit`', "(id, 'documents')"]) assert.ok(!src.includes(bad), `literal fuera de i18n: ${bad}`);
+  for (const lang of ['es', 'en']) {
+    const d = JSON.parse(readFileSync(new URL(`../../ui/i18n/${lang}.json`, import.meta.url)));
+    for (const k of ['pct', 'size.lt_1kb', 'fmt.bits', 'fmt.float32', 'fmt.wav', 'chip.long.documents', 'row.failed', 'preparing', 'done.verdicts', 'accept.drop']) assert.ok(d[k], `${lang}: ${k}`);
+  }
+  const es = JSON.parse(readFileSync(new URL('../../ui/i18n/es.json', import.meta.url)));
+  const en = JSON.parse(readFileSync(new URL('../../ui/i18n/en.json', import.meta.url)));
+  setDict('es', es); assert.equal(t('pct', { n: 45 }), '45 %');
+  setDict('en', en); assert.equal(t('pct', { n: 45 }), '45%');
+  assert.equal(t('fmt.float32'), '32-bit float');
+});
+
+test('styles_have_no_looping_mark_animation', () => {
+  const css = readFileSync(new URL('../../ui/styles.css', import.meta.url), 'utf8');
+  assert.ok(!css.includes('@keyframes mkb'), 'BRAND §4.5: el símbolo no se anima en bucle');
 });

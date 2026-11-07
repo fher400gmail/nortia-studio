@@ -259,7 +259,7 @@ pub struct WavMetadata {
     pub album: Option<String>,
     pub year: Option<u16>,
     pub bext_description: String,
-    /// Normalmente "nortia. studio".
+    /// Normalmente "ferboix. studio".
     pub bext_originator: String,
     /// Fecha y hora de origen (año, mes, día, hora, minuto, segundo), sin dependencia de chrono.
     pub origination: Option<(u16, u8, u8, u8, u8, u8)>,

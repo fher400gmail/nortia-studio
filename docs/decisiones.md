@@ -1,4 +1,4 @@
-# Decisiones — nortia. (empresa de ingresos extra; CEOs: Fer y Claude)
+# Decisiones — ferboix. studio (empresa de ingresos extra; CEOs: Fer y Claude)
 
 Formato: D-NN · título · fecha · quién · decisión · alternativas descartadas · riesgo · revisar cuando.
 
@@ -6,7 +6,7 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 
 ---
 
-# FASE 2 · nortia. y nortia. studio
+# FASE 2 · nortia. y nortia. studio (nombre anterior; las decisiones D-20…D-33 se conservan tal cual)
 
 ## D-20 · Estructura: nortia. (madre) y subempresas
 - 05/11/2026 · Fer. Fer y Claude son los dos CEOs. La marca madre es **nortia.** (siempre minúsculas y con punto). Las subempresas se nombran `nortia. <sub>`; la primera es **nortia. studio** (audio: apps para productores y artistas). Vendrán más. Ninguna persona visible en la marca.
@@ -74,6 +74,19 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 - Pendiente de Fer: pasar `docs/pruebas/hito2-checklist.md` (16 comprobaciones) en su Mac con el .dmg de Actions.
 - Hito 3 (del revisor final): progreso "preparando"; humo vía Tauri y en Windows; carrera mínima de cancel; textos sueltos en app.js; claves err.lame_failed/err.id3; open_path acotado; tope de duración (err.too_long); set_hook; feature test-hooks; mainBinaryName; lame + licencia; logos oficiales; además vídeo/Canvas/portada conformados, ADM/afclip en Mac.
 
+## D-31 · Marcas de terceros: opción B, solo nombre en texto (06/11/2026)
+- 06/11/2026 · CEO (pendiente de ratificar con Fer). master check no muestra ningún logo, badge ni glifo imitativo de plataformas. Cada una aparece con su **nombre oficial en texto** y el punto de estado de la marca (variante V1 «solo nombre», por defecto); la V2 «gesto por grupo» queda como variante de estilo (`data-chip-style="gesto"`). Etiquetas `[Apple Music]`, `[TIDAL]`, `[Portada animada]` en los archivos; aviso de marcas en «Acerca de», en el README de entrega y en `terceros.md` §9 (siete marcas: Spotify, Apple Music, Amazon Music, TIDAL, Deezer, YouTube, TuneCore).
+- Por qué: ninguna plataforma tiene guía pública para una herramienta de terceros; el uso del nombre en texto es referencial y está permitido, el logo exige acuerdo y el glifo imitativo no lo cubre ningún permiso (es el peor caso). Marcas no verificadas se tratan como «exigen permiso».
+- Investigación, fuentes y salidas abiertas (acuerdos o permiso escrito, antes de vender): [docs/legal/marcas-plataformas.md](legal/marcas-plataformas.md).
+
+## D-32 · CI: macOS solo bajo demanda en ramas de trabajo (06/11/2026)
+- 06/11/2026 · CEO. Los minutos de macOS cuentan ×10 en el plan gratuito. Los jobs de macOS de `app-build.yml` y `engine-tests.yml` corren en `main`, a mano (`workflow_dispatch`) o con `[mac]` en el mensaje del commit; en ramas `hito*` no corren por defecto (d7c77a0). Linux y Windows corren siempre.
+- **Regla de proceso:** antes de fusionar una rama a `main` se lanza a mano un run con `[mac]` (humo de macOS con `ADM=required` incluido) y no se fusiona sin verlo en verde. Es lo que habría cazado antes un fallo como el de `setparams`, que solo se ve con el sidecar real.
+- Complemento: `engine/masterout-core/tests/sidecar_allowlist.rs` ata los argumentos de ffmpeg del motor a la lista blanca del sidecar sin necesidad de CI. Sigue pendiente (hito 4) ejecutar los tests de vídeo de macOS y Windows con el sidecar del release en vez del ffmpeg de brew/choco.
+
+## D-33 · Cierre del hito 3
+- **Pendiente.** Se escribe al fusionar `hito3-media` en `main` (estado del sidecar nuevo, runs de CI en verde, diferidos al hito 4).
+
 ---
 
 # FASE 1 (histórico, cerrada)
@@ -119,3 +132,24 @@ Formato: D-NN · título · fecha · quién · decisión · alternativas descart
 - Alcance: nombre visible y usuario en Gumroad, GitHub, X, web, portadas, PDFs, fichas, correo de la empresa (alias de correo de la empresa; no se publica en el repositorio). Upwork y Fiverr exigen nombre real: se mantiene el nombre, pero el perfil no menciona música ni discográficas. Los recibos de Gumroad llevan el nombre fiscal por ley (solo lo ve el comprador).
 - Identidad visual: dirección B (software de confianza), símbolo A (norte), variante N2 aprobada. **Sustituida en fase 2 por "nortia." (D-20).**
 - Hecho ya: sustituido "Fernando Boix" por "Nortia Labs" en la guía Verifactu (PDF regenerado), guía de uso y fuentes de portadas; el Excel no contenía el nombre.
+
+## D-34 · Pivote: empresa de software personal, nada se vende (06/11/2026 10:36)
+- 06/11/2026 · **Fer.** «No vamos a vender, me lo quedo para mí todo lo que desarrollemos.» La empresa pasa a ser la **empresa de software personal de Fer**: herramientas para su propio trabajo (música primero), sin clientes.
+- Consecuencias inmediatas: fuera del plan pasarela de pago, licencias, EULA, notarización/firma Developer ID (basta «clic derecho → Abrir»), consulta de patentes H.264/AAC, oferta pública de fuentes LGPL (no hay distribución), versión Windows (salvo que Fer tenga PC) y las restricciones de marcas de terceros por venta (se mantiene la variante V1 «solo nombre» porque es más limpia, no por obligación). CI de GitHub no se paga: compilación en el Mac de Fer como runner autoalojado (D-35).
+- Criterio de prioridad desde ahora: **efectividad para Fer** (le sirve, le ahorra tiempo, lo usa) por encima de pulido de producto, mercado o escala. La revisión independiente se mantiene para lo que toca sus archivos (máster, portadas): un fallo ahí le cuesta a él.
+
+## D-35 · CI sin pagar: el Mac de Fer como runner autoalojado (06/11/2026 10:35)
+- 06/11/2026 · **Fer** («no voy a pagar por GitHub, necesitamos alternativa rápida»; eligió el runner propio frente a hacer público el repo). Los workflows pasan a `runs-on: [self-hosted, macOS]` para check, build, humo y sidecar; los jobs en runners de GitHub (Linux/Windows) quedan desactivados por variable hasta nuevo aviso. Requisitos en su Mac: Command Line Tools, Homebrew (gh, gnupg, nasm, pkg-config, node, ffmpeg), rustup con targets apple + windows-gnu, runner instalado como servicio, Mac sin reposo. El runner solo trabaja mientras el Mac está despierto. Implementado: workflows en `[self-hosted, macOS]`, jobs alojados tras la variable de repo `HOSTED_RUNNERS == 'true'` (ausente = apagados), release del sidecar solo con macOS mientras Windows no corra; guía para Fer en [runner-mac.md](runner-mac.md). **Pasa a opción tras D-38** (variable `SELF_HOSTED`).
+
+## D-36 · Nueva marca: ferboix. studio (06/11/2026 10:36)
+- 06/11/2026 · **Fer.** La empresa se llama **ferboix. studio** (sustituye a nortia. / nortia. studio). Fer pide «nuevo branding». Pendiente: opciones visuales (el CEO las enseña, no las cuenta), elección de Fer, y aplicación a todo (UI, «Acerca de», README de entrega, BRAND/DESIGN, tokens, iconos, plantillas, skill de marca, nombre del repositorio). `master check` conserva su nombre.
+
+## D-37 · Marca ferboix. studio: opción C «Instrumento» (06/11/2026 10:49)
+- 06/11/2026 · **Fer** («me gusta, aplícalo siempre como manual de branding de marca»), sobre tres opciones en imagen (A continuidad, B fermata violeta, C potenciómetro cian; recomendación del CEO: C). Wordmark `ferboix.` en tinta con punto circular a medida + `studio` en gris; símbolo: potenciómetro (disco de tinta/papel con marca de posición en el acento); acento cian `#0097B8` (texto `#00728B` en claro, `#0097B8` en oscuro); botón primario en tinta. Se aplica a todo lo que se vea: app, iconos, «Acerca de», README de entrega, plantillas, manual (`brand/`), skill de marca. `master check` conserva su nombre. Sustituye a D-28 (nortia.).
+- **Implementada** (06/11/2026, rama `hito3-media`): `brand/` regenerado (`python3 gen.py`, 0 fallos de contraste y legibilidad; `BRAND.md` y `DESIGN.md` reescritos: una sola marca, sin divisiones); app con tokens nuevos (acento cian, botón primario tinta/papel, play y estados en cian), cabecera «símbolo + ferboix. studio | master check», potenciómetro en la zona de soltar y en «listo»; iconos de `app/src-tauri/icons` desde el icono C; `identifier` de Tauri → `studio.ferboix.mastercheck` (nadie tiene instalada una build: solo cambia la carpeta de datos de la app); `bext` Originator y comentario MP3 → «ferboix. studio»; `docs/`, spec y planes sin el nombre antiguo (test de literales en `marcas.spec.mjs`). La app anterior se llama «ferboix. Facturación» (misma familia). Pendiente: renombrar el repositorio y el worktree (`nortia-studio`) y la skill de marca.
+
+## D-38 · Repos en público; la CI vuelve a los runners de GitHub (06/11/2026 14:47)
+- 06/11/2026 14:47 · **Fer.** Regla: repos en público siempre que no haya datos personales. `nortia-studio` pasa a público; el historial se reescribió para quitar el Gmail de 57 commits. Minutos de GitHub ilimitados en repos públicos.
+- CI: los jobs alojados (ubuntu, macos-15, windows) corren por defecto (`vars.HOSTED_RUNNERS != 'false'`) y el gating de macOS por «[mac]» desaparece. El Mac propio queda como opción con `vars.SELF_HOSTED == 'true'` (engine `mac-propio`; app `check-propio` y `macos-propio`). El release del sidecar vuelve a ubuntu y exige Windows (7 hashes fijados). **D-32 (macOS bajo demanda) y D-35 (runner propio) quedan como opción**, no como regla.
+- Aviso: con repo público, un runner propio activo ejecutaría el código de PRs ajenos; ver [runner-mac.md](runner-mac.md).
+- 06/11 15:40: GitHub no asigna runners macOS a la cuenta (posible secuela del pago fallido); Linux/Windows sí. Trozo macOS del sidecar y build de la app en el Mac de Fer (SELF_HOSTED) hasta que se aclare. Variables: `SELF_HOSTED=true` y `HOSTED_MAC=false` (esta apaga solo el Mac alojado). Ver [runner-mac.md](runner-mac.md).

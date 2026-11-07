@@ -1,4 +1,4 @@
-/* nortia. studio · master check · formato de números por idioma (módulo puro, sin DOM).
+/* ferboix. studio · master check · formato de números por idioma (módulo puro, sin DOM).
    es: coma decimal y menos tipográfico (−9,1 LUFS) · en: punto decimal y guion (-9.1 LUFS). */
 
 const MINUS = '−';
@@ -43,9 +43,19 @@ export function fmtBytes(bytes, lang = 'en') {
 
 const CONTAINER = { wav: 'WAV', flac: 'FLAC', mp3: 'MP3', mp4: 'MP4', jpg: 'JPG', png: 'PNG' };
 
+/** Imagen y vídeo: la ficha técnica no depende del idioma. */
+const MEDIA_SPEC = {
+  cover: 'JPG + PNG · 3000×3000',
+  canvas: 'MP4 · 1080×1920',
+  youtube_video: 'MP4 · 1080p · AAC 384 kbps',
+  apple_motion: 'MP4 · 3840×3840 + 2048×2732'
+};
+
 /** Especificación corta de un destino: "FLAC · 24 bit · 96 kHz", "MP3 · 320 kbps", "JPG". */
 export function fmtSpec(job, lang = 'en') {
   const c = CONTAINER[job.container] || String(job.container || '').toUpperCase();
+  const media = MEDIA_SPEC[job.preset_id];
+  if (media) return media;
   if (job.container === 'mp3') return `${c} · 320 kbps`;
   if (job.container === 'wav' || job.container === 'flac') {
     if (!job.bits) return c;

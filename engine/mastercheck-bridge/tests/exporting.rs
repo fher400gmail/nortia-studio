@@ -2,6 +2,8 @@ mod common;
 
 use mastercheck_bridge::dto::{ExportRequestDto, ReleaseMetaDto};
 use mastercheck_bridge::exporting::export;
+#[cfg(unix)]
+use mastercheck_bridge::exporting::export_with;
 use masterout_core::i18n::Lang;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,6 +19,7 @@ fn request(master: &Path, out: &Path, ids: &[&str]) -> ExportRequestDto {
             ..Default::default()
         },
         active_ids: ids.iter().map(|s| s.to_string()).collect(),
+        media_inputs: Default::default(),
     }
 }
 
@@ -161,34 +164,92 @@ fn non_wav_master_is_reported_with_key() {
     assert_eq!(e.key, "err.not_wav");
 }
 
+/// Un "ffmpeg" que siempre falla: el MP3 da `err.ffmpeg_failed` y el resto sale.
+#[cfg(unix)]
+fn failing_sidecar(dir: &Path) -> masterout_core::media::SidecarPaths {
+    use std::os::unix::fs::PermissionsExt;
+    let p = dir.join("ffmpeg");
+    std::fs::write(&p, "#!/bin/sh\necho boom >&2\nexit 1\n").unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    masterout_core::media::SidecarPaths {
+        ffmpeg: p.clone(),
+        ffprobe: p,
+    }
+}
+
+#[cfg(unix)]
 #[test]
 fn failed_job_carries_localized_message_key_and_no_spanish_display_text() {
-    if masterout_core::mp3::find_lame().is_some() {
-        eprintln!("skip: lame presente");
-        return;
-    }
     let tmp = tempfile::tempdir().unwrap();
     let m = master(tmp.path());
     let events = Mutex::new(Vec::new());
-    let d = export(
+    let d = export_with(
         &request(&m, &tmp.path().join("out"), &["deezer", "mp3_promo"]),
         Lang::En,
         &|p| events.lock().unwrap().push(p),
         Arc::new(AtomicBool::new(false)),
+        Some(failing_sidecar(tmp.path())),
     )
     .unwrap();
     let ev = events.into_inner().unwrap();
     let failed = ev.iter().find(|e| e.kind == "job_failed").unwrap();
-    assert_eq!(failed.error_key.as_deref(), Some("err.lame_missing"));
-    assert!(failed.error.as_deref().unwrap().contains("lame"));
+    assert_eq!(failed.error_key.as_deref(), Some("err.ffmpeg_failed"));
+    assert!(failed
+        .error
+        .as_deref()
+        .unwrap()
+        .contains("could not be created"));
     assert!(!failed.error.as_deref().unwrap().contains("no soportado"));
     assert_eq!(d.failed.len(), 1);
     assert_eq!(
         d.failed_keys,
-        vec![("mp3_promo".to_string(), "err.lame_missing".to_string())]
+        vec![("mp3_promo".to_string(), "err.ffmpeg_failed".to_string())]
     );
-    assert!(d.failed[0].1.starts_with("lame was not found"));
+    assert!(d.failed[0].1.starts_with("This file could not be created"));
     assert!(!d.cancelled);
+}
+
+#[test]
+fn export_with_cover_and_own_media_writes_the_files() {
+    let Some(_) = masterout_core::export::default_sidecar() else {
+        eprintln!("skip: no hay ffmpeg");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path());
+    let cover = tmp.path().join("portada.png");
+    image::RgbImage::from_pixel(1600, 1600, image::Rgb([180, 60, 30]))
+        .save(&cover)
+        .unwrap();
+    let mut req = request(&m, &tmp.path().join("out"), &["cover", "canvas"]);
+    req.meta.cover_path = Some(cover.to_string_lossy().into_owned());
+    // el Canvas usa una imagen propia en vez de la portada
+    let own = tmp.path().join("mia.png");
+    image::RgbImage::from_pixel(1200, 2000, image::Rgb([20, 90, 200]))
+        .save(&own)
+        .unwrap();
+    req.media_inputs
+        .insert("canvas".into(), own.to_string_lossy().into_owned());
+    let d = export(&req, Lang::Es, &|_| {}, Arc::new(AtomicBool::new(false))).unwrap();
+    assert!(d.failed.is_empty(), "{:?} {:?}", d.failed, d.failed_details);
+    let names: Vec<String> = d
+        .files
+        .iter()
+        .map(|(p, _)| {
+            Path::new(p)
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    for want in [
+        "Vera Alcón - Luz de Noviembre [Portada] 3000x3000.jpg",
+        "Vera Alcón - Luz de Noviembre [Portada] 3000x3000.png",
+        "Vera Alcón - Luz de Noviembre [Canvas] 1080x1920.mp4",
+    ] {
+        assert!(names.iter().any(|n| n == want), "{want} en {names:?}");
+    }
 }
 
 #[test]
@@ -222,4 +283,117 @@ fn blank_title_uses_suggested_title_without_duplicating_artist() {
         "{}",
         d.folder
     );
+}
+
+// ---------------------------------------------------------------- tarea 7 (hito 3)
+
+#[test]
+fn preparing_events_are_dtos_with_a_fraction_before_the_first_job() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path());
+    let events = Mutex::new(Vec::new());
+    export(
+        &request(&m, &tmp.path().join("salida"), &["spotify", "deezer"]),
+        Lang::Es,
+        &|p| events.lock().unwrap().push(p),
+        Arc::new(AtomicBool::new(false)),
+    )
+    .unwrap();
+    let ev = events.into_inner().unwrap();
+    let prep: Vec<f32> = ev
+        .iter()
+        .filter(|e| e.kind == "preparing")
+        .map(|e| e.fraction.expect("preparing lleva fraction"))
+        .collect();
+    assert!(!prep.is_empty() && *prep.last().unwrap() == 1.0, "{prep:?}");
+    let first_job = ev.iter().position(|e| e.kind == "job_started").unwrap();
+    let last_prep = ev.iter().rposition(|e| e.kind == "preparing").unwrap();
+    assert!(last_prep < first_job);
+}
+
+#[test]
+fn delivery_dto_lists_final_verdicts_and_aligned_details() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = master(tmp.path());
+    let d = export(
+        &request(&m, &tmp.path().join("salida"), &["spotify", "deezer"]),
+        Lang::Es,
+        &|_| {},
+        Arc::new(AtomicBool::new(false)),
+    )
+    .unwrap();
+    let ids: Vec<&str> = d.verdicts.iter().map(|v| v.preset_id.as_str()).collect();
+    assert_eq!(ids, ["spotify", "deezer"]);
+    assert!(d.verdicts.iter().all(
+        |v| ["ok", "warn", "fail"].contains(&v.verdict.as_str()) && !v.verdict_text.is_empty()
+    ));
+    assert_eq!(d.failed_details.len(), d.failed.len());
+    // los verdicts viajan en el JSON con los nombres del contrato
+    let json = serde_json::to_value(&d).unwrap();
+    assert_eq!(json["verdicts"][0]["preset_id"], "spotify");
+    assert!(json["failed_details"].is_array());
+}
+
+#[cfg(unix)]
+mod adm_verdict {
+    use super::*;
+    use mastercheck_bridge::exporting::export_custom;
+    use std::os::unix::fs::PermissionsExt;
+
+    fn script(dir: &Path, name: &str, body: &str) -> std::path::PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+
+    fn run(lang: Lang, clip: &str) -> mastercheck_bridge::dto::DeliveryDto {
+        let tmp = tempfile::tempdir().unwrap();
+        let m = master(tmp.path());
+        let conv = script(tmp.path(), "afconvert", "touch \"$2\"");
+        let clip = script(tmp.path(), "afclip", clip);
+        export_custom(
+            &request(&m, &tmp.path().join("o"), &["apple_adm", "deezer"]),
+            lang,
+            &|_| {},
+            Arc::new(AtomicBool::new(false)),
+            None,
+            Some((conv, clip)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn apple_card_gets_a_status_warning_when_the_aac_clips() {
+        let clips = "printf 'CLIPPED SAMPLES:\\n   total clipped samples    Left   on-sample:   1    inter-sample:   2\\n'";
+        let es = run(Lang::Es, clips);
+        let apple = es
+            .verdicts
+            .iter()
+            .find(|v| v.preset_id == "apple_adm")
+            .unwrap();
+        // aviso (warn), no fallo, con el texto de la ficha
+        assert_eq!(apple.verdict, "warn");
+        assert_eq!(apple.verdict_text, "pasa de 0 dB al codificar");
+        assert!(es.failed.is_empty(), "no es un error de exportación");
+        // el resto de destinos conserva el veredicto del plan (el mismo con o sin clipping)
+        let clean = run(Lang::Es, "echo ' -- no samples clipped --'");
+        let pick = |d: &mastercheck_bridge::dto::DeliveryDto, id: &str| {
+            let v = d.verdicts.iter().find(|v| v.preset_id == id).unwrap();
+            (v.verdict.clone(), v.verdict_text.clone())
+        };
+        assert_eq!(pick(&es, "deezer"), pick(&clean, "deezer"));
+        let en = run(Lang::En, clips);
+        let apple = en
+            .verdicts
+            .iter()
+            .find(|v| v.preset_id == "apple_adm")
+            .unwrap();
+        assert_eq!(
+            (apple.verdict.as_str(), apple.verdict_text.as_str()),
+            ("warn", "clips when encoded")
+        );
+        // sin clipping, el aviso de ADM no aparece
+        assert_ne!(pick(&clean, "apple_adm").1, "pasa de 0 dB al codificar");
+    }
 }

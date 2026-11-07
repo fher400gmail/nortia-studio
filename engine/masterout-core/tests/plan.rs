@@ -1,5 +1,6 @@
 use masterout_core::i18n::Lang;
 use masterout_core::loudness::{LoudnessReport, Verdict};
+use masterout_core::media::MediaCaps;
 use masterout_core::naming;
 use masterout_core::plan::*;
 use masterout_core::presets::{self, Container};
@@ -35,6 +36,11 @@ fn meta() -> ReleaseMeta {
     }
 }
 
+/// `resolve` de los tests de audio: sin material propio ni portada, con sidecar.
+fn resolve(m: &MasterInfo, meta: &ReleaseMeta, ids: &[&str]) -> Vec<Resolved> {
+    masterout_core::plan::resolve(m, meta, ids, &MediaInputs::default())
+}
+
 fn job(r: &Resolved) -> &Job {
     match r {
         Resolved::Job(j) => j,
@@ -43,9 +49,9 @@ fn job(r: &Resolved) -> &Job {
 }
 
 #[test]
-fn presets_json_loads_and_has_13_entries_with_sources() {
+fn presets_json_loads_and_has_14_entries_with_sources() {
     let all = presets::all();
-    assert_eq!(all.len(), 13);
+    assert_eq!(all.len(), 14);
     for p in &all {
         assert!(!p.source_url.is_empty(), "{} sin source_url", p.id);
     }
@@ -99,9 +105,9 @@ fn dither_rule_lower_bits_float_or_resampled_up_to_24() {
 fn preset_contract_table_id_subfolder_tag() {
     let expected = [
         ("spotify", "01 Spotify", "Spotify"),
-        ("apple_adm", "02 Apple Music", "Apple Digital Masters"),
+        ("apple_adm", "02 Apple Music", "Apple Music"),
         ("amazon", "03 Amazon Music", "Amazon Music"),
-        ("tidal", "04 Tidal", "Tidal"),
+        ("tidal", "04 TIDAL", "TIDAL"),
         ("deezer", "05 Deezer", "Deezer"),
         ("youtube_music", "06 YouTube", "YouTube Music"),
         ("youtube_video", "06 YouTube", "YouTube"),
@@ -115,6 +121,7 @@ fn preset_contract_table_id_subfolder_tag() {
         ("mp3_promo", "08 Promo", "MP3 320"),
         ("cover", "09 Imagen", "Portada"),
         ("canvas", "09 Imagen", "Canvas"),
+        ("apple_motion", "02 Apple Music", "Portada animada"),
     ];
     let all = presets::all();
     assert_eq!(all.len(), expected.len());
@@ -186,18 +193,302 @@ fn inactive_ids_are_not_resolved() {
     assert_eq!(resolve(&master(96000, 24), &meta(), &["spotify"]).len(), 1);
 }
 
-#[test]
-fn not_in_this_build_presets_are_disabled() {
-    let r = resolve(
-        &master(96000, 24),
+fn write_png(path: &std::path::Path, w: u32, h: u32) {
+    image::RgbImage::from_pixel(w, h, image::Rgb([200, 60, 30]))
+        .save(path)
+        .unwrap();
+}
+
+/// En el orden de `presets.json`.
+const MEDIA_IDS: [&str; 4] = ["youtube_video", "cover", "canvas", "apple_motion"];
+
+fn resolve_media(
+    m: &MasterInfo,
+    ids: &[&str],
+    media: &MediaInputs,
+    sidecar: bool,
+) -> Vec<Resolved> {
+    resolve_in(
+        m,
         &meta(),
-        &["cover", "canvas", "youtube_video"],
+        ids,
+        media,
+        Lang::Es,
+        sidecar.then_some(MediaCaps::ALL),
+    )
+}
+
+fn reason(r: &Resolved) -> &str {
+    match r {
+        Resolved::Disabled { reason_key, .. } => reason_key,
+        other => panic!("se esperaba Disabled, hay {other:?}"),
+    }
+}
+
+#[test]
+fn plan_media_presets_enabled_with_cover_and_sidecar() {
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    write_png(&cover, 3000, 3000);
+    let media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    let r = resolve_media(&master(44100, 24), &MEDIA_IDS, &media, true);
+    assert_eq!(r.len(), 4);
+    let names: Vec<(&str, &str, Vec<&str>)> = r
+        .iter()
+        .map(|x| {
+            let j = job(x);
+            (
+                j.subfolder.as_str(),
+                j.file_name.as_str(),
+                j.extra_files.iter().map(String::as_str).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            (
+                "06 YouTube",
+                "Vera Alcón - Luz de Noviembre [YouTube] 1080p.mp4",
+                vec![]
+            ),
+            (
+                "09 Imagen",
+                "Vera Alcón - Luz de Noviembre [Portada] 3000x3000.jpg",
+                vec!["Vera Alcón - Luz de Noviembre [Portada] 3000x3000.png"]
+            ),
+            (
+                "09 Imagen",
+                "Vera Alcón - Luz de Noviembre [Canvas] 1080x1920.mp4",
+                vec![]
+            ),
+            (
+                "02 Apple Music",
+                "Vera Alcón - Luz de Noviembre [Portada animada] 3840x3840.mp4",
+                vec!["Vera Alcón - Luz de Noviembre [Portada animada] 2048x2732.mp4"]
+            ),
+        ]
     );
-    assert_eq!(r.len(), 3);
+    // el audio de YouTube es el máster a 48 kHz con dither; el resto no es audio
+    let yt = job(&r[0]);
+    assert_eq!((yt.bits, yt.sample_rate), (24, 48000));
+    assert!(yt.needs_resample && yt.needs_dither);
+    assert_eq!(job(&r[2]).bits, 0);
+    assert!(r.iter().all(|x| job(x).media.is_some()));
+    // en inglés, las etiquetas del contrato
+    let en = resolve_in(
+        &master(44100, 24),
+        &meta(),
+        &["cover"],
+        &media,
+        Lang::En,
+        Some(MediaCaps::ALL),
+    );
+    assert_eq!(
+        job(&en[0]).file_name,
+        "Vera Alcón - Luz de Noviembre [Cover] 3000x3000.jpg"
+    );
+    assert_eq!(job(&en[0]).subfolder, "09 Artwork");
+}
+
+#[test]
+fn media_presets_are_off_by_default_except_none() {
+    let all = presets::all();
+    let motion = all.iter().find(|p| p.id == "apple_motion").unwrap();
+    assert_eq!(motion.tag, "Portada animada");
+    assert_eq!(motion.tag_key.as_deref(), Some("tag.motion"));
+    assert_eq!(motion.subfolder_key, "apple");
+}
+
+#[test]
+fn no_cover_disables_image_and_video_chips_unless_they_bring_their_own_media() {
+    let r = resolve_media(
+        &master(44100, 24),
+        &MEDIA_IDS,
+        &MediaInputs::default(),
+        true,
+    );
     for x in &r {
-        assert!(
-            matches!(x, Resolved::Disabled { reason_key, .. } if reason_key == "not_in_this_build")
-        );
+        assert_eq!(reason(x), "reason.no_cover");
+    }
+    // un vídeo propio para Canvas basta; el resto sigue sin portada
+    let d = tempfile::tempdir().unwrap();
+    let own = d.path().join("mi-canvas.mp4");
+    std::fs::write(&own, b"x").unwrap();
+    let mut media = MediaInputs::default();
+    media.per_preset.insert("canvas".into(), own.clone());
+    let r = resolve_media(&master(44100, 24), &MEDIA_IDS, &media, true);
+    let j = job(&r[2]);
+    assert_eq!(j.own_media.as_deref(), Some(own.as_path()));
+    assert_eq!(reason(&r[0]), "reason.no_cover");
+    assert_eq!(reason(&r[1]), "reason.no_cover");
+}
+
+#[test]
+fn missing_sidecar_disables_media_jobs_only() {
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    write_png(&cover, 3000, 3000);
+    let media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    let ids = [
+        "spotify",
+        "apple_adm",
+        "youtube_video",
+        "mp3_promo",
+        "cover",
+        "canvas",
+        "apple_motion",
+    ];
+    let r = resolve_media(&master(96000, 24), &ids, &media, false);
+    assert_eq!(r.len(), 7);
+    for (x, id) in r.iter().zip(ids) {
+        match id {
+            // audio y portada (con el crate `image`) no dependen del sidecar
+            "spotify" | "apple_adm" | "cover" => {
+                assert!(matches!(x, Resolved::Job(_)), "{id}: {x:?}")
+            }
+            _ => assert_eq!(reason(x), "reason.no_sidecar", "{id}"),
+        }
+    }
+}
+
+fn cover_media(d: &std::path::Path) -> MediaInputs {
+    let cover = d.join("c.png");
+    write_png(&cover, 3000, 3000);
+    MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn without_hevc_apple_motion_keeps_only_the_h264_size_and_says_why() {
+    let d = tempfile::tempdir().unwrap();
+    let media = cover_media(d.path());
+    let caps = Some(MediaCaps {
+        h264: true,
+        hevc: false,
+    });
+    let r = resolve_in(
+        &master(44100, 24),
+        &meta(),
+        &["apple_motion", "canvas"],
+        &media,
+        Lang::Es,
+        caps,
+    );
+    let j = job(&r[1]);
+    assert_eq!(j.preset_id, "apple_motion");
+    assert_eq!(
+        j.file_name,
+        "Vera Alcón - Luz de Noviembre [Portada animada] 2048x2732.mp4"
+    );
+    assert!(j.extra_files.is_empty() && j.hevc_skipped);
+    assert_eq!(j.warnings, vec!["reason.hevc_unavailable"]);
+    // el resto del vídeo sigue disponible
+    assert!(matches!(&r[0], Resolved::Job(_)));
+    // con HEVC, los dos tamaños
+    let r = resolve_in(
+        &master(44100, 24),
+        &meta(),
+        &["apple_motion"],
+        &media,
+        Lang::Es,
+        Some(MediaCaps::ALL),
+    );
+    assert!(!job(&r[0]).hevc_skipped && job(&r[0]).extra_files.len() == 1);
+}
+
+#[test]
+fn without_h264_all_video_chips_are_disabled_but_cover_and_audio_stay() {
+    let d = tempfile::tempdir().unwrap();
+    let media = cover_media(d.path());
+    let caps = Some(MediaCaps {
+        h264: false,
+        hevc: false,
+    });
+    let ids = [
+        "spotify",
+        "youtube_video",
+        "mp3_promo",
+        "cover",
+        "canvas",
+        "apple_motion",
+    ];
+    let r = resolve_in(&master(44100, 24), &meta(), &ids, &media, Lang::Es, caps);
+    for (x, id) in r.iter().zip(ids) {
+        match id {
+            "spotify" | "mp3_promo" | "cover" => assert!(matches!(x, Resolved::Job(_)), "{id}"),
+            _ => assert_eq!(reason(x), "reason.encoder_unavailable", "{id}"),
+        }
+    }
+}
+
+#[test]
+fn small_cover_disables_cover_derived_jobs_with_its_error() {
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    write_png(&cover, 800, 800);
+    let media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    let r = resolve_media(&master(44100, 24), &MEDIA_IDS, &media, true);
+    for x in &r {
+        assert_eq!(reason(x), "err.cover_too_small");
+    }
+}
+
+#[test]
+fn cover_warnings_travel_in_the_cover_job() {
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    write_png(&cover, 2000, 1500);
+    let media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    let r = resolve_media(&master(44100, 24), &["cover"], &media, true);
+    assert_eq!(
+        job(&r[0]).warnings,
+        vec!["warn.cover_cropped", "warn.cover_upscaled"]
+    );
+}
+
+#[test]
+fn cover_warnings_also_reach_every_job_derived_from_the_cover() {
+    let d = tempfile::tempdir().unwrap();
+    let cover = d.path().join("c.png");
+    write_png(&cover, 2000, 1500);
+    let own = d.path().join("v.mp4");
+    std::fs::write(&own, b"x").unwrap();
+    let mut media = MediaInputs {
+        cover: Some(cover),
+        ..Default::default()
+    };
+    media.per_preset.insert("canvas".into(), own);
+    let want = ["warn.cover_cropped", "warn.cover_upscaled"];
+    let ids = ["youtube_video", "mp3_promo", "canvas", "apple_motion"];
+    let r = resolve_media(&master(44100, 24), &ids, &media, true);
+    for x in &r {
+        let j = job(x);
+        // Canvas trae su propio vídeo: no usa la portada, no hereda avisos
+        if j.preset_id == "canvas" {
+            assert!(j.warnings.is_empty());
+        } else {
+            assert!(
+                want.iter().all(|w| j.warnings.iter().any(|x| x == w)),
+                "{}: {:?}",
+                j.preset_id,
+                j.warnings
+            );
+        }
     }
 }
 
@@ -212,9 +503,9 @@ fn youtube_music_fixes_48k_keeps_native_bits() {
 #[test]
 fn estimate_bytes_wav_exact() {
     let wav = job(&resolve(&master(96000, 24), &meta(), &["distributor_hires"])[0]).clone();
-    assert_eq!(estimate_bytes(&wav, 96000 * 60, 2), 34_560_000);
+    assert_eq!(estimate_bytes(&wav, 96000 * 60, 2, 96000), 34_560_000);
     let flac = job(&resolve(&master(96000, 24), &meta(), &["spotify"])[0]).clone();
-    assert_eq!(estimate_bytes(&flac, 96000 * 60, 2), 21_427_200);
+    assert_eq!(estimate_bytes(&flac, 96000 * 60, 2, 96000), 21_427_200);
 }
 
 #[test]
@@ -256,4 +547,74 @@ fn distributor_tags_and_note_sources() {
         let note = ["tidal", "deezer", "youtube_music"].contains(&p.id.as_str());
         assert_eq!(p.source_kind, if note { "note" } else { "url" }, "{}", p.id);
     }
+}
+
+#[test]
+fn own_media_paths_are_validated_in_the_plan() {
+    let d = tempfile::tempdir().unwrap();
+    let ok = d.path().join("bucle.mp4");
+    std::fs::write(&ok, b"x").unwrap();
+    let txt = d.path().join("notas.txt");
+    std::fs::write(&txt, b"x").unwrap();
+    let dir = d.path().join("carpeta.mp4");
+    std::fs::create_dir(&dir).unwrap();
+    let missing = d.path().join("no-existe.mp4");
+    let dash = d.path().join("-opcion.mp4");
+    std::fs::write(&dash, b"x").unwrap();
+    let state = |path: &std::path::Path| {
+        let mut media = MediaInputs::default();
+        media.per_preset.insert("canvas".into(), path.to_path_buf());
+        let r = resolve_media(&master(44100, 24), &["canvas"], &media, true);
+        match &r[0] {
+            Resolved::Job(_) => "job".to_string(),
+            Resolved::Disabled { reason_key, .. } => reason_key.clone(),
+        }
+    };
+    assert_eq!(state(&ok), "job");
+    assert_eq!(state(&dash), "job");
+    assert_eq!(state(&missing), "err.media_unreadable");
+    assert_eq!(state(&dir), "err.media_unreadable");
+    assert_eq!(state(&txt), "err.media_unreadable");
+    // la ficha de portada solo acepta imágenes
+    let mut media = MediaInputs::default();
+    media.per_preset.insert("cover".into(), ok.clone());
+    let r = resolve_media(&master(44100, 24), &["cover"], &media, true);
+    assert_eq!(reason(&r[0]), "err.media_unreadable");
+    // la portada de la entrega inexistente deshabilita las fichas derivadas
+    let media = MediaInputs {
+        cover: Some(d.path().join("ausente.png")),
+        ..Default::default()
+    };
+    let r = resolve_media(&master(44100, 24), &MEDIA_IDS, &media, true);
+    for x in &r {
+        assert_eq!(reason(x), "err.media_unreadable");
+    }
+}
+
+/// `presets.json` es la única fuente de los valores iniciales de la interfaz: todo encendido
+/// salvo Apple Motion (pesa y tarda), como aprobó Fer en el prototipo.
+#[test]
+fn default_on_table_matches_the_approved_prototype() {
+    let got: Vec<(String, bool)> = presets::all()
+        .into_iter()
+        .map(|p| (p.id, p.default_on))
+        .collect();
+    let want = [
+        ("spotify", true),
+        ("apple_adm", true),
+        ("amazon", true),
+        ("tidal", true),
+        ("deezer", true),
+        ("youtube_music", true),
+        ("youtube_video", true),
+        ("distributor_std", true),
+        ("distributor_hires", true),
+        ("tunecore", true),
+        ("mp3_promo", true),
+        ("cover", true),
+        ("canvas", true),
+        ("apple_motion", false),
+    ];
+    let want: Vec<(String, bool)> = want.iter().map(|(i, d)| (i.to_string(), *d)).collect();
+    assert_eq!(got, want);
 }

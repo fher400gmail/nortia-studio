@@ -1,4 +1,4 @@
-// Capturas con el mock (880×860, ×2): 01 vacío, 02 normal claro, 03 normal oscuro, 06 creando, 07 listo.
+// Capturas con el mock (880×860, ×2): 01 vacío, 02 normal claro, 03 normal oscuro, 06 creando, 07 listo, 08 material propio.
 // Uso: node ui-tests/scripts/capturas.mjs [es|en]
 import { fileURLToPath } from 'node:url';
 import { serve, loadPlaywright } from './serve.mjs';
@@ -14,7 +14,8 @@ const SHOTS = [
   ['02_normal_claro.png', 'theme=light&state=normal'],
   ['03_normal_oscuro.png', 'theme=dark&state=normal'],
   ['06_creando.png', 'theme=light&state=creating'],
-  ['07_listo.png', 'theme=light&state=done']
+  ['07_listo.png', 'theme=light&state=done&cover=rect'],
+  ['08_material_propio.png', 'theme=light&state=normal&cover=1&own=canvas,ytv']
 ];
 let bad = 0;
 for (const [name, q] of SHOTS) {

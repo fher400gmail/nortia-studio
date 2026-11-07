@@ -110,7 +110,7 @@ jobs:
           EXE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$P")
           echo "LSMinimumSystemVersion=$MIN CFBundleIdentifier=$ID CFBundleExecutable=$EXE"
           test "$MIN" = "14.0"
-          test "$ID" = "studio.nortia.mastercheck"
+          test "$ID" = "studio.ferboix.mastercheck"
           test -x "$APP/Contents/MacOS/$EXE"
           lipo -archs "$APP/Contents/MacOS/$EXE"
           # sidecar y licencias empaquetados (externalBin + resources)
